@@ -38,6 +38,18 @@ server <- function(input, output, session) {
   profile <- reactiveVal(CREDENTIALS$profile)
   valid_profile <- reactiveVal(CREDENTIALS$valid)
   
+  # ----------------------------------------------------------------------
+  # Documentation
+  # ----------------------------------------------------------------------
+  output$app_documentation <- renderUI({
+    HTML(
+      markdown::markdownToHTML(
+        file="src/documentation/documentation.md",
+        fragment.only = TRUE
+      )
+    )
+  })
+  
 }
 
 #-----------
