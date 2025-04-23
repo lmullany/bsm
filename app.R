@@ -38,11 +38,25 @@ server <- function(input, output, session) {
   profile <- reactiveVal(CREDENTIALS$profile)
   valid_profile <- reactiveVal(CREDENTIALS$valid)
   
+  # ----------------------------------------------------------------------
+  # Global Reactives for configuration and results
+  # ----------------------------------------------------------------------
+  
+  # data loader configuration reactives
+  dc = reactiveValues()
+  
+  # inla model configuration reactives
+  im = reactiveValues()
+  
+  # results
+  results = reactiveValues()
+  
   
   # ----------------------------------------------------------------------
   # Module Server calls
   # ----------------------------------------------------------------------
-  data_loader_server(id = "data_load")
+  data_loader_server(id = "data_load", dc, results)
+  inla_model_server(id = "inla_model", dc, im, results)
   
   # ----------------------------------------------------------------------
   # Documentation

@@ -9,7 +9,7 @@ inla_model_ui <- function(id) {
   # Number of forecasts
   forecasts = numericInput(
     ns("nforecasts"),
-    label = "Number of Forecasts",
+    label = "Number of Forecasts (weeks)",
     value = 4
   )
   
@@ -65,17 +65,38 @@ inla_model_ui <- function(id) {
       ),
       card(
         card_header("Place Holder for Model Result", class="bg-primary"),
-        card_body()
       )
     )
   )  
 }
 
-inla_model_server <- function(id) {
+inla_model_server <- function(id, dc, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
       
+      # observe the time_res and update the forecasts label and 
+      observe({
+        req(dc$time_res)
+        lv = update_n_forecast_widget(dc$time_res)
+        updateNumericInput(
+          inputId =  "nforecasts", 
+          label = lv[["label"]],
+          value = lv[["value"]]
+        )
+      })
     }
   )
+}
+
+# Helper function for forecast label and default
+update_n_forecast_widget <- function(res) {
+  lu = list(
+    "daily" = list(label = "Number of forecasts (days)", value = 28),
+    "weekly" = list(label = "Number of forecasts (weeks)", value = 4),
+    "monthly" = list(label = "Number of forecasts (months)", value = 1),
+    "yearly" = list(label = "Number of forecasts (years)", value=1)
+  )
+  
+  lu[[res]]
 }

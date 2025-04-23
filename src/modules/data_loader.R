@@ -81,10 +81,14 @@ data_loader_ui <- function(id) {
 
 }
 
-data_loader_server <- function(id) {
+data_loader_server <- function(id, dc, results) {
   moduleServer(
     id,
     function(input, output, session) {
+      
+      # Monitor to fill global reactives
+      observe(results$data <- data())
+      observe(dc$time_res <- input$time_res)
       
       # Update the choices for syndromic categories
       observe({
