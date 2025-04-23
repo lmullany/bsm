@@ -14,6 +14,11 @@ library(bsicons)
 library(DT)
 library(ggplot2)
 library(Rnssp)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(lubridate)
+library(MMWRweek)
 
 #####################
 ## profile
