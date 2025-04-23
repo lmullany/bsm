@@ -1,51 +1,45 @@
-#
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    https://shiny.posit.co/
-#
+# © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
+# Development of this software was sponsored by the U.S. Government under
+# contract no. 75D30124C19958
 
-library(shiny)
+# source files --------------------------------------------------------------
+source("src/00_setup.R")
 
-# Define UI for application that draws a histogram
-ui <- fluidPage(
 
-    # Application title
-    titlePanel("Old Faithful Geyser Data"),
-
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-            sliderInput("bins",
-                        "Number of bins:",
-                        min = 1,
-                        max = 50,
-                        value = 30)
-        ),
-
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("distPlot")
-        )
-    )
+ui <- page(
+  theme = bs_theme(version = 5, preset = BOOT_PRESET),
+  tags$head(tags$style(HTML("
+        .shiny-output-error-validation {
+          color: red;
+        }
+        .card {border: 0;}
+      "))),
+  useShinyjs(),
+  page_navbar(
+    title = "Bayesian Spatiotemporal Modeling",
+    data_loader_ui("data_load"),
+    inla_model_ui("inla_model"),
+    viz_ui("viz"),
+    nav_spacer(),
+    nav_panel(
+      "Documentation",
+      uiOutput(outputId = "app_documentation")
+    ),
+    nav_item(input_dark_mode(mode="dark")),
+    navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
+  )
 )
 
-# Define server logic required to draw a histogram
-server <- function(input, output) {
-
-    output$distPlot <- renderPlot({
-        # generate bins based on input$bins from ui.R
-        x    <- faithful[, 2]
-        bins <- seq(min(x), max(x), length.out = input$bins + 1)
-
-        # draw the histogram with the specified number of bins
-        hist(x, breaks = bins, col = 'darkgray', border = 'white',
-             xlab = 'Waiting time to next eruption (in mins)',
-             main = 'Histogram of waiting times')
-    })
+server <- function(input, output, session) {
+  
+  # ----------------------------------------------------------------------
+  # Global Reactives for Profile
+  # ----------------------------------------------------------------------
+  profile <- reactiveVal(CREDENTIALS$profile)
+  valid_profile <- reactiveVal(CREDENTIALS$valid)
+  
 }
 
-# Run the application 
-shinyApp(ui = ui, server = server)
+#-----------
+shinyApp(ui, server)
+
