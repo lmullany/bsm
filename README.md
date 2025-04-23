@@ -2,9 +2,8 @@
 
 ## Contacts
 
--   Mark J. Panaggio ([Mark.Panaggio\@jhuapl.edu](mailto:Mark.Panaggio@jhuapl.edu){.email})
-
--   Luke C. Mullany ([Luke.Mullany\@jhuapl.edu](mailto:Luke.Mullany@jhuapl.edu){.email})
+-   Mark J. Panaggio ([Mark.Panaggio\@jhuapl.edu](mailto:Mark.Panaggio@jhuapl.edu))
+-   Luke C. Mullany ([Luke.Mullany\@jhuapl.edu](mailto:Luke.Mullany@jhuapl.edu))
 
 ## Project status
 
