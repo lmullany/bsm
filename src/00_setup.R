@@ -19,6 +19,7 @@ library(tidyr)
 library(stringr)
 library(lubridate)
 library(MMWRweek)
+library(shinycssloaders)
 
 #####################
 ## profile
@@ -43,4 +44,6 @@ rm(list=c("f", "grp"))
 ## constants
 #####################
 BOOT_PRESET = "pulse"
+THEME = bs_theme(version = 5, preset = BOOT_PRESET)
 SIDEBAR_WIDTH = 300
+DEFAULT_STATES = c("MD")
