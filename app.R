@@ -7,7 +7,7 @@ source("src/00_setup.R")
 
 
 ui <- page(
-  theme = bs_theme(version = 5, preset = BOOT_PRESET),
+  theme = THEME,
   tags$head(tags$style(HTML("
         .shiny-output-error-validation {
           color: red;
@@ -37,6 +37,12 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------
   profile <- reactiveVal(CREDENTIALS$profile)
   valid_profile <- reactiveVal(CREDENTIALS$valid)
+  
+  
+  # ----------------------------------------------------------------------
+  # Module Server calls
+  # ----------------------------------------------------------------------
+  data_loader_server(id = "data_load")
   
   # ----------------------------------------------------------------------
   # Documentation
