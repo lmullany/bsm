@@ -155,9 +155,10 @@ create_syndrome_inputs <- function(ns, cats) {
       inputId = ns("synd_cat"),
       label = "Target Outcome",
       choices = c(
-        "CCDD" = "ccdd",
-        "Syndrome" = "synd",
-        "Sub-Syndrome" = "subsynd"
+        "CCDD" = "ccdd"
+        # Hide the remainder of the choices for now
+        #"Syndrome" = "synd",
+        #"Sub-Syndrome" = "subsynd"
       )
     ),
     selectInput(
