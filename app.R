@@ -7,6 +7,7 @@ source("src/00_setup.R")
 
 
 ui <- page(
+  # get theme from the setup file
   theme = THEME,
   tags$head(tags$style(HTML("
         .shiny-output-error-validation {
@@ -17,16 +18,20 @@ ui <- page(
   useShinyjs(),
   page_navbar(
     title = "Bayesian Spatiotemporal Modeling",
+    # Data Loading UI
     data_loader_ui("data_load"),
+    # INLA Estimation UI
     inla_model_ui("inla_model"),
+    # VIZ UI
     viz_ui("viz"),
+    # SPACER
     nav_spacer(),
-    nav_panel(
-      "Documentation",
-      uiOutput(outputId = "app_documentation")
-    ),
+    # Documentation UI
+    documentation_ui("documentation"),
+    # Dark Mode Toggle
     nav_item(input_dark_mode(mode="dark")),
-    navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
+    # Options
+    navbar_options = list(class = "btn-primary", theme = "dark", underline=FALSE)
   )
 )
 
@@ -38,23 +43,21 @@ server <- function(input, output, session) {
   profile <- reactiveVal(CREDENTIALS$profile)
   valid_profile <- reactiveVal(CREDENTIALS$valid)
   
+  # ----------------------------------------------------------------------
+  # Global Reactives for configuration and results
+  # ----------------------------------------------------------------------
+  
+  dc = reactiveValues() # data loader configuration reactives
+  im = reactiveValues() # inla model configuration reactives
+  results = reactiveValues(data=data.table::fread("~/../Downloads/demo_inla_data_md.csv"))  # results reactives (data, plots, model, etc)
   
   # ----------------------------------------------------------------------
   # Module Server calls
   # ----------------------------------------------------------------------
-  data_loader_server(id = "data_load")
-  
-  # ----------------------------------------------------------------------
-  # Documentation
-  # ----------------------------------------------------------------------
-  output$app_documentation <- renderUI({
-    HTML(
-      markdown::markdownToHTML(
-        file="src/documentation/documentation.md",
-        fragment.only = TRUE
-      )
-    )
-  })
+  data_loader_server(id = "data_load", dc, results)
+  inla_model_server(id = "inla_model", dc, im, results)
+  viz_server("viz", dc, im, results)
+  documentation_server(id="documentation")
   
 }
 

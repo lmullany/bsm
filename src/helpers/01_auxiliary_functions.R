@@ -118,7 +118,7 @@ fit_model<-function(data,formula,family){
   
 }
 
-get_adjacency<-function(data=NULL){
+get_adjacency<-function(data=NULL, region_col){
   adj_mat<-read.csv("data/mobility_adj_mat.csv",colClasses=c("X"="character"))
   rownames(adj_mat)<-adj_mat$X 
   colnames(adj_mat)<-gsub("^X","",colnames(adj_mat))
@@ -197,7 +197,9 @@ aggregate_by_week<-function(data,cat_cols){
   
 }
 
-get_posteriors<-function(res_data,inla_model,suffix=NULL){
+get_posteriors<-function(res_data,inla_model,date_col,family,suffix=NULL){
+  
+
   res_data[[date_col]]<-as.Date(res_data[[date_col]])
   median_name = "predicted_median"
   lower_name = "predicted_lower"
@@ -267,8 +269,11 @@ add_baselines <- function(df, n) {
 ############################################
 ## PLOTTING TOOLS
 ############################################
-make_timeseries_plots<-function(res_data,use_prop=FALSE,add_temporal=TRUE,add_rolling=TRUE,add_rescaled=TRUE){
+make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_temporal=TRUE,add_rolling=TRUE,add_rescaled=TRUE){
   groups <-res_data %>% group_split(countyfips)
+  
+  plots = list()
+  
   for (i in seq_along(groups)) {
     group <- groups[[i]]
     if (use_prop){
@@ -288,17 +293,21 @@ make_timeseries_plots<-function(res_data,use_prop=FALSE,add_temporal=TRUE,add_ro
         group$rescaled_aggregate_trend = group$rescaled_aggregate_trend/group$overall
       }
     }
-    group_name <- paste0("location_",unique(group$countyfips))
+    #group_name <- paste0("location_",unique(group$countyfips))
+    group_name <- unique(group$region)
     plt<-ggplot(group, aes(x = .data[[date_col]], y = ccdd)) +
       geom_point(size=0.5) +
       geom_line(aes(y=predicted_median,color='spatio-temporal'),linewidth=0.1) +
-      geom_ribbon(aes(ymin=predicted_lower,ymax=predicted_upper),fill='red',alpha=0.3)
-    labs(title = "Time Series of Counts", x = "Date", y = "Count") +
-      theme_minimal()
+      geom_ribbon(aes(ymin=predicted_lower,ymax=predicted_upper, fill='spatio-temporal'),alpha=0.3) + 
+      labs(title = group_name, x = "Date", y = ifelse(use_prop==TRUE, "Proportion of Visits", "Count"), fill="", color="") +
+      theme_minimal() + 
+      theme(legend.position = "bottom")
+    
+    
     if (add_temporal){
       plt<-plt+
         geom_line(aes(y=predicted_median_temporal,color='temporal'),linewidth=0.1) +
-        geom_ribbon(aes(ymin=predicted_lower_temporal,ymax=predicted_upper_temporal),alpha=0.3,fill='blue')
+        geom_ribbon(aes(ymin=predicted_lower_temporal,ymax=predicted_upper_temporal, fill='temporal'),alpha=0.3)
     }
     if (add_rolling){
       plt<-plt+
@@ -309,13 +318,17 @@ make_timeseries_plots<-function(res_data,use_prop=FALSE,add_temporal=TRUE,add_ro
         geom_line(aes(y=rescaled_aggregate_trend,color="aggregate"),linewidth=0.1)
     }
     plt<-plt+scale_color_manual(values = c("spatio-temporal" = "red", "temporal" = "blue","rolling"="green","aggregate"="black"))
-    folder=paste0("figures/figs_",gsub("%20","_",ccdd),"_",gsub("-","",sd),"_to_",gsub("-","",ed),"_",family)
-    if (!dir.exists(folder)) {
-      dir.create(folder, recursive = TRUE)
-    }
-    ggsave(paste0(folder,"/plot_", group_name, ".png"), plt, width = 8, height = 3)
+    plt<-plt+scale_fill_manual(values = c("spatio-temporal" = "red", "temporal" = "blue"))
+    # folder=paste0("figures/figs_",gsub("%20","_",ccdd),"_",gsub("-","",sd),"_to_",gsub("-","",ed),"_",family)
+    # if (!dir.exists(folder)) {
+    #   dir.create(folder, recursive = TRUE)
+    # }
+    #ggsave(paste0(folder,"/plot_", group_name, ".png"), plt, width = 8, height = 3)
+    plots[[group_name]] <- plt
   }
-  print(plt)
+  
+  return(plots)
+  
   
 }
 
@@ -486,14 +499,14 @@ get_time_dependent_covariates<-function(start_date,end_date,time_resolution,geo_
 
 
 make_table_builder_url<-function(
-    start_date,end_date,ccdd=NULL,time_resolution,geo_resolution,state_filter=NULL){
+    start_date,end_date,time_resolution,geo_resolution,state_filter=NULL, med_group_sys, categ_info=NULL){
+  
   base_url <- "https://essence.syndromicsurveillance.org/nssp_essence/api/tableBuilder/csv?"
   start_date<-format(as.Date(start_date), "%d%b%Y")
   end_date<-format(as.Date(end_date), "%d%b%Y")
   url<-paste0(base_url,"endDate=",end_date,"&startDate=",start_date)
   
   url<-paste0(url,"&aqtTarget=TableBuilder")
-  url<-paste0(url,"&medicalGroupingSystem=essencesyndromes")
   url<-paste0(url,"&datasource=va_er")
   url<-paste0(url,"&detector=nodetectordetector")
   
@@ -523,15 +536,18 @@ make_table_builder_url<-function(
     url<-paste0(url,"&geographySystem=state")
     url<-paste0(url,"&columnField=geographystate")
     if (!is.null(state_filter)){
-      print(paste0("Filtering to ", paste0(state_filter,collapse=", ")))
+      #print(paste0("Filtering to ", paste0(state_filter,collapse=", ")))
       url <- paste0(url,paste0("&geography=", tolower(state_filter), collapse = ""))
     }
   } else {
     stop(paste0("invalid geo resoution:",geo_resolution))
   }
   
-  if (!is.null(ccdd)){
-    url<-paste0(url,"&ccddCategory=",ccdd)
+  url<-paste0(url,"&medicalGroupingSystem=", med_group_sys)
+  
+  if (!is.null(categ_info)){
+
+    url<-paste0(url,"&", categ_info[["cat_class"]], "=",categ_info[["cat_value"]])
   }
   #url<-paste0(url,"&userId=",userid)
   return(url)
@@ -552,25 +568,27 @@ reshape_and_join <- function(df_single, df_all) {
 }
 
 
-get_data<-function(sd,ed,time_res,geo_res,ccdd,state_filter=NULL){
+get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, categ_info){
   url_all <- make_table_builder_url(
     start_date=sd,
     end_date=ed,
     time_resolution=time_res,
     geo_resolution=geo_res,
-    state_filter=state_filter
+    state_filter=state_filter,
+    med_group_sys = med_group_sys
   )
   url_ccdd <- make_table_builder_url(
     start_date=sd,
     end_date=ed,
     time_resolution=time_res,
     geo_resolution=geo_res,
-    ccdd=ccdd,
-    state_filter=state_filter
+    state_filter=state_filter,
+    med_group_sys = med_group_sys,
+    categ_info = categ_info
   )
   # Data Pull from ESSENCE
   data_all <- get_api_data(url_all, fromCSV = TRUE)
   data_ccdd <- get_api_data(url_ccdd, fromCSV = TRUE)
   merged<-reshape_and_join(df_single=data_ccdd,df_all=data_all)
-  return(merged)
+  return(list(data = merged, url_all = url_all, url_ccdd = url_ccdd))
 }
