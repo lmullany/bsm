@@ -144,7 +144,7 @@ data_loader_server <- function(id, dc, results) {
         if (input$time_res=="weekly"){
           data$data$date<-sapply(data$data$date,week_to_end_date)
         } else if (input$time_res=="daily"){
-          data$data$date<-as.Date(data$date,f)
+          data$data$date<-as.Date(data$data$date)
         }
         return(data)
         
