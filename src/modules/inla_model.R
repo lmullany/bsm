@@ -64,7 +64,12 @@ inla_model_ui <- function(id) {
         input_task_button(ns("estimate_model_btn"), "Run Model")
       ),
       card(
-        card_header("Place Holder for Model Result", class="bg-primary"),
+        card_header("INLA Model Object", class="bg-primary"),
+        card_body(withSpinner(
+          verbatimTextOutput(ns("inla_model_object")),
+          caption = "Estimating Model ... please wait",
+          color = bs_get_variables(theme=THEME,"primary")
+        ))
       )
     )
   )  
@@ -74,6 +79,16 @@ inla_model_server <- function(id, dc, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
+      
+      
+      observe(im$model <- inla_model()$model)
+      observe(im$posterior <- get_posteriors(
+        res_data = inla_model()[["processed_data"]],
+        inla_model = inla_model()[["model"]],
+        date_col = inla_model()[["date_col"]],
+        family = input$dist_family,
+        suffix=NULL
+        )) |> bindEvent(inla_model())
       
       # observe the time_res and update the forecasts label and 
       observe({
@@ -85,6 +100,79 @@ inla_model_server <- function(id, dc, im, results) {
           value = lv[["value"]]
         )
       })
+    
+      # On click of "Estimate Model", we will want to
+      # 1. Validate the inputs
+      # 2. Pre-process transform the data
+      # 3. get adjacency matrice(s)
+      # 4. Create the formula (custom or default)
+      # 5. Run the model
+  
+      inla_model <- reactive({
+        
+        #1. TODO: VALIDATE INPUTS
+        #2. Preprocess Data:
+        print("getting_pre-processed data")
+        processed_data <- pre_process_data(results$data, input$nforecasts)
+        
+        print(processed_data)
+        
+        
+        #3 Get adjaceny matrix
+        print("getting_adjacency_matrix")
+        adj_mat_inla<-get_adjacency(processed_data$data, processed_data$region_col)
+        
+        
+        #4. Create formula (for now, just using default)
+        #formula = create_formula(inputs...)
+        print("creating_formula")
+        alpha = 0.01
+        param = 0.2
+        formula = ccdd ~ 1 + 
+          f(
+            region_id,
+            graph = adj_mat_inla,
+            model='besagproper',
+            group = date_id,
+            control.group = list(model='ar1'),
+            #hyper=list(prec = list(prior = 'pc.prec', param =input$param, alpha = input$alpha))
+            hyper=list(prec = list(prior = 'pc.prec', param =param, alpha = alpha))
+          ) +
+          f(
+            region_id2,
+            model='iid', 
+            #hyper=list(prec = list(prior = 'pc.prec', param =input$param, alpha = input$alpha))
+            hyper=list(prec = list(prior = 'pc.prec', param =param, alpha = alpha))
+          ) +
+          f(
+            week_id,
+            model='rw2',
+            cyclic=TRUE
+          )
+        
+        
+        #5. fit the model
+        print("fitting model")
+        
+        model <- fit_model(data=processed_data$data,formula=formula,family=input$dist_family)
+        
+        return(list(
+          model = model,
+          processed_data = processed_data[["data"]],
+          region_col = processed_data[["region_col"]],
+          date_col = processed_data[["date_col"]]
+        ))
+        
+
+      }) |> bindEvent(input$estimate_model_btn)
+    
+    
+      output$inla_model_object <- renderPrint({
+        req(inla_model())
+        print(summary(inla_model()$model))
+      })
+      
+      output$raw_data <- renderDT(results$data)
     }
   )
 }
@@ -99,4 +187,22 @@ update_n_forecast_widget <- function(res) {
   )
   
   lu[[res]]
+}
+
+pre_process_data <- function(data, nforecasts ) {
+  
+  data <- expand_dataset(data,nforecasts)
+  date_col="date"
+  region_col="region"
+  cat_cols=c(date_col,region_col)
+  
+  for (col in cat_cols){ # add id columns
+    data[[paste0(col,"_id")]]=as.numeric(factor(data[[col]])) 
+    data[[paste0(col,"_id2")]]=as.numeric(factor(data[[col]]))
+  }
+  data<-add_fips(data) # add column with fips codes
+  data<-add_expected(data,nforecasts) # add column with expected counts (based on share of total counts) for each region
+  data$week_id <- (data$date_id - 1) %% 52 + 1
+  
+  return(list(data = data, region_col = region_col, date_col = date_col, cat_cols = cat_cols))
 }

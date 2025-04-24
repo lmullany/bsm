@@ -74,6 +74,13 @@ data_loader_ui <- function(id) {
             caption = "Pulling data via API / Please wait",
             color = bs_get_variables(theme=THEME,"primary")
           )
+        ),
+        card_footer(
+          downloadButton(
+            ns("download_data"),
+            label="Download Data", 
+            class="btn-primary"
+          )
         )
       )
     )
@@ -87,7 +94,7 @@ data_loader_server <- function(id, dc, results) {
     function(input, output, session) {
       
       # Monitor to fill global reactives
-      observe(results$data <- data())
+      observe(results$data <- data()$data)
       observe(dc$time_res <- input$time_res)
       
       # Update the choices for syndromic categories
@@ -98,54 +105,58 @@ data_loader_server <- function(id, dc, results) {
                   synd=cat_values$syndromes,
                   subsynd=cat_values$subsyndromes)[[input$synd_cat]]
         
+        if(input$synd_cat == "ccdd") selected="CDC COVID-Specific DD v1"
+        else selected = NULL
+        
         updateSelectInput(
           session = session,
           inputId = "synd_drop_menu",
-          choices = sc
+          choices = sc,
+          selected = selected
         )
       })
       
       data <- reactive({
         
-        # # --------------------------
-        # # Syndromic categories
-        # # --------------------------
-        # synd_bits <- list(
-        #   "ccdd" = c("mgs" = "chiefcomplaintsubsyndromes", "cat" = "ccddCategory="),
-        #   "synd" = c("mgs" = "essencesyndromes", "cat" = "medicalGrouping="),
-        #   "subsynd" = c("mgs" = "chiefcomplaintsubsyndromes", "cat" = "medicalGrouping=")
-        # )
-        # # Set the syndrome specification
-        # sc <- paste0(
-        #   "medicalGroupingSystem=",synd_bits[[syndrome_cat]]["mgs"], "&",
-        #   synd_bits[[syndrome_cat]]["cat"], xml2::url_escape(tolower(syndrome))
-        # )
+        # --------------------------
+        # Syndromic categories
+        # --------------------------
+        synd_bits <- list(
+          "ccdd" = c("mgs" = "chiefcomplaintsubsyndromes", "cat" = "ccddCategory"),
+          "synd" = c("mgs" = "essencesyndromes", "cat" = "medicalGrouping"),
+          "subsynd" = c("mgs" = "chiefcomplaintsubsyndromes", "cat" = "medicalGrouping")
+        )
         
+        med_group_sys = synd_bits[[input$synd_cat]]["mgs"]
+        categ_info = list(cat_class = synd_bits[[input$synd_cat]]["cat"],
+                          cat_value = xml2::url_escape(tolower(input$synd_drop_menu)))
         
-        sdm = xml2::url_escape(tolower(input$synd_drop_menu))
-        print(sdm)
-                               
         data<- get_data(
           sd=input$drange[1],
           ed=input$drange[2],
           time_res=input$time_res,
           geo_res=input$geo_res,
-          ccdd=sdm,
-          state_filter=input$states
+          state_filter=input$states,
+          med_group_sys = med_group_sys,
+          categ_info = categ_info
         )
+        
         if (input$time_res=="weekly"){
-          data$date<-sapply(data$date,week_to_end_date)
+          data$data$date<-sapply(data$data$date,week_to_end_date)
         } else if (input$time_res=="daily"){
-          data$date<-as.Date(data$date,f)
+          data$data$date<-as.Date(data$date,f)
         }
         return(data)
         
       }) |> bindEvent(input$load_data_btn)
       
       output$ingested_data <- renderDT(
-        data()
+        data()$data
       )
       
+      output$download_data <- downloadHandler(
+        filename = "data.csv" , content = \(file) data.table::fwrite(data()$data, file)
+      )
       
     }
   )
@@ -159,10 +170,9 @@ create_syndrome_inputs <- function(ns, cats) {
       inputId = ns("synd_cat"),
       label = "Target Outcome",
       choices = c(
-        "CCDD" = "ccdd"
-        # Hide the remainder of the choices for now
-        #"Syndrome" = "synd",
-        #"Sub-Syndrome" = "subsynd"
+        "CCDD" = "ccdd",
+        "Syndrome" = "synd",
+        "Sub-Syndrome" = "subsynd"
       )
     ),
     selectInput(

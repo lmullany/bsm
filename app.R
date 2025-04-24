@@ -31,7 +31,7 @@ ui <- page(
     # Dark Mode Toggle
     nav_item(input_dark_mode(mode="dark")),
     # Options
-    navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
+    navbar_options = list(class = "btn-primary", theme = "dark", underline=FALSE)
   )
 )
 
@@ -49,13 +49,14 @@ server <- function(input, output, session) {
   
   dc = reactiveValues() # data loader configuration reactives
   im = reactiveValues() # inla model configuration reactives
-  results = reactiveValues()  # results reactives (data, plots, model, etc)
+  results = reactiveValues(data=data.table::fread("~/../Downloads/demo_inla_data_md.csv"))  # results reactives (data, plots, model, etc)
   
   # ----------------------------------------------------------------------
   # Module Server calls
   # ----------------------------------------------------------------------
   data_loader_server(id = "data_load", dc, results)
   inla_model_server(id = "inla_model", dc, im, results)
+  viz_server("viz", dc, im, results)
   documentation_server(id="documentation")
   
 }

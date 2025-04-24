@@ -20,6 +20,8 @@ library(stringr)
 library(lubridate)
 library(MMWRweek)
 library(shinycssloaders)
+library(INLA)
+library(gridExtra)
 
 #####################
 ## profile
