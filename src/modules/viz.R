@@ -13,18 +13,19 @@ viz_ui <- function(id) {
         checkboxInput(ns("add_rescaled"), "Add Rescale",value = FALSE),
         selectizeInput(ns("viz_regions"), "Select Region(s)", choices=NULL, multiple=TRUE)
       ),
-      navset_card_pill(
+      navset_bar(
         nav_panel(
           title = "Plots Placeholder",
           plotOutput(ns("plots"))
         ),
         nav_panel(
           title="Posterior",
-          card_body(
-            DTOutput(ns("posterior_data")),
-          ),
-          downloadButton(ns("download_posterior_btn"), "Download", class = "btn-primary")
-        )
+          card(
+            card_body(DTOutput(ns("posterior_data"))),
+            card_footer(downloadButton(ns("download_posterior_btn"), "Download", class = "btn-primary"))
+          )
+        ),
+        navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
       )
     )
   )

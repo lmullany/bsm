@@ -31,7 +31,7 @@ ui <- page(
     # Dark Mode Toggle
     nav_item(input_dark_mode(mode="dark")),
     # Options
-    navbar_options = list(class = "btn-primary", theme = "dark", underline=FALSE)
+    navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
   )
 )
 
