@@ -88,7 +88,7 @@ data_loader_ui <- function(id) {
 
 }
 
-data_loader_server <- function(id, dc, results) {
+data_loader_server <- function(id, dc, results, profile) {
   moduleServer(
     id,
     function(input, output, session) {
@@ -138,7 +138,8 @@ data_loader_server <- function(id, dc, results) {
           geo_res=input$geo_res,
           state_filter=input$states,
           med_group_sys = med_group_sys,
-          categ_info = categ_info
+          categ_info = categ_info, 
+          profile = profile()
         )
         
         if (input$time_res=="weekly"){

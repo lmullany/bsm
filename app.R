@@ -55,7 +55,7 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------
   # Module Server calls
   # ----------------------------------------------------------------------
-  data_loader_server(id = "data_load", dc, results)
+  data_loader_server(id = "data_load", dc, results, profile)
   inla_model_server(id = "inla_model", dc, im, results)
   viz_server("viz", dc, im, results)
   documentation_server(id="documentation")

@@ -568,7 +568,7 @@ reshape_and_join <- function(df_single, df_all) {
 }
 
 
-get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, categ_info){
+get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, categ_info, profile){
   url_all <- make_table_builder_url(
     start_date=sd,
     end_date=ed,
@@ -587,8 +587,8 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, cate
     categ_info = categ_info
   )
   # Data Pull from ESSENCE
-  data_all <- get_api_data(url_all, fromCSV = TRUE)
-  data_ccdd <- get_api_data(url_ccdd, fromCSV = TRUE)
+  data_all <- get_api_data(url_all, fromCSV = TRUE, profile=profile)
+  data_ccdd <- get_api_data(url_ccdd, fromCSV = TRUE, profile=profile)
   merged<-reshape_and_join(df_single=data_ccdd,df_all=data_all)
   return(list(data = merged, url_all = url_all, url_ccdd = url_ccdd))
 }
