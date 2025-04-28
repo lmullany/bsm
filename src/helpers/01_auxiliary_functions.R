@@ -555,10 +555,10 @@ make_table_builder_url<-function(
 
 reshape_and_join <- function(df_single, df_all) {
   df_single_long <- df_single %>%
-    pivot_longer(-timeResolution, names_to = "region", values_to = "ccdd")
+    pivot_longer(-timeResolution, names_to = "region", values_to = "target_count")
   
   df_all_long <- df_all %>%
-    pivot_longer(-timeResolution, names_to = "region", values_to = "overall")
+    pivot_longer(-timeResolution, names_to = "region", values_to = "all_count")
   
   df_joined <- df_single_long %>%
     inner_join(df_all_long, by = c("timeResolution", "region")) %>%
@@ -567,6 +567,13 @@ reshape_and_join <- function(df_single, df_all) {
   return(df_joined)
 }
 
+reshape_and_join_dt <- function(df_single, df_all) {
+  merge(
+    melt(df_single, id="timeResolution", value.name="target_count", variable.name="region"),
+    melt(df_all, id="timeResolution", value.name="all_count", variable.name="region"),
+    by=c("timeResolution", "region")
+  ) |> setnames("date", "region", "target_count", "all_count")
+}
 
 get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, categ_info, profile){
   url_all <- make_table_builder_url(
@@ -577,7 +584,7 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, cate
     state_filter=state_filter,
     med_group_sys = med_group_sys
   )
-  url_ccdd <- make_table_builder_url(
+  url_single <- make_table_builder_url(
     start_date=sd,
     end_date=ed,
     time_resolution=time_res,
@@ -588,7 +595,11 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, cate
   )
   # Data Pull from ESSENCE
   data_all <- get_api_data(url_all, fromCSV = TRUE, profile=profile)
-  data_ccdd <- get_api_data(url_ccdd, fromCSV = TRUE, profile=profile)
-  merged<-reshape_and_join(df_single=data_ccdd,df_all=data_all)
-  return(list(data = merged, url_all = url_all, url_ccdd = url_ccdd))
+  data_single <- get_api_data(url_single, fromCSV = TRUE, profile=profile)
+  #merged<-reshape_and_join(df_single=data_single,df_all=data_all)
+  setDT(data_all)
+  setDT(data_single)
+  merged <- reshape_and_join_dt(data_single, data_all)
+  
+  return(list(data = merged, url_all = url_all, url_single = url_single))
 }
