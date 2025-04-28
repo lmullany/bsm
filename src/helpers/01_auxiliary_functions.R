@@ -118,11 +118,31 @@ fit_model<-function(data,formula,family){
   
 }
 
+read_mobility_adj_mat <- function(path = "data/mobility_adj_mat.csv") {
+  am = data.table::fread(path, drop = 1, header=TRUE)
+  as.matrix(am, rownames=names(rdt))
+}
+
 get_adjacency<-function(data=NULL, region_col){
   adj_mat<-read.csv("data/mobility_adj_mat.csv",colClasses=c("X"="character"))
   rownames(adj_mat)<-adj_mat$X 
   colnames(adj_mat)<-gsub("^X","",colnames(adj_mat))
   adj_mat<-adj_mat[,colnames(adj_mat)!=""]
+  if (is.null(data)){
+    return(adj_mat)
+  } else {
+    region_id_col=paste0(region_col,"_id")
+    id_mapping<-data[,c("countyfips", region_id_col)] |> distinct() |> arrange(region_id_col)
+    fips_order<-id_mapping$countyfips
+    adj_mat_filt<-adj_mat[fips_order,fips_order]
+    adj_mat_inla <-inla.read.graph(adj_mat_filt)
+    return(adj_mat_inla)
+  }
+  
+}
+
+get_adjacency_dt<-function(data=NULL, region_col){
+  adj_mat = read_mobility_adj_mat()
   if (is.null(data)){
     return(adj_mat)
   } else {
@@ -135,6 +155,7 @@ get_adjacency<-function(data=NULL, region_col){
   }
   
 }
+
 
 get_physical_adjacency<-function(data=NULL){
   adj_mat<-read.csv("data/us_county_adjacency.csv",colClasses=c("X"="character"))

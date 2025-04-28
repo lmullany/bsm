@@ -120,7 +120,7 @@ inla_model_server <- function(id, dc, im, results) {
         
         #3 Get adjaceny matrix
         print("getting_adjacency_matrix")
-        adj_mat_inla<-get_adjacency(processed_data$data, processed_data$region_col)
+        adj_mat_inla<-get_adjacency_dt(processed_data$data, processed_data$region_col)
         
         
         #4. Create formula (for now, just using default)
