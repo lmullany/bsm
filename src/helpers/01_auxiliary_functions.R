@@ -53,22 +53,22 @@ add_expected <-function(df,nforecasts){
   # Calculate total value for each date
   df_date <- df %>%
     group_by(date) %>%
-    summarise(ccdd_tot = sum(ccdd, na.rm = TRUE)) %>%
+    summarise(target_tot = sum(target, na.rm = TRUE)) %>%
     arrange(date)
   nrows= nrow(df_date)
   forecast_inds = (nrows-nforecasts+1):nrows
-  df_date[forecast_inds,"ccdd_tot"]<-df_date[nrows-nforecasts,"ccdd_tot"]
+  df_date[forecast_inds,"target_tot"]<-df_date[nrows-nforecasts,"target_tot"]
   # Calculate total population proportion for each date
   df_reg <- df %>%
     group_by(region) %>%
-    summarise(reg_sum = sum(ccdd, na.rm = TRUE)) 
-  df_reg$reg_prop<-df_reg$reg_sum/sum(df$ccdd,na.rm=TRUE)
+    summarise(reg_sum = sum(target, na.rm = TRUE)) 
+  df_reg$reg_prop<-df_reg$reg_sum/sum(df$target,na.rm=TRUE)
   
   
   # Calculate adjusted total value
   df <- inner_join(df,df_date,by="date")
   df <- inner_join(df,df_reg,by="region")
-  df$expected_ccdd<-df$reg_prop*df$ccdd_tot
+  df$expected_target<-df$reg_prop*df$target_tot
   return(df)
 }
 
@@ -77,14 +77,14 @@ fit_model<-function(data,formula,family){
   print(formula)
   start <- Sys.time()
   data<-data.frame(data)
-  data$log_offset <- log(data$expected_ccdd)
+  data$log_offset <- log(data$expected_target)
   if (family == "poisson"){
     inla_model <- inla(
       formula, 
       family = "poisson", 
       data = data, 
       offset=log_offset,
-      #E=expected_ccdd,
+      #E=expected_target,
       control.compute=list(waic=TRUE,return.marginals.predictor = TRUE),
       control.predictor = list(compute = TRUE, link = 1)
     )
@@ -95,13 +95,13 @@ fit_model<-function(data,formula,family){
       data = data, 
       Ntrials = overall,
       #offset=log_offset,
-      E=expected_ccdd,
+      E=expected_target,
       control.predictor = list(compute = TRUE, link = 1),
       control.compute=list(waic=TRUE,return.marginals.predictor = TRUE),
       control.inla=list(int.strategy="eb")
     )
   }else if (family=="nbinomial"){
-    data$log_offset <- log(data$expected_ccdd)
+    data$log_offset <- log(data$expected_target)
     inla_model <- inla(
       formula, 
       family = "nbinomial", 
@@ -244,18 +244,18 @@ add_baselines <- function(df, n) {
   df <- df %>%
     arrange(region, date) %>%
     group_by(region) %>%
-    mutate(rolling_avg_ccdd = rollapply(ccdd, width = n, FUN = mean, fill = NA, align = "right")) %>%
+    mutate(rolling_avg_target = rollapply(target, width = n, FUN = mean, fill = NA, align = "right")) %>%
     ungroup()
   daily_total <- df %>%
     group_by(date) %>%
-    summarize(total_count = sum(ccdd, na.rm = TRUE), .groups = "drop")
+    summarize(total_count = sum(target, na.rm = TRUE), .groups = "drop")
   # Compute sum of count for each region over all dates
   region_total <- df %>%
     group_by(region) %>%
-    summarize(region_sum = sum(ccdd, na.rm = TRUE), .groups = "drop")
+    summarize(region_sum = sum(target, na.rm = TRUE), .groups = "drop")
   
   # Compute overall sum of count across all dates and regions
-  overall_sum <- sum(df$ccdd, na.rm = TRUE)
+  overall_sum <- sum(df$target, na.rm = TRUE)
   
   # Merge total count per date
   df <- df %>%
@@ -277,7 +277,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
   for (i in seq_along(groups)) {
     group <- groups[[i]]
     if (use_prop){
-      group$ccdd=group$ccdd/group$overall
+      group$target=group$target/group$overall
       group$predicted_median = group$predicted_median/group$overall
       group$predicted_lower = group$predicted_lower/group$overall
       group$predicted_upper = group$predicted_upper/group$overall
@@ -287,7 +287,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
         group$predicted_upper_temporal = group$predicted_upper_temporal/group$overall
       }
       if (add_rolling){
-        group$rolling_avg_ccdd = group$rolling_avg_ccdd/group$overall
+        group$rolling_avg_target = group$rolling_avg_target/group$overall
       }
       if (add_rescaled){
         group$rescaled_aggregate_trend = group$rescaled_aggregate_trend/group$overall
@@ -295,7 +295,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
     }
     #group_name <- paste0("location_",unique(group$countyfips))
     group_name <- unique(group$region)
-    plt<-ggplot(group, aes(x = .data[[date_col]], y = ccdd)) +
+    plt<-ggplot(group, aes(x = .data[[date_col]], y = target)) +
       geom_point(size=0.5) +
       geom_line(aes(y=predicted_median,color='spatio-temporal'),linewidth=0.1) +
       geom_ribbon(aes(ymin=predicted_lower,ymax=predicted_upper, fill='spatio-temporal'),alpha=0.3) + 
@@ -311,7 +311,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
     }
     if (add_rolling){
       plt<-plt+
-        geom_line(aes(y=rolling_avg_ccdd,color="rolling"),linewidth=0.1)
+        geom_line(aes(y=rolling_avg_target,color="rolling"),linewidth=0.1)
     }
     if (add_rescaled){
       plt<-plt+
@@ -319,7 +319,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
     }
     plt<-plt+scale_color_manual(values = c("spatio-temporal" = "red", "temporal" = "blue","rolling"="green","aggregate"="black"))
     plt<-plt+scale_fill_manual(values = c("spatio-temporal" = "red", "temporal" = "blue"))
-    # folder=paste0("figures/figs_",gsub("%20","_",ccdd),"_",gsub("-","",sd),"_to_",gsub("-","",ed),"_",family)
+    # folder=paste0("figures/figs_",gsub("%20","_",target),"_",gsub("-","",sd),"_to_",gsub("-","",ed),"_",family)
     # if (!dir.exists(folder)) {
     #   dir.create(folder, recursive = TRUE)
     # }
@@ -555,10 +555,10 @@ make_table_builder_url<-function(
 
 reshape_and_join <- function(df_single, df_all) {
   df_single_long <- df_single %>%
-    pivot_longer(-timeResolution, names_to = "region", values_to = "target_count")
+    pivot_longer(-timeResolution, names_to = "region", values_to = "target")
   
   df_all_long <- df_all %>%
-    pivot_longer(-timeResolution, names_to = "region", values_to = "all_count")
+    pivot_longer(-timeResolution, names_to = "region", values_to = "overall")
   
   df_joined <- df_single_long %>%
     inner_join(df_all_long, by = c("timeResolution", "region")) %>%
@@ -569,10 +569,10 @@ reshape_and_join <- function(df_single, df_all) {
 
 reshape_and_join_dt <- function(df_single, df_all) {
   merge(
-    melt(df_single, id="timeResolution", value.name="target_count", variable.name="region"),
-    melt(df_all, id="timeResolution", value.name="all_count", variable.name="region"),
+    melt(df_single, id="timeResolution", value.name="target", variable.name="region"),
+    melt(df_all, id="timeResolution", value.name="overall", variable.name="region"),
     by=c("timeResolution", "region")
-  ) |> setnames("date", "region", "target_count", "all_count")
+  ) |> setnames(new= c("date", "region", "target", "overall"))
 }
 
 get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, categ_info, profile){

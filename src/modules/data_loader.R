@@ -35,7 +35,7 @@ data_loader_ui <- function(id) {
   drange = dateRangeInput(
     ns("drange"),
     "Date Range",
-    start = end - 365,
+    start = end - 180,
     end = end
   )
   
@@ -130,6 +130,8 @@ data_loader_server <- function(id, dc, results, profile) {
         med_group_sys = synd_bits[[input$synd_cat]]["mgs"]
         categ_info = list(cat_class = synd_bits[[input$synd_cat]]["cat"],
                           cat_value = xml2::url_escape(tolower(input$synd_drop_menu)))
+        
+        dput(categ_info)
         
         data<- get_data(
           sd=input$drange[1],

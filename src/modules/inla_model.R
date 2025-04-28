@@ -128,7 +128,7 @@ inla_model_server <- function(id, dc, im, results) {
         print("creating_formula")
         alpha = 0.01
         param = 0.2
-        formula = ccdd ~ 1 + 
+        formula = target ~ 1 + 
           f(
             region_id,
             graph = adj_mat_inla,
