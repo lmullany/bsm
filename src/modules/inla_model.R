@@ -191,6 +191,8 @@ update_n_forecast_widget <- function(res) {
 
 pre_process_data <- function(data, nforecasts ) {
   
+  print(paste0("the class of data is ", class(data)))
+  
   data <- expand_dataset(data,nforecasts)
   date_col="date"
   region_col="region"

@@ -145,7 +145,8 @@ data_loader_server <- function(id, dc, results, profile) {
         )
         
         if (input$time_res=="weekly"){
-          data$data$date<-sapply(data$data$date,week_to_end_date)
+          #data$data$date<-sapply(data$data$date,week_to_end_date)
+          data$data <- wk_to_date(data$data, "date")
         } else if (input$time_res=="daily"){
           data$data$date<-as.Date(data$data$date)
         }
@@ -185,4 +186,7 @@ create_syndrome_inputs <- function(ns, cats) {
     )
   )
 }
+
+
+
 

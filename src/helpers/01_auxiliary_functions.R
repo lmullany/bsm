@@ -8,6 +8,7 @@ counties_by_state <- function(states) {
 }
 
 
+# function does week to end date for a single week string
 week_to_end_date <- function(week_str) {
   parts <- strsplit(week_str, "-")[[1]]
   year <- as.numeric(parts[1])
@@ -17,18 +18,32 @@ week_to_end_date <- function(week_str) {
   as.character(MMWRweek::MMWRweek2Date(year, week, 1))
 }
 
+# function takes data frame and string date column name
+# and returns frame with that column replaced with the
+# the date. Speed up, (relative to using sapply on 
+# the above function) grows with bigger datasets.
+wk_to_date <- function(df, date_col) {
+  d = df$date |> unique()
+  ndf = names(df)
+  dlu = data.table(
+    sapply(str_split(d,"-",), \(f) MMWRweek2Date(as.numeric(f[1]), as.numeric(f[2]),1)) |> as.IDate(),
+    d
+  ) |> setnames(new=c("_x", date_col))
+  df = df[dlu, on=c(date_col)]
+  df[, .SD, .SDcols = c("_x", ndf[-1])] |> setnames(new=ndf)
+}
+
+
 # Function to complete and extend the dataset
 expand_dataset <- function(df, num_future_steps) {
   
   # Ensure date column is of Date class
-  df$date <- as.Date(df$date)
+  df$date <- as.IDate(df$date)
   
   # Determine the increment (daily or weekly)
-  date_diffs <- unique(diff(sort(unique(df$date))))
-  if (length(date_diffs) == 1) {
-    date_increment <- date_diffs
-  } else {
-    stop("Inconsistent date increments detected.")
+  date_increment <- unique(df$date) |> sort() |> diff() |> unique()
+  if (length(date_increment) !=1) {
+    cli::cli_abort("Inconsistent date increments detected.")
   }
   
   # Create full sequence of dates
@@ -38,14 +53,19 @@ expand_dataset <- function(df, num_future_steps) {
   
   # Create all combinations of region and date
   regions <- unique(df$region)
-  full_grid <- expand.grid(date = all_dates, region = regions)
   
-  # Merge with original data
-  df_full <- full_grid %>%
-    left_join(df, by = c("date", "region")) %>%
-    mutate(overall = ifelse(is.na(overall), 1, overall)) # add ones for denominators
+  #full_grid <- expand.grid(date = all_dates, region = regions)
+  full_grid <- data.table::CJ(date= all_dates, region=regions)
+  df_full <- df[full_grid, on=.(date, region)]
+  df_full[is.na(overall), overall:=1]
+  df_full
   
-  return(df_full)
+  # # Merge with original data
+  # df_full <- full_grid %>%
+  #   left_join(df, by = c("date", "region")) %>%
+  #   mutate(overall = ifelse(is.na(overall), 1, overall)) # add ones for denominators
+  # 
+  # return(df_full)
 }
 
 add_expected <-function(df,nforecasts){
@@ -142,12 +162,17 @@ get_adjacency<-function(data=NULL, region_col){
 }
 
 get_adjacency_dt<-function(data=NULL, region_col){
+  print(head(data))
   adj_mat = read_mobility_adj_mat()
   if (is.null(data)){
     return(adj_mat)
   } else {
     region_id_col=paste0(region_col,"_id")
-    id_mapping<-distinct(data[,c("countyfips", region_id_col)]) %>% arrange(.data[[region_id_col]])
+    id_mapping <- data[, .SD, .SDcols = c("countyfips", region_id_col)] |> 
+      unique() |> 
+      _[order(x), env=list(x=region_id_col)]
+    
+    #id_mapping<-distinct(data[,c("countyfips", region_id_col)]) %>% arrange(.data[[region_id_col]])
     fips_order<-id_mapping$countyfips
     adj_mat_filt<-adj_mat[fips_order,fips_order]
     adj_mat_inla <-inla.read.graph(adj_mat_filt)
