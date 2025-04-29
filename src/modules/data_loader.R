@@ -35,7 +35,7 @@ data_loader_ui <- function(id) {
   drange = dateRangeInput(
     ns("drange"),
     "Date Range",
-    start = end - 365,
+    start = end - 180,
     end = end
   )
   
@@ -131,6 +131,8 @@ data_loader_server <- function(id, dc, results, profile) {
         categ_info = list(cat_class = synd_bits[[input$synd_cat]]["cat"],
                           cat_value = xml2::url_escape(tolower(input$synd_drop_menu)))
         
+        dput(categ_info)
+        
         data<- get_data(
           sd=input$drange[1],
           ed=input$drange[2],
@@ -143,7 +145,8 @@ data_loader_server <- function(id, dc, results, profile) {
         )
         
         if (input$time_res=="weekly"){
-          data$data$date<-sapply(data$data$date,week_to_end_date)
+          #data$data$date<-sapply(data$data$date,week_to_end_date)
+          data$data <- wk_to_date(data$data, "date")
         } else if (input$time_res=="daily"){
           data$data$date<-as.Date(data$data$date)
         }
@@ -183,4 +186,7 @@ create_syndrome_inputs <- function(ns, cats) {
     )
   )
 }
+
+
+
 

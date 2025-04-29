@@ -8,6 +8,7 @@ counties_by_state <- function(states) {
 }
 
 
+# function does week to end date for a single week string
 week_to_end_date <- function(week_str) {
   parts <- strsplit(week_str, "-")[[1]]
   year <- as.numeric(parts[1])
@@ -17,18 +18,32 @@ week_to_end_date <- function(week_str) {
   as.character(MMWRweek::MMWRweek2Date(year, week, 1))
 }
 
+# function takes data frame and string date column name
+# and returns frame with that column replaced with the
+# the date. Speed up, (relative to using sapply on 
+# the above function) grows with bigger datasets.
+wk_to_date <- function(df, date_col) {
+  d = df$date |> unique()
+  ndf = names(df)
+  dlu = data.table(
+    sapply(str_split(d,"-",), \(f) MMWRweek2Date(as.numeric(f[1]), as.numeric(f[2]),1)) |> as.IDate(),
+    d
+  ) |> setnames(new=c("_x", date_col))
+  df = df[dlu, on=c(date_col)]
+  df[, .SD, .SDcols = c("_x", ndf[-1])] |> setnames(new=ndf)
+}
+
+
 # Function to complete and extend the dataset
 expand_dataset <- function(df, num_future_steps) {
   
   # Ensure date column is of Date class
-  df$date <- as.Date(df$date)
+  df$date <- as.IDate(df$date)
   
   # Determine the increment (daily or weekly)
-  date_diffs <- unique(diff(sort(unique(df$date))))
-  if (length(date_diffs) == 1) {
-    date_increment <- date_diffs
-  } else {
-    stop("Inconsistent date increments detected.")
+  date_increment <- unique(df$date) |> sort() |> diff() |> unique()
+  if (length(date_increment) !=1) {
+    cli::cli_abort("Inconsistent date increments detected.")
   }
   
   # Create full sequence of dates
@@ -38,14 +53,19 @@ expand_dataset <- function(df, num_future_steps) {
   
   # Create all combinations of region and date
   regions <- unique(df$region)
-  full_grid <- expand.grid(date = all_dates, region = regions)
   
-  # Merge with original data
-  df_full <- full_grid %>%
-    left_join(df, by = c("date", "region")) %>%
-    mutate(overall = ifelse(is.na(overall), 1, overall)) # add ones for denominators
+  #full_grid <- expand.grid(date = all_dates, region = regions)
+  full_grid <- data.table::CJ(date= all_dates, region=regions)
+  df_full <- df[full_grid, on=.(date, region)]
+  df_full[is.na(overall), overall:=1]
+  df_full
   
-  return(df_full)
+  # # Merge with original data
+  # df_full <- full_grid %>%
+  #   left_join(df, by = c("date", "region")) %>%
+  #   mutate(overall = ifelse(is.na(overall), 1, overall)) # add ones for denominators
+  # 
+  # return(df_full)
 }
 
 add_expected <-function(df,nforecasts){
@@ -53,22 +73,22 @@ add_expected <-function(df,nforecasts){
   # Calculate total value for each date
   df_date <- df %>%
     group_by(date) %>%
-    summarise(ccdd_tot = sum(ccdd, na.rm = TRUE)) %>%
+    summarise(target_tot = sum(target, na.rm = TRUE)) %>%
     arrange(date)
   nrows= nrow(df_date)
   forecast_inds = (nrows-nforecasts+1):nrows
-  df_date[forecast_inds,"ccdd_tot"]<-df_date[nrows-nforecasts,"ccdd_tot"]
+  df_date[forecast_inds,"target_tot"]<-df_date[nrows-nforecasts,"target_tot"]
   # Calculate total population proportion for each date
   df_reg <- df %>%
     group_by(region) %>%
-    summarise(reg_sum = sum(ccdd, na.rm = TRUE)) 
-  df_reg$reg_prop<-df_reg$reg_sum/sum(df$ccdd,na.rm=TRUE)
+    summarise(reg_sum = sum(target, na.rm = TRUE)) 
+  df_reg$reg_prop<-df_reg$reg_sum/sum(df$target,na.rm=TRUE)
   
   
   # Calculate adjusted total value
   df <- inner_join(df,df_date,by="date")
   df <- inner_join(df,df_reg,by="region")
-  df$expected_ccdd<-df$reg_prop*df$ccdd_tot
+  df$expected_target<-df$reg_prop*df$target_tot
   return(df)
 }
 
@@ -77,14 +97,14 @@ fit_model<-function(data,formula,family){
   print(formula)
   start <- Sys.time()
   data<-data.frame(data)
-  data$log_offset <- log(data$expected_ccdd)
+  data$log_offset <- log(data$expected_target)
   if (family == "poisson"){
     inla_model <- inla(
       formula, 
       family = "poisson", 
       data = data, 
       offset=log_offset,
-      #E=expected_ccdd,
+      #E=expected_target,
       control.compute=list(waic=TRUE,return.marginals.predictor = TRUE),
       control.predictor = list(compute = TRUE, link = 1)
     )
@@ -95,13 +115,13 @@ fit_model<-function(data,formula,family){
       data = data, 
       Ntrials = overall,
       #offset=log_offset,
-      E=expected_ccdd,
+      E=expected_target,
       control.predictor = list(compute = TRUE, link = 1),
       control.compute=list(waic=TRUE,return.marginals.predictor = TRUE),
       control.inla=list(int.strategy="eb")
     )
   }else if (family=="nbinomial"){
-    data$log_offset <- log(data$expected_ccdd)
+    data$log_offset <- log(data$expected_target)
     inla_model <- inla(
       formula, 
       family = "nbinomial", 
@@ -118,6 +138,11 @@ fit_model<-function(data,formula,family){
   
 }
 
+read_mobility_adj_mat <- function(path = "data/mobility_adj_mat.csv") {
+  am = data.table::fread(path, drop = 1, header=TRUE)
+  as.matrix(am, rownames=names(rdt))
+}
+
 get_adjacency<-function(data=NULL, region_col){
   adj_mat<-read.csv("data/mobility_adj_mat.csv",colClasses=c("X"="character"))
   rownames(adj_mat)<-adj_mat$X 
@@ -127,7 +152,7 @@ get_adjacency<-function(data=NULL, region_col){
     return(adj_mat)
   } else {
     region_id_col=paste0(region_col,"_id")
-    id_mapping<-distinct(data[,c("countyfips", region_id_col)]) %>% arrange(.data[[region_id_col]])
+    id_mapping<-data[,c("countyfips", region_id_col)] |> distinct() |> arrange(region_id_col)
     fips_order<-id_mapping$countyfips
     adj_mat_filt<-adj_mat[fips_order,fips_order]
     adj_mat_inla <-inla.read.graph(adj_mat_filt)
@@ -135,6 +160,27 @@ get_adjacency<-function(data=NULL, region_col){
   }
   
 }
+
+get_adjacency_dt<-function(data=NULL, region_col){
+  print(head(data))
+  adj_mat = read_mobility_adj_mat()
+  if (is.null(data)){
+    return(adj_mat)
+  } else {
+    region_id_col=paste0(region_col,"_id")
+    id_mapping <- data[, .SD, .SDcols = c("countyfips", region_id_col)] |> 
+      unique() |> 
+      _[order(x), env=list(x=region_id_col)]
+    
+    #id_mapping<-distinct(data[,c("countyfips", region_id_col)]) %>% arrange(.data[[region_id_col]])
+    fips_order<-id_mapping$countyfips
+    adj_mat_filt<-adj_mat[fips_order,fips_order]
+    adj_mat_inla <-inla.read.graph(adj_mat_filt)
+    return(adj_mat_inla)
+  }
+  
+}
+
 
 get_physical_adjacency<-function(data=NULL){
   adj_mat<-read.csv("data/us_county_adjacency.csv",colClasses=c("X"="character"))
@@ -244,18 +290,18 @@ add_baselines <- function(df, n) {
   df <- df %>%
     arrange(region, date) %>%
     group_by(region) %>%
-    mutate(rolling_avg_ccdd = rollapply(ccdd, width = n, FUN = mean, fill = NA, align = "right")) %>%
+    mutate(rolling_avg_target = rollapply(target, width = n, FUN = mean, fill = NA, align = "right")) %>%
     ungroup()
   daily_total <- df %>%
     group_by(date) %>%
-    summarize(total_count = sum(ccdd, na.rm = TRUE), .groups = "drop")
+    summarize(total_count = sum(target, na.rm = TRUE), .groups = "drop")
   # Compute sum of count for each region over all dates
   region_total <- df %>%
     group_by(region) %>%
-    summarize(region_sum = sum(ccdd, na.rm = TRUE), .groups = "drop")
+    summarize(region_sum = sum(target, na.rm = TRUE), .groups = "drop")
   
   # Compute overall sum of count across all dates and regions
-  overall_sum <- sum(df$ccdd, na.rm = TRUE)
+  overall_sum <- sum(df$target, na.rm = TRUE)
   
   # Merge total count per date
   df <- df %>%
@@ -277,7 +323,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
   for (i in seq_along(groups)) {
     group <- groups[[i]]
     if (use_prop){
-      group$ccdd=group$ccdd/group$overall
+      group$target=group$target/group$overall
       group$predicted_median = group$predicted_median/group$overall
       group$predicted_lower = group$predicted_lower/group$overall
       group$predicted_upper = group$predicted_upper/group$overall
@@ -287,7 +333,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
         group$predicted_upper_temporal = group$predicted_upper_temporal/group$overall
       }
       if (add_rolling){
-        group$rolling_avg_ccdd = group$rolling_avg_ccdd/group$overall
+        group$rolling_avg_target = group$rolling_avg_target/group$overall
       }
       if (add_rescaled){
         group$rescaled_aggregate_trend = group$rescaled_aggregate_trend/group$overall
@@ -295,7 +341,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
     }
     #group_name <- paste0("location_",unique(group$countyfips))
     group_name <- unique(group$region)
-    plt<-ggplot(group, aes(x = .data[[date_col]], y = ccdd)) +
+    plt<-ggplot(group, aes(x = .data[[date_col]], y = target)) +
       geom_point(size=0.5) +
       geom_line(aes(y=predicted_median,color='spatio-temporal'),linewidth=0.1) +
       geom_ribbon(aes(ymin=predicted_lower,ymax=predicted_upper, fill='spatio-temporal'),alpha=0.3) + 
@@ -311,7 +357,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
     }
     if (add_rolling){
       plt<-plt+
-        geom_line(aes(y=rolling_avg_ccdd,color="rolling"),linewidth=0.1)
+        geom_line(aes(y=rolling_avg_target,color="rolling"),linewidth=0.1)
     }
     if (add_rescaled){
       plt<-plt+
@@ -319,7 +365,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
     }
     plt<-plt+scale_color_manual(values = c("spatio-temporal" = "red", "temporal" = "blue","rolling"="green","aggregate"="black"))
     plt<-plt+scale_fill_manual(values = c("spatio-temporal" = "red", "temporal" = "blue"))
-    # folder=paste0("figures/figs_",gsub("%20","_",ccdd),"_",gsub("-","",sd),"_to_",gsub("-","",ed),"_",family)
+    # folder=paste0("figures/figs_",gsub("%20","_",target),"_",gsub("-","",sd),"_to_",gsub("-","",ed),"_",family)
     # if (!dir.exists(folder)) {
     #   dir.create(folder, recursive = TRUE)
     # }
@@ -555,7 +601,7 @@ make_table_builder_url<-function(
 
 reshape_and_join <- function(df_single, df_all) {
   df_single_long <- df_single %>%
-    pivot_longer(-timeResolution, names_to = "region", values_to = "ccdd")
+    pivot_longer(-timeResolution, names_to = "region", values_to = "target")
   
   df_all_long <- df_all %>%
     pivot_longer(-timeResolution, names_to = "region", values_to = "overall")
@@ -567,6 +613,13 @@ reshape_and_join <- function(df_single, df_all) {
   return(df_joined)
 }
 
+reshape_and_join_dt <- function(df_single, df_all) {
+  merge(
+    melt(df_single, id="timeResolution", value.name="target", variable.name="region"),
+    melt(df_all, id="timeResolution", value.name="overall", variable.name="region"),
+    by=c("timeResolution", "region")
+  ) |> setnames(new= c("date", "region", "target", "overall"))
+}
 
 get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, categ_info, profile){
   url_all <- make_table_builder_url(
@@ -577,7 +630,7 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, cate
     state_filter=state_filter,
     med_group_sys = med_group_sys
   )
-  url_ccdd <- make_table_builder_url(
+  url_single <- make_table_builder_url(
     start_date=sd,
     end_date=ed,
     time_resolution=time_res,
@@ -588,7 +641,11 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, cate
   )
   # Data Pull from ESSENCE
   data_all <- get_api_data(url_all, fromCSV = TRUE, profile=profile)
-  data_ccdd <- get_api_data(url_ccdd, fromCSV = TRUE, profile=profile)
-  merged<-reshape_and_join(df_single=data_ccdd,df_all=data_all)
-  return(list(data = merged, url_all = url_all, url_ccdd = url_ccdd))
+  data_single <- get_api_data(url_single, fromCSV = TRUE, profile=profile)
+  #merged<-reshape_and_join(df_single=data_single,df_all=data_all)
+  setDT(data_all)
+  setDT(data_single)
+  merged <- reshape_and_join_dt(data_single, data_all)
+  
+  return(list(data = merged, url_all = url_all, url_single = url_single))
 }
