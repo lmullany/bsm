@@ -44,7 +44,44 @@ inla_model_ui <- function(id) {
       ns = ns
     )
   )
+
   
+  ## Output cards:
+  model_card <- card(
+    card_header("INLA Estimation Summary", class="bg-primary"),
+    card_body(withSpinner(
+      verbatimTextOutput(ns("inla_model_object")),
+      caption = "Estimating Model ... please wait",
+      color = bs_get_variables(theme=THEME,"primary")
+    ))
+  )
+  
+  model_data_card <- card(
+    card_header("Processed Data", class="bg-primary"),
+    card_body(withSpinner(
+      DTOutput(ns("inla_model_data")),
+      caption = "Estimating Model ... please wait",
+      color = bs_get_variables(theme=THEME,"primary")
+    )),
+    card_footer(
+      downloadButton(
+        ns("download_data"),
+        label="Download Data", 
+        class="btn-primary"
+      )
+    )
+  )
+  
+  model_formula_card <- card(
+    card_header("Model/Formula", class="bg-primary"),
+    card_body(withSpinner(
+      verbatimTextOutput(ns("inla_model_formula")),
+      caption = "Estimating Model ... please wait",
+      color = bs_get_variables(theme=THEME,"primary")
+    ))
+  )
+
+
   
   
   ########################
@@ -56,20 +93,22 @@ inla_model_ui <- function(id) {
     layout_sidebar(
       sidebar = sidebar(
         id = ns("model_sidebar"),
-        width = SIDEBAR_WIDTH,
+        width = SIDEBAR_WIDTH*2,
         forecasts, 
         family,
         hyper_params,
         formula_panel,
         input_task_button(ns("estimate_model_btn"), "Run Model")
       ),
-      card(
-        card_header("INLA Model Object", class="bg-primary"),
-        card_body(withSpinner(
-          verbatimTextOutput(ns("inla_model_object")),
-          caption = "Estimating Model ... please wait",
-          color = bs_get_variables(theme=THEME,"primary")
-        ))
+      layout_column_wrap(
+        width=NULL, height=300, 
+        style = css(grid_template_columns = c("60%", "40%")),
+        model_data_card,
+        layout_column_wrap(
+          width=1, 
+          #heights_equal = "row",
+          model_card, model_formula_card
+        ) 
       )
     )
   )  
@@ -110,6 +149,9 @@ inla_model_server <- function(id, dc, im, results) {
   
       inla_model <- reactive({
         
+        validate(need(results$data, "Please load data first"))
+  
+        
         #1. TODO: VALIDATE INPUTS
         #2. Preprocess Data:
         print("getting_pre-processed data")
@@ -128,27 +170,61 @@ inla_model_server <- function(id, dc, im, results) {
         print("creating_formula")
         alpha = 0.01
         param = 0.2
-        formula = target ~ 1 + 
-          f(
-            region_id,
-            graph = adj_mat_inla,
-            model='besagproper',
-            group = date_id,
-            control.group = list(model='ar1'),
-            #hyper=list(prec = list(prior = 'pc.prec', param =input$param, alpha = input$alpha))
-            hyper=list(prec = list(prior = 'pc.prec', param =param, alpha = alpha))
-          ) +
-          f(
-            region_id2,
-            model='iid', 
-            #hyper=list(prec = list(prior = 'pc.prec', param =input$param, alpha = input$alpha))
-            hyper=list(prec = list(prior = 'pc.prec', param =param, alpha = alpha))
-          ) +
-          f(
-            week_id,
-            model='rw2',
-            cyclic=TRUE
+        
+        # Requried
+        region_random_effect=rlang::parse_expr(
+          paste(
+            "f(",
+            "region_id2,",
+            "model='iid',", 
+            "hyper=list(prec = list(prior = 'pc.prec', param =", input$param, ", alpha = ", input$alpha, "))",
+            ")"
           )
+        )
+        
+        # Optional
+        temporal_component = rlang::parse_expr(
+          paste(
+            "f(",
+            "week_id,",
+            "model='rw2',",
+            "cyclic=TRUE",
+            ")"
+          )
+        )
+        
+        # build_spatial_component <- function(col, graph, model, group=NULL, control.group=NULL,...) {
+        #   rlang::call2(
+        #     "f", 
+        #     sym(col),
+        #     graph = graph, 
+        #     model = model, 
+        #     group = group,
+        #     control.group = control.group,
+        #     ...
+        #   )
+        # }
+        # Optional
+        spatial_component = rlang::parse_expr(
+          paste0(
+            "f(",
+            "region_id, ", 
+            "graph = adj_mat_inla,",
+            "model='besagproper',",
+            "group = date_id,",
+            "control.group = list(model='ar1'),",
+            "hyper=list(prec = list(prior = 'pc.prec', param =", input$param, ", alpha = ", input$alpha, "))", 
+            ")"
+        ))
+
+        formula = expr(
+          target ~ 1 +
+            !!spatial_component +
+            !!region_random_effect +
+            !!temporal_component
+        )
+        
+        formula = eval(formula)
         
         
         #5. fit the model
@@ -160,7 +236,8 @@ inla_model_server <- function(id, dc, im, results) {
           model = model,
           processed_data = processed_data[["data"]],
           region_col = processed_data[["region_col"]],
-          date_col = processed_data[["date_col"]]
+          date_col = processed_data[["date_col"]], 
+          formula = formula
         ))
         
 
@@ -172,7 +249,23 @@ inla_model_server <- function(id, dc, im, results) {
         print(summary(inla_model()$model))
       })
       
-      output$raw_data <- renderDT(results$data)
+      output$inla_model_formula <- renderPrint({
+        req(inla_model())
+        inla_model()$formula
+      })
+      
+      output$inla_model_data <- renderDT({
+        datatable(
+          inla_model()$processed_data,
+          rownames=FALSE
+        )
+      })
+      
+      output$download_data <- downloadHandler(
+        filename = "processed_data.csv" ,
+        content = \(file) data.table::fwrite(inla_model()$processed_data, file)
+      )
+      
     }
   )
 }
