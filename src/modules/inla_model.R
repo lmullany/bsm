@@ -32,7 +32,7 @@ inla_model_ui <- function(id) {
     radioButtons(
       ns("formula_type"),
       "Formula",
-      choices = c("Default", "Custom"), 
+      choices = c("Default"),#, "Custom"), 
       selected = "Default"
     ),
     conditionalPanel(
