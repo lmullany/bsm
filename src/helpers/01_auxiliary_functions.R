@@ -140,7 +140,7 @@ fit_model<-function(data,formula,family){
 
 read_mobility_adj_mat <- function(path = "data/mobility_adj_mat.csv") {
   am = data.table::fread(path, drop = 1, header=TRUE)
-  as.matrix(am, rownames=names(rdt))
+  as.matrix(am, rownames=names(am))
 }
 
 get_adjacency<-function(data=NULL, region_col){
