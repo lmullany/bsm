@@ -17,17 +17,17 @@ inla_model_ui <- function(id) {
     ns("dist_family"),
     label="Distributional Family",
     choices = c(
-      "Binomial" = "binomial",
-      "Negative Binomial"="nbinomial",
-      "Poisson" = "poisson"
+      "Binomial" = "binomial"#,
+      #"Negative Binomial"="nbinomial",
+      #"Poisson" = "poisson"
     ),
     selected = "binomial"
   )
   
-  hyper_params = tagList(
-    numericInput(ns("param"), "INLA Hyperparam: param", value=0.2),
-    numericInput(ns("alpha"), "INLA Hyperparam: alpha", value=0.01),
-  )
+  #hyper_params = tagList(
+  #  numericInput(ns("param"), "INLA Hyperparam: param", value=0.2),
+  #  numericInput(ns("alpha"), "INLA Hyperparam: alpha", value=0.01),
+  #)
   formula_panel = tagList(
     radioButtons(
       ns("formula_type"),
@@ -59,7 +59,7 @@ inla_model_ui <- function(id) {
         width = SIDEBAR_WIDTH,
         forecasts, 
         family,
-        hyper_params,
+        #hyper_params,
         formula_panel,
         input_task_button(ns("estimate_model_btn"), "Run Model")
       ),
