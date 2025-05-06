@@ -112,11 +112,7 @@ inla_model_server <- function(id, dc, im, results) {
         
         #1. TODO: VALIDATE INPUTS
         #2. Preprocess Data:
-        print("getting_pre-processed data")
         processed_data <- pre_process_data(results$data, input$nforecasts)
-        
-        print(processed_data)
-        
         
         #3 Get adjaceny matrix
         print("getting_adjacency_matrix")
@@ -169,7 +165,7 @@ inla_model_server <- function(id, dc, im, results) {
     
       output$inla_model_object <- renderPrint({
         req(inla_model())
-        print(summary(inla_model()$model))
+        summary(inla_model()$model)
       })
       
       output$raw_data <- renderDT(results$data)
@@ -190,8 +186,6 @@ update_n_forecast_widget <- function(res) {
 }
 
 pre_process_data <- function(data, nforecasts ) {
-  
-  print(paste0("the class of data is ", class(data)))
   
   data <- expand_dataset(data,nforecasts)
   date_col="date"

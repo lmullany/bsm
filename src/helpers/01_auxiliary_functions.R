@@ -162,7 +162,6 @@ get_adjacency<-function(data=NULL, region_col){
 }
 
 get_adjacency_dt<-function(data=NULL, region_col){
-  print(head(data))
   adj_mat = read_mobility_adj_mat()
   if (is.null(data)){
     return(adj_mat)
@@ -389,7 +388,6 @@ draw_map<-function(df,col){
     scale_fill_viridis_c(name = NULL, option = "rocket", na.value = "grey90", direction = -1) +
     labs(fill = "", title = "") +
     theme_void()
-  print(map1)
 }
 
 ############################################

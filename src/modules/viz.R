@@ -15,11 +15,11 @@ viz_ui <- function(id) {
       ),
       navset_bar(
         nav_panel(
-          title = "Plots Placeholder",
+          title = "Plots",
           plotOutput(ns("plots"))
         ),
         nav_panel(
-          title="Posterior",
+          title="Posterior Data",
           card(
             card_body(DTOutput(ns("posterior_data"))),
             card_footer(downloadButton(ns("download_posterior_btn"), "Download", class = "btn-primary"))
