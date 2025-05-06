@@ -269,6 +269,25 @@ get_posteriors<-function(res_data,inla_model,date_col,family,suffix=NULL){
   return(res_data)
 }
 
+
+get_exceedance_probs<-function(res_data,inla_model,family, thr){
+  # Get marginal distributions from the model
+  marg <- inla_model$marginals.fitted.values
+  # We need to be careful about the model family.  
+  # For binomial/betabinomial the outputs are proportions.
+  # For poisson/nbinomial the outputs are counts.  
+  # Most of the time it makes sense to apply thresholds to rates or proportions rather than counts.
+  # So, one might want to use thr*denominator in those cases.
+  if (family %in% c("poisson","nbinomial")){
+    thr<-thr 
+  } else if (family %in% c("binomial","betabinomial")){
+    thr<-thr*res_data$overall        
+  }
+  get_exceedance<-function(thr,marg) as.numeric(1 - inla.pmarginal(q = thr, marginal = marg))[[1]]
+  exceedance_prob <- unname(mapply(get_exceedance,thr,marg))
+  return(exceedance_prob)
+}
+
 process_region <- function(df, formula, family) {
   model <- fit_model(df, formula = formula, family = family)  # Train the model with formula and family
   df_with_results <- get_posteriors(df, model,suffix="temporal")  # Extract results
