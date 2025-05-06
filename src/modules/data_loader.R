@@ -16,7 +16,7 @@ data_loader_ui <- function(id) {
   geo = selectInput(
     ns("geo_res"),
     "Geographic Resolution",
-    choices=c("Zip Code" = "zip", "County" = "county"),
+    choices=c("County" = "county"), # "Zip Code" = "zip", 
     selected="county"
   )
   
@@ -43,7 +43,7 @@ data_loader_ui <- function(id) {
   time_res <- selectInput(
     ns("time_res"),
     label = "Time Resolution",
-    choices = c("Daily" = "daily", "Weekly" = "weekly", "Monthly" = "monthly"),
+    choices = c("Weekly" = "weekly"),#"Daily" = "daily", , "Monthly" = "monthly"),
     selected = "weekly"
   )
   

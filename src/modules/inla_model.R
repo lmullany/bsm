@@ -17,22 +17,22 @@ inla_model_ui <- function(id) {
     ns("dist_family"),
     label="Distributional Family",
     choices = c(
-      "Binomial" = "binomial",
-      "Negative Binomial"="nbinomial",
-      "Poisson" = "poisson"
+      "Binomial" = "binomial"#,
+      #"Negative Binomial"="nbinomial",
+      #"Poisson" = "poisson"
     ),
     selected = "binomial"
   )
   
-  hyper_params = tagList(
-    numericInput(ns("param"), "INLA Hyperparam: param", value=0.2),
-    numericInput(ns("alpha"), "INLA Hyperparam: alpha", value=0.01),
-  )
+  #hyper_params = tagList(
+  #  numericInput(ns("param"), "INLA Hyperparam: param", value=0.2),
+  #  numericInput(ns("alpha"), "INLA Hyperparam: alpha", value=0.01),
+  #)
   formula_panel = tagList(
     radioButtons(
       ns("formula_type"),
       "Formula",
-      choices = c("Default", "Custom"), 
+      choices = c("Default"),#, "Custom"), 
       selected = "Default"
     ),
     conditionalPanel(
@@ -96,7 +96,7 @@ inla_model_ui <- function(id) {
         width = SIDEBAR_WIDTH*2,
         forecasts, 
         family,
-        hyper_params,
+        #hyper_params,
         formula_panel,
         input_task_button(ns("estimate_model_btn"), "Run Model")
       ),
@@ -154,11 +154,7 @@ inla_model_server <- function(id, dc, im, results) {
         
         #1. TODO: VALIDATE INPUTS
         #2. Preprocess Data:
-        print("getting_pre-processed data")
         processed_data <- pre_process_data(results$data, input$nforecasts)
-        
-        print(processed_data)
-        
         
         #3 Get adjaceny matrix
         print("getting_adjacency_matrix")
@@ -246,7 +242,7 @@ inla_model_server <- function(id, dc, im, results) {
     
       output$inla_model_object <- renderPrint({
         req(inla_model())
-        print(summary(inla_model()$model))
+        summary(inla_model()$model)
       })
       
       output$inla_model_formula <- renderPrint({
@@ -283,8 +279,6 @@ update_n_forecast_widget <- function(res) {
 }
 
 pre_process_data <- function(data, nforecasts ) {
-  
-  print(paste0("the class of data is ", class(data)))
   
   data <- expand_dataset(data,nforecasts)
   date_col="date"

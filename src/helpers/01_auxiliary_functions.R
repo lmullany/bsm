@@ -388,7 +388,6 @@ draw_map<-function(df,col){
     scale_fill_viridis_c(name = NULL, option = "rocket", na.value = "grey90", direction = -1) +
     labs(fill = "", title = "") +
     theme_void()
-  print(map1)
 }
 
 ############################################
