@@ -58,7 +58,7 @@ data_loader_ui <- function(id) {
     layout_sidebar(
       sidebar = sidebar(
         id = ns("config_sidebar"),
-        width = SIDEBAR_WIDTH,
+        width = SIDEBAR_WIDTH*2,
         geo, 
         states,
         drange,

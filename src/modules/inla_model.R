@@ -515,7 +515,7 @@ build_spatial_component <- function(input, use_default = FALSE) {
       sc,
       ", order=", input[["sco_control_group_ar_order"]], "), "
     )
-  } else sc = paste0(sc, ")")
+  } else sc = paste0(sc, "), ")
     
   prec_prior_name = fcase(
     input[["sco_model_type"]] == "besagproper", "prec",
