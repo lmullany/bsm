@@ -171,7 +171,8 @@ inla_model_ui <- function(id) {
   model_formula_card <- card(
     card_header("Model/Formula", class="bg-primary"),
     card_body(withSpinner(
-      verbatimTextOutput(ns("inla_model_formula")),
+      verbatimTextOutput(ns("inla_model_formula")) |> 
+        tagAppendAttributes(style = css("white-space" = "pre-wrap")),
       caption = "Estimating Model ... please wait",
       color = bs_get_variables(theme=THEME,"primary")
     ))
@@ -285,6 +286,7 @@ inla_model_server <- function(id, dc, im, results) {
             names(input)
           )
         )
+        
         formula = eval(formula)
         
         #5. fit the model
@@ -297,7 +299,7 @@ inla_model_server <- function(id, dc, im, results) {
           processed_data = processed_data[["data"]],
           region_col = processed_data[["region_col"]],
           date_col = processed_data[["date_col"]], 
-          formula = formula
+          formula = deparse1(formula)
         ))
         
 
@@ -311,7 +313,7 @@ inla_model_server <- function(id, dc, im, results) {
       
       output$inla_model_formula <- renderPrint({
         req(inla_model())
-        inla_model()$formula
+        inla_model()$formula |> cat()
       })
       
       output$inla_model_data <- renderDT({
@@ -387,10 +389,8 @@ get_formula <- function(formula_type, input) {
   if(input$temporal_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "temporal")
   
   formula <- purrr::reduce(components[requested], ~call2('+', .x, .y))
-  formula <- expr(target~!!formula)
-  #formula <- eval(formula)
   
-  return(formula)
+  expr(target~!!formula)
   
 }
 
@@ -482,15 +482,9 @@ build_spatial_component <- function(input, use_default = FALSE) {
 }
 
 MODEL_COMPONENT_DEFAULTS = list(
-  #dist_family = "binomial",
   sco_model_type = "besagproper", 
   sco_control_group_model = "ar",
   tco_model = "rw2", 
-  #formula_type = "default",
-  #sco_adjacency_type = "mobility_adj_mat",
-  #spatial_component_chkbx = FALSE,
-  #temporal_component_chkbx = FALSE,
-  #nforecasts = 4L,
   rre_prec_pc_param = 0.2,
   rre_prec_pc_alpha = 0.01,
   sco_control_group_ar_order = 1L,
