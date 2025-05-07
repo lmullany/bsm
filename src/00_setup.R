@@ -22,6 +22,7 @@ library(MMWRweek)
 library(shinycssloaders)
 library(INLA)
 library(gridExtra)
+library(rlang)
 
 #####################
 ## profile
