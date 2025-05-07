@@ -29,8 +29,8 @@ inla_model_ui <- function(id) {
     div(
       class = "well",
       HTML("Precision Hyper-parameters:"),
-      numericInput(ns("rre_prec_pc_param"), "PC Prior Param", value=0.2),
-      numericInput(ns("rre_prec_pc_alpha"), "PC Prior Alpha", value=0.01)
+      numericInput(ns("rre_prec_pc_param"), "PC Prior Sigma Threshold", value=.2, step = .001),
+      sliderInput(ns("rre_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=1e-5, max = 1)
     )
   ))
   
@@ -44,30 +44,43 @@ inla_model_ui <- function(id) {
       inline=TRUE
     ),
     selectInput(
-      ns("sco_model_type"), "Model Type",
-      choices = c("Proper Besag Model" = "besagproper")
+      ns("sco_model_type"), "Spatial Model",
+      choices = c(
+        "Proper Besag Model" = "besagproper",
+        "Besag Area Model" = "besag",
+        "Besag-York-Mollier" = "bym"
+      )
     ),
     selectInput(
-      ns("sco_control_group_model"), "Date-based model",
-      choices = c("Autoregressive" = "ar")
+      ns("sco_control_group_model"), "Temporal Model",
+      choices = c(
+        "Autoregressive" = "ar",
+        "Random Walk (Order 2)" = "rw2",
+        "Random Walk (Order 1)" = "rw1"
+      )
     ),
     conditionalPanel(
       condition = "input.sco_control_group_model == 'ar'",
       numericInput(ns("sco_control_group_ar_order"), "Order", value = 1, min=1, max=5), 
       ns=ns
     ),
-    hidden(div(
+    div(
       class = "well",
       HTML("Precision Hyper-parameters:"),
-      numericInput(ns("sco_prec_pc_param"), "PC Prior Param", value=0.2),
-      numericInput(ns("sco_prec_pc_alpha"), "PC Prior Alpha", value=0.01)
-    ))
+      numericInput(ns("sco_prec_pc_param"), "PC Prior Sigma Threshold", value=.2, step = .001),
+      sliderInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=1e-5, max = 1)
+    )
   )
   
   temporal_component_options <- tagList(
     selectInput(
       ns("tco_model"), "Model",
-      choices = c("Random Walk" = "rw2", "Autoregressive-1" = "ar1", "Autoregressive-p" = "ar"),
+      choices = c(
+        "Random Walk (Order 2)-Cyclical" = "rw2",
+        "Random Walk (Order 1)-Cyclical" = "rw1",
+        "Autoregressive-Cyclical" = "ar1",
+        "Autoregressive - Temporal" = "ar"
+      ),
       selected = "rw2"
     ),
     conditionalPanel(
@@ -79,36 +92,44 @@ inla_model_ui <- function(id) {
   
   # Custom model panel
   model_component_custom_panel = tagList(
-    layout_columns(
-      checkboxInput(ns("include_rre"), "Region Random Effect",value = TRUE),
-      # unhide this if we want to allow for customization of RRE
-      hidden(input_switch(ns("customize_rre"),label ="Customize",value = FALSE)),
-      col_widths = c(6,6)
+    div(
+      class="well", 
+      layout_columns(
+        checkboxInput(ns("rre_component_chkbx"), "Region Random Effect",value = TRUE),
+        hidden(input_switch(ns("customize_rre"),label ="Advanced Customization",value = FALSE)),
+        col_widths = c(6,6)
+      ),
+      conditionalPanel(
+        condition = "input.customize_rre",
+        region_re_options,
+        ns=ns
+      )
     ),
-    conditionalPanel(
-      condition = "input.customize_rre",
-      region_re_options,
-      ns=ns
+    div(
+      class = "well",
+      layout_columns(
+        checkboxInput(ns("spatial_component_chkbx"), "Spatio-Temporal Component",value = FALSE),
+        input_switch(ns("customize_spatial_component"),label ="Advanced Customization",value = FALSE),
+        col_widths = c(6,6)
+      ),
+      conditionalPanel(
+        condition = "input.customize_spatial_component",
+        spatial_component_options, 
+        ns=ns
+      )
     ),
-    layout_columns(
-      checkboxInput(ns("spatial_component_chkbx"), "Spatial Component",value = FALSE),
-      input_switch(ns("customize_spatial_component"),label ="Customize",value = FALSE),
-      col_widths = c(6,6)
-    ),
-    conditionalPanel(
-      condition = "input.customize_spatial_component",
-      spatial_component_options, 
-      ns=ns
-    ),
-    layout_columns(
-      checkboxInput(ns("temporal_component_chkbx"), "Temporal Component",value = FALSE),
-      input_switch(ns("customize_temporal_component"),label ="Customize",value = FALSE),
-      col_widths = c(6,6)
-    ), 
-    conditionalPanel(
-      condition = "input.customize_temporal_component",
-      temporal_component_options,
-      ns=ns
+    div(
+      class="well",
+      layout_columns(
+        checkboxInput(ns("temporal_component_chkbx"), "Seaonal/Temporal Component",value = FALSE),
+        input_switch(ns("customize_temporal_component"),label ="Advanced Customization",value = FALSE),
+        col_widths = c(6,6)
+      ), 
+      conditionalPanel(
+        condition = "input.customize_temporal_component",
+        temporal_component_options,
+        ns=ns
+      )
     )
   )
   
@@ -216,9 +237,7 @@ inla_model_server <- function(id, dc, im, results) {
     id,
     function(input, output, session) {
       
-      # the RRE is required, so disable the checkbox for now.
-      disable(id = "include_rre")
-      
+
       observe(im$model <- inla_model()$model)
       observe(im$posterior <- get_posteriors(
         res_data = inla_model()[["processed_data"]],
@@ -384,7 +403,8 @@ get_formula <- function(formula_type, input) {
   )
 
   # reduce the components to those that are requested:
-  requested = c("intercept", "region_re")
+  requested = c("intercept")
+  if(input$rre_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "region_re")
   if(input$spatial_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "spatial")
   if(input$temporal_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "temporal")
   
@@ -409,7 +429,8 @@ build_region_random_effect <- function(input, use_default=FALSE) {
       "f(",
       "region_id2,",
       "model='iid',", 
-      "hyper=list(prec = list(prior = 'pc.prec', param =", input[["rre_prec_pc_param"]], ", alpha = ", input[["rre_prec_pc_alpha"]], "))",
+      "hyper=list(prec = list(prior = 'pc.prec', param =c(",
+      input[["rre_prec_pc_param"]], ",", input[["rre_prec_pc_alpha"]], ")))",
       ")"
     )
   )
@@ -431,17 +452,14 @@ build_temporal_component <- function(input, use_default = FALSE) {
     "model = '", input[["tco_model"]], "' "
   )
   if(input[["tco_model"]] == "ar") {
-    tc = paste0(tc, ", order=", input[["tco_model_ar_order"]])
-  }
-  if(input[["tco_model"]] == "rw2" || input[["tco_model"]] == "ar1") {
+    tc = paste0(tc, ", order=", input[["tco_model_ar_order"]], ")")
+  } else {
     tc <-paste0(
       tc,
       ",cyclic=TRUE",
       ")"
     )
-  } else {
-      tc <- paste0(tc,")")
-    }
+  }
   
   rlang::parse_expr(tc)
   
@@ -471,9 +489,16 @@ build_spatial_component <- function(input, use_default = FALSE) {
       ", order=", input[["sco_control_group_ar_order"]], "), "
     )
   } else sc = paste0(sc, ")")
+    
+  prec_prior_name = fcase(
+    input[["sco_model_type"]] == "besagproper", "prec",
+    input[["sco_model_type"]] == "bym", "prec.spatial",
+    input[["sco_model_type"]] == "besag", "prec"
+  )
   sc = paste0(
     sc,
-    "hyper=list(prec = list(prior = 'pc.prec', param =", input[["sco_prec_pc_param"]], ", alpha = ", input[["sco_prec_pc_alpha"]], "))", 
+    "hyper=list(", prec_prior_name, " = list(prior = 'pc.prec', param =c(",
+    input[["rre_prec_pc_param"]], ", ", input[["rre_prec_pc_alpha"]], ")))",
     ")"
   )
   
