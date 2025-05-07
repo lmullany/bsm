@@ -68,7 +68,7 @@ inla_model_ui <- function(id) {
       class = "well",
       HTML("Precision Hyper-parameters:"),
       numericInput(ns("sco_prec_pc_param"), "PC Prior Sigma Threshold", value=.2, step = .001),
-      sliderInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=1e-5, max = 1)
+      numericInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=0, max = 1, step=0.01)
     )
   )
   
@@ -150,6 +150,11 @@ inla_model_ui <- function(id) {
       selected = "default",
       inline = TRUE
     ),
+    tags$details(
+      tags$summary("Show Formula"), 
+      verbatimTextOutput(ns("inla_model_formula_r")) |> 
+        tagAppendAttributes(style = css("white-space" = "pre-wrap"))
+    ),
     conditionalPanel(
       condition = "input.formula_type == 'custom_components'",
       model_component_custom_panel,
@@ -189,15 +194,15 @@ inla_model_ui <- function(id) {
     )
   )
   
-  model_formula_card <- card(
-    card_header("Model/Formula", class="bg-primary"),
-    card_body(withSpinner(
-      verbatimTextOutput(ns("inla_model_formula")) |> 
-        tagAppendAttributes(style = css("white-space" = "pre-wrap")),
-      caption = "Estimating Model ... please wait",
-      color = bs_get_variables(theme=THEME,"primary")
-    ))
-  )
+  # model_formula_card <- card(
+  #   card_header("Model/Formula", class="bg-primary"),
+  #   card_body(withSpinner(
+  #     verbatimTextOutput(ns("inla_model_formula")) |> 
+  #       tagAppendAttributes(style = css("white-space" = "pre-wrap")),
+  #     caption = "Estimating Model ... please wait",
+  #     color = bs_get_variables(theme=THEME,"primary")
+  #   ))
+  # )
 
 
   
@@ -214,7 +219,6 @@ inla_model_ui <- function(id) {
         width = SIDEBAR_WIDTH*2,
         forecasts, 
         family,
-        #hyper_params,
         formula_panel,
         input_task_button(ns("estimate_model_btn"), "Run Model")
       ),
@@ -222,11 +226,12 @@ inla_model_ui <- function(id) {
         width=NULL, height=300, 
         style = css(grid_template_columns = c("60%", "40%")),
         model_data_card,
-        layout_column_wrap(
-          width=1, 
-          #heights_equal = "row",
-          model_card, model_formula_card
-        ) 
+        model_card
+        # layout_column_wrap(
+        #   width=1, 
+        #   #heights_equal = "row",
+        #   model_card, model_formula_card
+        # ) 
       )
     )
   )  
@@ -258,6 +263,20 @@ inla_model_server <- function(id, dc, im, results) {
         )
       })
     
+      formula_r <- reactive(
+        get_formula(
+          formula_type = input$formula_type,
+          input = setNames(
+            lapply(names(input), \(n) input[[n]]),
+            names(input)
+          )
+        )
+      )
+      
+      output$inla_model_formula_r <- renderPrint({
+        deparse1(formula_r()) |> cat()
+      })
+      
       # On click of "Estimate Model", we will want to
       # 1. Validate the inputs
       # 2. Pre-process transform the data
@@ -294,8 +313,6 @@ inla_model_server <- function(id, dc, im, results) {
           } else {
             adj_mat_inla <- get_physical_adjacency_dt(processed_data$data, processed_data$region_col)
           }
-        } else {
-          "not getting adjacency matrix"
         }
         
         formula <- get_formula(
@@ -309,7 +326,6 @@ inla_model_server <- function(id, dc, im, results) {
         formula = eval(formula)
         
         #5. fit the model
-        print("fitting model")
         
         model <- fit_model(data=processed_data$data,formula=formula,family=input$dist_family)
         
@@ -330,10 +346,10 @@ inla_model_server <- function(id, dc, im, results) {
         summary(inla_model()$model)
       })
       
-      output$inla_model_formula <- renderPrint({
-        req(inla_model())
-        inla_model()$formula |> cat()
-      })
+      # output$inla_model_formula <- renderPrint({
+      #   req(inla_model())
+      #   inla_model()$formula |> cat()
+      # })
       
       output$inla_model_data <- renderDT({
         datatable(
@@ -383,17 +399,28 @@ pre_process_data <- function(data, nforecasts ) {
 
 get_formula <- function(formula_type, input) {
   
-  print("creating_formula")
-  
   # if this is custom, return the custom input
   if(formula_type == "custom_formula") {
     return(as.formula(input[["custom_formula"]]))
   }
   
   # Required
-  region_random_effect=build_region_random_effect(input, use_default = formula_type == "default")
-  temporal_component=build_temporal_component(input, use_default = formula_type == "default")
-  spatial_component=build_spatial_component(input,  use_default = formula_type == "default")
+  region_random_effect=build_region_random_effect(
+    input, 
+    # use default if formula type is default, or if advance customization toggle is off
+    use_default = formula_type == "default" || input[["customize_rre"]] == FALSE
+  )
+  
+  temporal_component=build_temporal_component(
+    input,
+    # use default if formula type is default, or if advance customization toggle is off
+    use_default = formula_type == "default" || input[["customize_temporal_component"]] == FALSE  )
+  
+  spatial_component=build_spatial_component(
+    input,
+    # use default if formula type is default, or if advance customization toggle is off
+    use_default = formula_type == "default" || input[["customize_spatial_component"]] == FALSE
+  )
   
   components = list(
     "intercept" = parse_expr("1"),
