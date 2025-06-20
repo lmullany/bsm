@@ -23,6 +23,7 @@ library(shinycssloaders)
 library(INLA)
 library(gridExtra)
 library(rlang)
+library(epistemic)
 
 #####################
 ## profile

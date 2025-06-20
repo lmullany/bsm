@@ -35,7 +35,7 @@ data_loader_ui <- function(id) {
   drange = dateRangeInput(
     ns("drange"),
     "Date Range",
-    start = end - 180,
+    start = end - 60,
     end = end
   )
   

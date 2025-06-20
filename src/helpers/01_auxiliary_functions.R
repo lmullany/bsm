@@ -92,7 +92,7 @@ add_expected <-function(df,nforecasts){
   return(df)
 }
 
-fit_model<-function(data,formula,family){
+fit_model_deprecated<-function(data,formula,family){
   print("Formula:")
   print(formula)
   start <- Sys.time()
@@ -339,6 +339,9 @@ add_baselines <- function(df, n) {
 ## PLOTTING TOOLS
 ############################################
 make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_temporal=TRUE,add_rolling=TRUE,add_rescaled=TRUE){
+  rename_map <- c("0.5quant_median_counts" = "predicted_median", "lower_0.95_counts" = "predicted_lower", "upper_0.95_counts"="predicted_upper") 
+  existing <- intersect(names(rename_map), names(res_data))
+  setnames(res_data, old = existing, new = rename_map[existing])
   groups <-res_data %>% group_split(countyfips)
   
   plots = list()
@@ -363,7 +366,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
       }
     }
     #group_name <- paste0("location_",unique(group$countyfips))
-    group_name <- unique(group$region)
+    group_name <- as.character(unique(na.omit(group$region)))
     plt<-ggplot(group, aes(x = .data[[date_col]], y = target)) +
       geom_point(size=0.5) +
       geom_line(aes(y=predicted_median,color='spatio-temporal'),linewidth=0.1) +
