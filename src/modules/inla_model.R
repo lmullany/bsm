@@ -377,6 +377,9 @@ add_posteriors <- function(data_cls, model){
     use_count_scale = TRUE
   )
   merged <- merge(medians,cis,by=c(data_cls$region_column,data_cls$date_column),all=TRUE)
+  rename_map <- c("0.5quant_median_counts" = "predicted_median", "lower_0.95_counts" = "predicted_lower", "upper_0.95_counts"="predicted_upper") 
+  existing <- intersect(names(rename_map), names(merged))
+  setnames(merged, old = existing, new = rename_map[existing])
   data_cls <- add_covariates(covariates = merged, dc = data_cls, region=data_cls$region_column, date=data_cls$date_column)
   return (data_cls$data)
 }

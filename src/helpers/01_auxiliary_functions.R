@@ -339,9 +339,6 @@ add_baselines <- function(df, n) {
 ## PLOTTING TOOLS
 ############################################
 make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_temporal=TRUE,add_rolling=TRUE,add_rescaled=TRUE){
-  rename_map <- c("0.5quant_median_counts" = "predicted_median", "lower_0.95_counts" = "predicted_lower", "upper_0.95_counts"="predicted_upper") 
-  existing <- intersect(names(rename_map), names(res_data))
-  setnames(res_data, old = existing, new = rename_map[existing])
   groups <-res_data %>% group_split(countyfips)
   
   plots = list()
