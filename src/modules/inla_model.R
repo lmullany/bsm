@@ -232,6 +232,13 @@ inla_model_ui <- function(id) {
         #   #heights_equal = "row",
         #   model_card, model_formula_card
         # ) 
+      ),
+      wellPanel(
+        downloadButton(
+          ns("model_output"),
+          label = "Download Model Outputs (.rds)",
+          class="btn-primary"
+        )
       )
     )
   )  
@@ -361,6 +368,12 @@ inla_model_server <- function(id, dc, im, results) {
         filename = "processed_data.csv" ,
         content = \(file) data.table::fwrite(inla_model()$data_class$data, file)
       )
+      
+      output$model_output <- downloadHandler(
+        filename = "model_outputs.rds" ,
+        content = \(file) saveRDS(inla_model(), file)
+      )
+      
       
     }
   )
