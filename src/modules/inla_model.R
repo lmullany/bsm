@@ -151,7 +151,7 @@ inla_model_ui <- function(id) {
       inline = TRUE
     ),
     tags$details(
-      tags$summary("Show Formula"), 
+      tags$summary("Show Generic Formula"), 
       verbatimTextOutput(ns("inla_model_formula_r")) |> 
         tagAppendAttributes(style = css("white-space" = "pre-wrap"))
     ),
@@ -194,15 +194,15 @@ inla_model_ui <- function(id) {
     )
   )
   
-  # model_formula_card <- card(
-  #   card_header("Model/Formula", class="bg-primary"),
-  #   card_body(withSpinner(
-  #     verbatimTextOutput(ns("inla_model_formula")) |> 
-  #       tagAppendAttributes(style = css("white-space" = "pre-wrap")),
-  #     caption = "Estimating Model ... please wait",
-  #     color = bs_get_variables(theme=THEME,"primary")
-  #   ))
-  # )
+  model_formula_card <- card(
+    card_header("Model/Formula", class="bg-primary"),
+    card_body(withSpinner(
+      verbatimTextOutput(ns("inla_model_formula")) |>
+        tagAppendAttributes(style = css("white-space" = "pre-wrap")),
+      caption = "Estimating Model ... please wait",
+      color = bs_get_variables(theme=THEME,"primary")
+    ))
+  )
 
 
   
@@ -227,18 +227,14 @@ inla_model_ui <- function(id) {
         style = css(grid_template_columns = c("60%", "40%")),
         model_data_card,
         model_card
-        # layout_column_wrap(
-        #   width=1, 
-        #   #heights_equal = "row",
-        #   model_card, model_formula_card
-        # ) 
       ),
       wellPanel(
         downloadButton(
           ns("model_output"),
           label = "Download Model Outputs (.rds)",
-          class="btn-primary"
-        )
+          class="btn-primary btn-sm"
+        ),
+        actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm")
       )
     )
   )  
@@ -251,12 +247,9 @@ inla_model_server <- function(id, dc, im, results) {
       
 
       observe(im$model <- inla_model()$model)
-      observe(im$posterior <- get_posteriors(
-        res_data = inla_model()[["processed_data"]],
-        inla_model = inla_model()[["model"]],
-        date_col = inla_model()[["date_col"]],
-        family = input$dist_family,
-        suffix=NULL
+      observe(im$posterior <- add_posteriors(
+        data_cls = inla_model()$data_class,
+        model = inla_model()$model
         )) |> bindEvent(inla_model())
       
       # observe the time_res and update the forecasts label and 
@@ -309,19 +302,24 @@ inla_model_server <- function(id, dc, im, results) {
         #1. TODO: VALIDATE INPUTS
         
         #2. Preprocess Data:
-        processed_data <- pre_process_data(results$data, input$nforecasts)
+        data_cls <- pre_process_data(results$data, input$nforecasts)
         
-        #3 Get adjacency matrix (only needed if spatial is requested)
+        #3 Set adjacency matrix
+        # Note that we set it here, but we really should set to NULL
+        # and pass that NULL to the fit_model function if not needed
         if(input$formula_type == "default") {
-          adj_mat_inla <- get_adjacency_dt(processed_data$data, processed_data$region_col)
+          adj_mat_raw <- read_mobility_adj_mat()
         } else if (input$spatial_component_chkbx == TRUE) {
           if(input$sco_adjacency_type == "mobility_adj_mat") {
-            adj_mat_inla <- get_adjacency_dt(processed_data$data, processed_data$region_col)
+            adj_mat_raw <- read_mobility_adj_mat()
           } else {
-            adj_mat_inla <- get_physical_adjacency_dt(processed_data$data, processed_data$region_col)
+            adj_mat_raw <- read_physical_adj_mat()
           }
-        }
+        } else {
+          adj_mat_raw <- NULL
+        }        
         
+        #4 Create the formula, with generic region and date ids
         formula <- get_formula(
           formula_type = input$formula_type,
           input = setNames(
@@ -329,19 +327,21 @@ inla_model_server <- function(id, dc, im, results) {
             names(input)
           )
         )
-        
         formula = eval(formula)
         
         #5. fit the model
-        
-        model <- fit_model(data=processed_data$data,formula=formula,family=input$dist_family)
-        
+        model <- epistemic::fit_model(
+          data_cls=data_cls,
+          formula=formula,
+          family = input$dist_family,
+          reformulate = TRUE,
+          adjacency_matrix = adj_mat_raw
+        )
+                
         return(list(
-          model = model,
-          processed_data = processed_data[["data"]],
-          region_col = processed_data[["region_col"]],
-          date_col = processed_data[["date_col"]], 
-          formula = deparse1(formula)
+          model = model$inla_model,
+          data_class = model$data,          
+          formula = deparse1(model$formula)
         ))
         
 
@@ -352,22 +352,22 @@ inla_model_server <- function(id, dc, im, results) {
         req(inla_model())
         summary(inla_model()$model)
       })
-      
-      # output$inla_model_formula <- renderPrint({
-      #   req(inla_model())
-      #   inla_model()$formula |> cat()
-      # })
+
+      output$inla_model_formula <- renderPrint({
+        req(inla_model())
+        inla_model()$formula |> cat()
+      })
       
       output$inla_model_data <- renderDT({
         datatable(
-          inla_model()$processed_data,
+          inla_model()$data_class$data,
           rownames=FALSE
         )
       })
       
       output$download_data <- downloadHandler(
         filename = "processed_data.csv" ,
-        content = \(file) data.table::fwrite(inla_model()$processed_data, file)
+        content = \(file) data.table::fwrite(inla_model()$data_class$data, file)
       )
       
       output$model_output <- downloadHandler(
@@ -375,11 +375,59 @@ inla_model_server <- function(id, dc, im, results) {
         content = \(file) saveRDS(inla_model(), file)
       )
       
+      # show modal box if actual formula button is pressed
+      observe({
+        
+        req(inla_model())
+        
+        showModal( 
+          modalDialog( 
+            title = "Actual Formula Ingested by INLA",
+            easyClose = TRUE,
+            size = "l", 
+            card(div(inla_model()$formula, style="font-size:80%"))
+          ) 
+        ) 
+      }) |> bindEvent(input$actual_formula)  
+      
+      
       
     }
   )
 }
 
+add_posteriors <- function(data_cls, model){
+  medians <- epistemic::get_posterior_medians(
+    inla_model = model,
+    data_cls = data_cls,
+    use_count_scale = TRUE
+  )
+  cis = epistemic::get_credible_intervals(
+    inla_model = model,
+    data_cls = data_cls,
+    ci_width = 0.95,
+    use_count_scale = TRUE
+  )
+  merged <- merge(
+    medians,
+    cis,
+    by=c(data_cls$region_column,data_cls$date_column),
+    all=TRUE
+  )
+  
+  rename_map <- c("0.5quant_median_counts" = "predicted_median", "lower_0.95_counts" = "predicted_lower", "upper_0.95_counts"="predicted_upper") 
+  existing <- intersect(names(rename_map), names(merged))
+  setnames(merged, old = existing, new = rename_map[existing])
+  
+  data_cls <- epistemic::add_covariates(
+    covariates = merged,
+    dc = data_cls,
+    region=data_cls$region_column,
+    date=data_cls$date_column
+  )
+  
+  return (data_cls$data)
+}
 # Helper function for forecast label and default
 update_n_forecast_widget <- function(res) {
   lu = list(
@@ -393,21 +441,26 @@ update_n_forecast_widget <- function(res) {
 }
 
 pre_process_data <- function(data, nforecasts ) {
+  data <- add_fips(data)
+  data[, date := as.data.table(date)]
+  data$date <- as.Date(data$date)
+  data_cls <- epistemic::data_class(
+    data = data,
+    region_column = "countyfips",
+    date_column = "date",
+    numerator_column = "target",
+    denominator_column = "overall",
+    generate_expected = TRUE
+  )
   
-  data <- expand_dataset(data,nforecasts)
-  date_col="date"
-  region_col="region"
-  cat_cols=c(date_col,region_col)
-  
-  for (col in cat_cols){ # add id columns
-    data[[paste0(col,"_id")]]=as.numeric(factor(data[[col]])) 
-    data[[paste0(col,"_id2")]]=as.numeric(factor(data[[col]]))
-  }
-  data<-add_fips(data) # add column with fips codes
-  data<-add_expected(data,nforecasts) # add column with expected counts (based on share of total counts) for each region
-  data$week_id <- (data$date_id - 1) %% 52 + 1
-  
-  return(list(data = data, region_col = region_col, date_col = date_col, cat_cols = cat_cols))
+
+data_cls <- epistemic::add_future_dates(
+  num_future_steps = nforecasts,
+  dc = data_cls,
+  forward_fill = TRUE
+)
+
+  return(data_cls)
 }
 
 get_formula <- function(formula_type, input) {
@@ -446,7 +499,7 @@ get_formula <- function(formula_type, input) {
   requested = c("intercept")
   if(input$rre_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "region_re")
   if(input$spatial_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "spatial")
-  if(input$temporal_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "temporal")
+  if(input$temporal_component_chkbx == TRUE) requested = c(requested, "temporal")
   
   formula <- purrr::reduce(components[requested], ~call2('+', .x, .y))
   
@@ -467,7 +520,7 @@ build_region_random_effect <- function(input, use_default=FALSE) {
   rlang::parse_expr(
     paste(
       "f(",
-      "region_id2,",
+      "r_id,",
       "model='iid',", 
       "hyper=list(prec = list(prior = 'pc.prec', param =c(",
       input[["rre_prec_pc_param"]], ",", input[["rre_prec_pc_alpha"]], ")))",
@@ -517,10 +570,10 @@ build_spatial_component <- function(input, use_default = FALSE) {
 
     sc = paste0(
     "f(",
-    "region_id, ", 
-    "graph = adj_mat_inla,",
+    "r_id, ", 
+    "graph = adjacency_matrix,",
     "model='", input[["sco_model_type"]], "',",
-    "group = date_id,",
+    "group = d_id,",
     "control.group = list(model='", input[["sco_control_group_model"]], "'"
   )
   if(input[["sco_control_group_model"]] == "ar") {
