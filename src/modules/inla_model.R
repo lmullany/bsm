@@ -151,7 +151,7 @@ inla_model_ui <- function(id) {
       inline = TRUE
     ),
     tags$details(
-      tags$summary("Show Formula"), 
+      tags$summary("Show Generic Formula"), 
       verbatimTextOutput(ns("inla_model_formula_r")) |> 
         tagAppendAttributes(style = css("white-space" = "pre-wrap"))
     ),
@@ -194,15 +194,15 @@ inla_model_ui <- function(id) {
     )
   )
   
-  # model_formula_card <- card(
-  #   card_header("Model/Formula", class="bg-primary"),
-  #   card_body(withSpinner(
-  #     verbatimTextOutput(ns("inla_model_formula")) |> 
-  #       tagAppendAttributes(style = css("white-space" = "pre-wrap")),
-  #     caption = "Estimating Model ... please wait",
-  #     color = bs_get_variables(theme=THEME,"primary")
-  #   ))
-  # )
+  model_formula_card <- card(
+    card_header("Model/Formula", class="bg-primary"),
+    card_body(withSpinner(
+      verbatimTextOutput(ns("inla_model_formula")) |>
+        tagAppendAttributes(style = css("white-space" = "pre-wrap")),
+      caption = "Estimating Model ... please wait",
+      color = bs_get_variables(theme=THEME,"primary")
+    ))
+  )
 
 
   
@@ -227,18 +227,14 @@ inla_model_ui <- function(id) {
         style = css(grid_template_columns = c("60%", "40%")),
         model_data_card,
         model_card
-        # layout_column_wrap(
-        #   width=1, 
-        #   #heights_equal = "row",
-        #   model_card, model_formula_card
-        # ) 
       ),
       wellPanel(
         downloadButton(
           ns("model_output"),
           label = "Download Model Outputs (.rds)",
-          class="btn-primary"
-        )
+          class="btn-primary btn-sm"
+        ),
+        actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm")
       )
     )
   )  
@@ -307,7 +303,11 @@ inla_model_server <- function(id, dc, im, results) {
         
         #2. Preprocess Data:
         data_cls <- pre_process_data(results$data, input$nforecasts)
-         if(input$formula_type == "default") {
+        
+        #3 Set adjacency matrix
+        # Note that we set it here, but we really should set to NULL
+        # and pass that NULL to the fit_model function if not needed
+        if(input$formula_type == "default") {
           adj_mat_raw <- read_mobility_adj_mat()
         } else if (input$spatial_component_chkbx == TRUE) {
           if(input$sco_adjacency_type == "mobility_adj_mat") {
@@ -315,10 +315,11 @@ inla_model_server <- function(id, dc, im, results) {
           } else {
             adj_mat_raw <- read_physical_adj_mat()
           }
+        } else {
+          adj_mat_raw <- NULL
         }        
-
-        #3 Get adjacency matrix (only needed if spatial is requested)        
         
+        #4 Create the formula, with generic region and date ids
         formula <- get_formula(
           formula_type = input$formula_type,
           input = setNames(
@@ -329,7 +330,7 @@ inla_model_server <- function(id, dc, im, results) {
         formula = eval(formula)
         
         #5. fit the model
-        model <- fit_model(
+        model <- epistemic::fit_model(
           data_cls=data_cls,
           formula=formula,
           family = input$dist_family,
@@ -339,8 +340,8 @@ inla_model_server <- function(id, dc, im, results) {
                 
         return(list(
           model = model$inla_model,
-          data_class = data_cls,          
-          formula = deparse1(formula)
+          data_class = model$data,          
+          formula = deparse1(model$formula)
         ))
         
 
@@ -351,11 +352,11 @@ inla_model_server <- function(id, dc, im, results) {
         req(inla_model())
         summary(inla_model()$model)
       })
-      
-      # output$inla_model_formula <- renderPrint({
-      #   req(inla_model())
-      #   inla_model()$formula |> cat()
-      # })
+
+      output$inla_model_formula <- renderPrint({
+        req(inla_model())
+        inla_model()$formula |> cat()
+      })
       
       output$inla_model_data <- renderDT({
         datatable(
@@ -374,26 +375,57 @@ inla_model_server <- function(id, dc, im, results) {
         content = \(file) saveRDS(inla_model(), file)
       )
       
+      # show modal box if actual formula button is pressed
+      observe({
+        
+        req(inla_model())
+        
+        showModal( 
+          modalDialog( 
+            title = "Actual Formula Ingested by INLA",
+            easyClose = TRUE,
+            size = "l", 
+            card(div(inla_model()$formula, style="font-size:80%"))
+          ) 
+        ) 
+      }) |> bindEvent(input$actual_formula)  
+      
+      
       
     }
   )
 }
 
 add_posteriors <- function(data_cls, model){
-  medians <- get_posterior_medians(inla_model = model,
+  medians <- epistemic::get_posterior_medians(
+    inla_model = model,
     data_cls = data_cls,
     use_count_scale = TRUE
   )
-  cis = get_credible_intervals(inla_model = model,
+  cis = epistemic::get_credible_intervals(
+    inla_model = model,
     data_cls = data_cls,
     ci_width = 0.95,
     use_count_scale = TRUE
   )
-  merged <- merge(medians,cis,by=c(data_cls$region_column,data_cls$date_column),all=TRUE)
+  merged <- merge(
+    medians,
+    cis,
+    by=c(data_cls$region_column,data_cls$date_column),
+    all=TRUE
+  )
+  
   rename_map <- c("0.5quant_median_counts" = "predicted_median", "lower_0.95_counts" = "predicted_lower", "upper_0.95_counts"="predicted_upper") 
   existing <- intersect(names(rename_map), names(merged))
   setnames(merged, old = existing, new = rename_map[existing])
-  data_cls <- add_covariates(covariates = merged, dc = data_cls, region=data_cls$region_column, date=data_cls$date_column)
+  
+  data_cls <- epistemic::add_covariates(
+    covariates = merged,
+    dc = data_cls,
+    region=data_cls$region_column,
+    date=data_cls$date_column
+  )
+  
   return (data_cls$data)
 }
 # Helper function for forecast label and default
@@ -412,17 +444,20 @@ pre_process_data <- function(data, nforecasts ) {
   data <- add_fips(data)
   data[, date := as.data.table(date)]
   data$date <- as.Date(data$date)
-  data_cls <- data_class(
-  data = data,
-  region_column = "countyfips",
-  date_column = "date",
-  numerator_column = "target",
-  denominator_column = "overall",
-  generate_expected = TRUE
-)
-data_cls <- add_future_dates(
+  data_cls <- epistemic::data_class(
+    data = data,
+    region_column = "countyfips",
+    date_column = "date",
+    numerator_column = "target",
+    denominator_column = "overall",
+    generate_expected = TRUE
+  )
+  
+
+data_cls <- epistemic::add_future_dates(
   num_future_steps = nforecasts,
-  dc = data_cls
+  dc = data_cls,
+  forward_fill = TRUE
 )
 
   return(data_cls)
