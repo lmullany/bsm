@@ -457,7 +457,8 @@ pre_process_data <- function(data, nforecasts ) {
 data_cls <- epistemic::add_future_dates(
   num_future_steps = nforecasts,
   dc = data_cls,
-  forward_fill = TRUE
+  forward_fill = TRUE,
+  den = 1
 )
 
   return(data_cls)
