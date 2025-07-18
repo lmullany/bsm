@@ -15,6 +15,52 @@ viz_ui <- function(id) {
       ),
       navset_bar(
         nav_panel(
+          title = "Region-Wide Map",
+          layout_sidebar(
+            leafletOutput(ns("region_map")),
+            sidebar = sidebar(
+              radioButtons(
+                inputId = ns("map_metric"),
+                label="Metric",
+                choices = c(
+                  "Mean" = "mean", 
+                  "Median" = "median",
+                  "Quantile" = "quantile",
+                  "Exceedance" = "exceedance"
+                ),
+                inline = TRUE,
+                selected = "mean"
+              ),
+              conditionalPanel(
+                condition = "input.map_metric != 'exceedance'",
+                radioButtons(
+                  inputId = ns("metric_counts"),
+                  label="Counts/Proportions",
+                  choices = c("Counts", "Proportion"),
+                  selected = "Counts"
+                ),
+                ns = ns
+              ),
+              conditionalPanel(
+                condition = "input.map_metric == 'quantile'",
+                sliderInput(
+                  inputId = ns("metric_quantile"),label = "Quantile",min = 0,max=1,step = 0.01,value=0.5
+                ),
+                ns = ns
+              ),
+              conditionalPanel(
+                condition = "input.map_metric == 'exceedance'",
+                numericInput(inputId = ns("metric_exceedance"), label = "Exceedance Threshold", value=10),
+                ns = ns
+              ),
+              position = "right"
+            )
+              
+            
+          )
+
+        ),
+        nav_panel(
           title = "Plots",
           plotOutput(ns("plots"))
         ),
@@ -47,6 +93,37 @@ viz_server <- function(id, dc, im, results) {
         req(im$posterior)
         im$posterior
       })
+      
+      map_params <- reactive({
+        # create a list from the overall map sidebar
+        l <- list(
+          metric = input$map_metric,
+          use_count = input$metric_counts == "Counts",
+          quantile = input$metric_quantile,
+          threshold = input$metric_exceedance
+        )
+        return(l)
+      })
+
+      map_data <- reactive({
+        get_map_data(
+          model = im$model,
+          data_cls = im$data_cls,
+          params = map_params()
+        )
+      }) |> bindEvent(map_params())
+      
+      region_map <- reactive({
+        
+        target_date = im$data_cls$data[[im$data_cls$date_col]] |> max()
+        
+        make_map(
+          map_data = map_data(),
+          target_date = target_date
+        )  
+      }) |> bindEvent(map_data())
+      
+      output$region_map <- renderLeaflet(region_map())
       
       # For now, making all the plots, because they are fast
       plots <- reactive({

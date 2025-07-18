@@ -2,7 +2,7 @@ counties_by_state <- function(states) {
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
   county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
   pattern <- paste0("^(", paste(states, collapse = "|"), ")_")
-  df <- county_to_fips %>% filter(str_detect(Region, pattern))  %>%
+  df <- county_to_fips |> filter(str_detect(Region, pattern))  |>
     arrange(Region)
   return(df$Region)
 }
@@ -10,7 +10,7 @@ counties_by_state <- function(states) {
 add_fips<-function(data){
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
   county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
-  county_to_fips<-county_to_fips%>% rename(region="Region")
+  county_to_fips<-county_to_fips|> rename(region="Region")
   data<-inner_join(data,county_to_fips,by="region")
   return(data)
 
@@ -53,7 +53,7 @@ read_physical_adj_mat <- function(path = "data/us_county_adjacency.csv") {
 ## PLOTTING TOOLS
 ############################################
 make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_temporal=TRUE,add_rolling=TRUE,add_rescaled=TRUE){
-  groups <-res_data %>% group_split(countyfips)
+  groups <-res_data |> group_split(countyfips)
   
   plots = list()
   
@@ -193,14 +193,14 @@ make_table_builder_url<-function(
 }
 
 reshape_and_join <- function(df_single, df_all) {
-  df_single_long <- df_single %>%
+  df_single_long <- df_single |>
     pivot_longer(-timeResolution, names_to = "region", values_to = "target")
   
-  df_all_long <- df_all %>%
+  df_all_long <- df_all |>
     pivot_longer(-timeResolution, names_to = "region", values_to = "overall")
   
-  df_joined <- df_single_long %>%
-    inner_join(df_all_long, by = c("timeResolution", "region")) %>%
+  df_joined <- df_single_long |>
+    inner_join(df_all_long, by = c("timeResolution", "region")) |>
     rename("date"="timeResolution")
   
   return(df_joined)
