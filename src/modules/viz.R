@@ -163,13 +163,16 @@ viz_server <- function(id, dc, im, results) {
       }) |> bindEvent(map_base_locations())
       
       observe({
+        req(map_base_locations())
+        req(map_data())
+        req(target_date())
         leafletProxy("region_map") |>
           clearControls() |>
           clearShapes() |>
           update_polygons(
             polygon_info(map_base_locations(), map_data(), target_date())
           )
-      }) |> bindEvent(map_data(), target_date(), ignoreInit = TRUE)
+      }) |> bindEvent(map_data(), target_date(), ignoreInit = FALSE)
       
 
       # For now, making all the plots, because they are fast
@@ -198,7 +201,7 @@ viz_server <- function(id, dc, im, results) {
       
       output$ts_plots <- renderPlotly({
         time_series_subplots(input$viz_regions, ts_plot_data = tspd(), q_value = input$ts_quantile)
-      }) |> bindEvent(tspd())
+      }) |> bindEvent(input$viz_regions, tspd())
       
       
       # Download posterior data

@@ -536,7 +536,7 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
   
 }
 
-plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", q_value = 0.95) {
+plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", location_display_name = NULL, q_value = 0.95) {
   
   dt[, hover_text := paste0(
     "Date: ", format(date, "%Y-%m-%d"), "<br>",
@@ -597,9 +597,10 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", q_value
   
   
   # Layout
+  if(is.null(location_display_name)) location_display_name = unique(dt$countyfips)
   p <- p |> 
     layout(
-      annotations = list(text = unique(dt$countyfips), x=0.02, y=1, xref="paper", yref="paper",
+      annotations = list(text = location_display_name, x=0.02, y=1, xref="paper", yref="paper",
                          xanchor = "left", yanchor = "bottom", showarrow=FALSE),
       xaxis = list(title = "Date",
                    range = c(min(dt$date), max(dt$date))),
@@ -619,6 +620,7 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, ...) {
     plot_ly_time_series(
       ts_plot_data[[ts_inputs[i]]],
       show_legend = (i==1), 
+      location_display_name = ts_inputs[i],
       ...
     )
   })
