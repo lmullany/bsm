@@ -536,7 +536,14 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
   
 }
 
-plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome") {
+plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", q_value = 0.95) {
+  
+  dt[, hover_text := paste0(
+    "Date: ", format(date, "%Y-%m-%d"), "<br>",
+    "Estimated: ", round(median, 4), "<br>",
+    sprintf("%2.0f%%", q_value*100), " CI: [", round(lower, 4), ", ", round(upper, 4), "]"
+  )]
+  
   # Historical ribbon
   p <- plot_ly() |> 
     add_ribbons(data = dt[type == "Historical"],
@@ -545,7 +552,8 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome") {
                 line = list(color = 'rgba(0,0,0,0)'),
                 name = '95% CI (Past)',
                 legendgroup = "observed",
-                showlegend = FALSE)
+                showlegend = FALSE, 
+                hoverinfo = "none")
   
   
   # Forecast ribbon
@@ -556,7 +564,8 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome") {
                 line = list(color = 'rgba(0,0,0,0)'),
                 name = '95% CI (Forecast)',
                 legendgroup = "future",
-                showlegend = FALSE)
+                showlegend = FALSE, 
+                hoverinfo ="none")
   
   
   # Historical line
@@ -567,7 +576,9 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome") {
               line = list(color = 'blue'),
               name = 'Observed Data',
               legendgroup = 'observed',
-              showlegend = show_legend
+              showlegend = show_legend, 
+              text = ~hover_text,
+              hoverinfo = "text"
     )
   
   # Forecast line
@@ -578,8 +589,12 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome") {
               line = list(color = 'green', dash = 'dash'),
               name = 'Future Time Points',
               legendgroup = "future",
-              showlegend = show_legend
+              showlegend = show_legend,
+              text = ~hover_text,
+              hoverinfo = "text"
     )
+  
+  
   
   # Layout
   p <- p |> 
@@ -598,12 +613,13 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome") {
   
 }
 
-time_series_subplots <- function(ts_inputs, ts_plot_data) {
+time_series_subplots <- function(ts_inputs, ts_plot_data, ...) {
   
   plots = lapply(seq_along(ts_inputs), \(i) {
     plot_ly_time_series(
       ts_plot_data[[ts_inputs[i]]],
-      show_legend = (i==1)
+      show_legend = (i==1), 
+      ...
     )
   })
   

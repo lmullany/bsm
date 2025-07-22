@@ -197,9 +197,8 @@ viz_server <- function(id, dc, im, results) {
       
       
       output$ts_plots <- renderPlotly({
-        print(tspd())
-        time_series_subplots(input$viz_regions, ts_plot_data = tspd())
-      })
+        time_series_subplots(input$viz_regions, ts_plot_data = tspd(), q_value = input$ts_quantile)
+      }) |> bindEvent(tspd())
       
       
       # Download posterior data
