@@ -23,6 +23,10 @@ library(shinycssloaders)
 library(INLA)
 library(gridExtra)
 library(rlang)
+
+library(leaflet)
+library(leaflet.extras)
+
 library(epistemic)
 
 ##################################

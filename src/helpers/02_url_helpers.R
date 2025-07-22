@@ -7,7 +7,7 @@ get_categorical_values <- function(profile=NULL) {
   url <- "https://essence.syndromicsurveillance.org/nssp_essence/servlet/SyndromeDefinitionsServlet_CCDD?action=getCCDDTerms"
   ##################################################   Note CCDD name change!
   
-  combinedCategories <- comb_url %>% get_api_data(profile = profile)
+  combinedCategories <- comb_url |> get_api_data(profile = profile)
   ccddterms <- get_api_data(url, profile = profile)
   
   if(!is.null(combinedCategories) && !is.null(ccddterms)) {

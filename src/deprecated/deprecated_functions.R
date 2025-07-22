@@ -38,8 +38,8 @@
 #   df_full
 #   
 #   # # Merge with original data
-#   # df_full <- full_grid %>%
-#   #   left_join(df, by = c("date", "region")) %>%
+#   # df_full <- full_grid |>
+#   #   left_join(df, by = c("date", "region")) |>
 #   #   mutate(overall = ifelse(is.na(overall), 1, overall)) # add ones for denominators
 #   # 
 #   # return(df_full)
@@ -48,16 +48,16 @@
 # add_expected <-function(df,nforecasts){
 #   
 #   # Calculate total value for each date
-#   df_date <- df %>%
-#     group_by(date) %>%
-#     summarise(target_tot = sum(target, na.rm = TRUE)) %>%
+#   df_date <- df |>
+#     group_by(date) |>
+#     summarise(target_tot = sum(target, na.rm = TRUE)) |>
 #     arrange(date)
 #   nrows= nrow(df_date)
 #   forecast_inds = (nrows-nforecasts+1):nrows
 #   df_date[forecast_inds,"target_tot"]<-df_date[nrows-nforecasts,"target_tot"]
 #   # Calculate total population proportion for each date
-#   df_reg <- df %>%
-#     group_by(region) %>%
+#   df_reg <- df |>
+#     group_by(region) |>
 #     summarise(reg_sum = sum(target, na.rm = TRUE)) 
 #   df_reg$reg_prop<-df_reg$reg_sum/sum(df$target,na.rm=TRUE)
 #   
@@ -143,7 +143,7 @@
 #       unique() |> 
 #       _[order(x), env=list(x=region_id_col)]
 #     
-#     #id_mapping<-distinct(data[,c("countyfips", region_id_col)]) %>% arrange(.data[[region_id_col]])
+#     #id_mapping<-distinct(data[,c("countyfips", region_id_col)]) |> arrange(.data[[region_id_col]])
 #     fips_order<-id_mapping$countyfips
 #     adj_mat_filt<-adj_mat[fips_order,fips_order]
 #     adj_mat_inla <-inla.read.graph(adj_mat_filt)
@@ -162,7 +162,7 @@
 #     return(adj_mat)
 #   } else {
 #     region_id_col=paste0(region_col,"_id")
-#     id_mapping<-distinct(data[,c("countyfips", region_id_col)]) %>% arrange(.data[[region_id_col]])
+#     id_mapping<-distinct(data[,c("countyfips", region_id_col)]) |> arrange(.data[[region_id_col]])
 #     fips_order<-id_mapping$countyfips
 #     adj_mat_filt<-adj_mat[fips_order,fips_order]
 #     return(adj_mat_filt)
@@ -221,9 +221,9 @@
 # 
 # fit_temporal_model<-function(res_data,formula,family){
 #   # Apply the function to each subset and combine the results
-#   res_data <- res_data %>%
-#     split(.$region) %>% 
-#     lapply(process_region, formula = formula, family = family) %>%
+#   res_data <- res_data |>
+#     split(.$region) |> 
+#     lapply(process_region, formula = formula, family = family) |>
 #     bind_rows()
 #   return(res_data)
 # }
@@ -234,7 +234,7 @@
 # draw_map<-function(df,col){
 #   counties_sf <- counties(cb = TRUE, resolution = "5m",year=2020)
 #   counties_sf$GEOID <- as.character(counties_sf$GEOID)
-#   merged_df <- counties_sf %>% inner_join(df,by=c("GEOID" = "countyfips"))
+#   merged_df <- counties_sf |> inner_join(df,by=c("GEOID" = "countyfips"))
 #   map1 <- ggplot(data = merged_df) +
 #     geom_sf(aes(fill = .data[[col]]), lwd = 0.01) +
 #     scale_fill_viridis_c(name = NULL, option = "rocket", na.value = "grey90", direction = -1) +
@@ -293,13 +293,13 @@
 #   }
 #   
 #   weather_df<-get_api_data(url)$timeSeriesData[,c("date","stationID_id","count")]
-#   weather_df <- weather_df %>% 
+#   weather_df <- weather_df |> 
 #     rename(stationid=stationID_id,temp=count)
 #   df_res<-inner_join(df[,c("county_fips","stationid","weight")],weather_df,by="stationid")
-#   df_res <- df_res %>%
-#     group_by(county_fips,date) %>%
+#   df_res <- df_res |>
+#     group_by(county_fips,date) |>
 #     summarise(weighted_temp = sum(temp * weight) / sum(weight), .groups = "drop")
-#   return(df_res %>% select(county_fips,date,weighted_temp))
+#   return(df_res |> select(county_fips,date,weighted_temp))
 #   
 #   
 # }
@@ -360,15 +360,15 @@
 #     stop("Air quality data is not available for states.")
 #   }
 #   aq_df<-get_api_data(url)$timeSeriesData[,c("date","County_id","count")]
-#   aq_df <- aq_df %>% 
+#   aq_df <- aq_df |> 
 #     rename(station_county_name=County_id,air_quality=count)
 #   
 #   df_res<-inner_join(df[,c("county_fips","station_county_name","weight")],aq_df,by="station_county_name")
-#   df_res <- df_res %>%
-#     group_by(county_fips,date) %>%
+#   df_res <- df_res |>
+#     group_by(county_fips,date) |>
 #     summarise(weighted_air_quality = sum(air_quality * weight) / sum(weight), .groups = "drop")
 #   
-#   return(df_res %>% select(county_fips,date,weighted_air_quality))
+#   return(df_res |> select(county_fips,date,weighted_air_quality))
 #   
 #   
 # }
@@ -377,27 +377,27 @@
 # add_baselines <- function(df, n) {
 #   
 #   # Calculate rolling average per region
-#   df <- df %>%
-#     arrange(region, date) %>%
-#     group_by(region) %>%
-#     mutate(rolling_avg_target = rollapply(target, width = n, FUN = mean, fill = NA, align = "right")) %>%
+#   df <- df |>
+#     arrange(region, date) |>
+#     group_by(region) |>
+#     mutate(rolling_avg_target = rollapply(target, width = n, FUN = mean, fill = NA, align = "right")) |>
 #     ungroup()
-#   daily_total <- df %>%
-#     group_by(date) %>%
+#   daily_total <- df |>
+#     group_by(date) |>
 #     summarize(total_count = sum(target, na.rm = TRUE), .groups = "drop")
 #   # Compute sum of count for each region over all dates
-#   region_total <- df %>%
-#     group_by(region) %>%
+#   region_total <- df |>
+#     group_by(region) |>
 #     summarize(region_sum = sum(target, na.rm = TRUE), .groups = "drop")
 #   
 #   # Compute overall sum of count across all dates and regions
 #   overall_sum <- sum(df$target, na.rm = TRUE)
 #   
 #   # Merge total count per date
-#   df <- df %>%
-#     left_join(daily_total, by = "date") %>%
-#     left_join(region_total, by = "region") %>%
-#     mutate(rescaled_aggregate_trend = total_count * (region_sum / overall_sum)) %>%
+#   df <- df |>
+#     left_join(daily_total, by = "date") |>
+#     left_join(region_total, by = "region") |>
+#     mutate(rescaled_aggregate_trend = total_count * (region_sum / overall_sum)) |>
 #     select(-total_count, -region_sum) # Remove intermediate columns
 #   return(df)
 # }
@@ -412,23 +412,23 @@
 # 
 # aggregate_by_week<-function(data,cat_cols){
 #   last_date <- max(data[[date_col]])
-#   df_weekly <- data %>%
+#   df_weekly <- data |>
 #     mutate(
 #       Week_Ending = ceiling_date(.data[[date_col]] - days(wday(last_date) %% 7), unit = "week") + days(wday(last_date) %% 7 - 1)
 #     )
 #   
 #   # Keep only complete weeks (exactly 7 days per week)
-#   complete_weeks <- df_weekly %>%
-#     group_by(Week_Ending) %>%
-#     filter(n_distinct(.data[[date_col]]) == 7) %>%
+#   complete_weeks <- df_weekly |>
+#     group_by(Week_Ending) |>
+#     filter(n_distinct(.data[[date_col]]) == 7) |>
 #     ungroup()
 #   
 #   # Aggregate counts by Region and Week_Ending
-#   weekly_summary <- complete_weeks %>%
-#     group_by(.data[[region_col]], countyfips,Week_Ending) %>%
-#     summarise(count = sum(count), .groups = "drop") %>%
-#     arrange(.data[[region_col]], Week_Ending) %>%
-#     rename(!!date_col:=Week_Ending) %>%
+#   weekly_summary <- complete_weeks |>
+#     group_by(.data[[region_col]], countyfips,Week_Ending) |>
+#     summarise(count = sum(count), .groups = "drop") |>
+#     arrange(.data[[region_col]], Week_Ending) |>
+#     rename(!!date_col:=Week_Ending) |>
 #     ungroup()
 #   data2<-weekly_summary
 #   for (col in cat_cols){

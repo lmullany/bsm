@@ -2,7 +2,7 @@ counties_by_state <- function(states) {
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
   county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
   pattern <- paste0("^(", paste(states, collapse = "|"), ")_")
-  df <- county_to_fips %>% filter(str_detect(Region, pattern))  %>%
+  df <- county_to_fips |> filter(str_detect(Region, pattern))  |>
     arrange(Region)
   return(df$Region)
 }
@@ -10,7 +10,7 @@ counties_by_state <- function(states) {
 add_fips<-function(data){
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
   county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
-  county_to_fips<-county_to_fips%>% rename(region="Region")
+  county_to_fips<-county_to_fips|> rename(region="Region")
   data<-inner_join(data,county_to_fips,by="region")
   return(data)
 
@@ -49,71 +49,6 @@ read_physical_adj_mat <- function(path = "data/us_county_adjacency.csv") {
 
 
 
-############################################
-## PLOTTING TOOLS
-############################################
-make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_temporal=TRUE,add_rolling=TRUE,add_rescaled=TRUE){
-  groups <-res_data %>% group_split(countyfips)
-  
-  plots = list()
-  
-  for (i in seq_along(groups)) {
-    group <- groups[[i]]
-    if (use_prop){
-      group$target=group$target/group$overall
-      group$predicted_median = group$predicted_median/group$overall
-      group$predicted_lower = group$predicted_lower/group$overall
-      group$predicted_upper = group$predicted_upper/group$overall
-      if (add_temporal){
-        group$predicted_median_temporal = group$predicted_median_temporal/group$overall
-        group$predicted_lower_temporal = group$predicted_lower_temporal/group$overall
-        group$predicted_upper_temporal = group$predicted_upper_temporal/group$overall
-      }
-      if (add_rolling){
-        group$rolling_avg_target = group$rolling_avg_target/group$overall
-      }
-      if (add_rescaled){
-        group$rescaled_aggregate_trend = group$rescaled_aggregate_trend/group$overall
-      }
-    }
-    #group_name <- paste0("location_",unique(group$countyfips))
-    group_name <- as.character(unique(na.omit(group$region)))
-    plt<-ggplot(group, aes(x = .data[[date_col]], y = target)) +
-      geom_point(size=0.5) +
-      geom_line(aes(y=predicted_median,color='spatio-temporal'),linewidth=0.1) +
-      geom_ribbon(aes(ymin=predicted_lower,ymax=predicted_upper, fill='spatio-temporal'),alpha=0.3) + 
-      labs(title = group_name, x = "Date", y = ifelse(use_prop==TRUE, "Proportion of Visits", "Count"), fill="", color="") +
-      theme_minimal() + 
-      theme(legend.position = "bottom")
-    
-    
-    if (add_temporal){
-      plt<-plt+
-        geom_line(aes(y=predicted_median_temporal,color='temporal'),linewidth=0.1) +
-        geom_ribbon(aes(ymin=predicted_lower_temporal,ymax=predicted_upper_temporal, fill='temporal'),alpha=0.3)
-    }
-    if (add_rolling){
-      plt<-plt+
-        geom_line(aes(y=rolling_avg_target,color="rolling"),linewidth=0.1)
-    }
-    if (add_rescaled){
-      plt<-plt+
-        geom_line(aes(y=rescaled_aggregate_trend,color="aggregate"),linewidth=0.1)
-    }
-    plt<-plt+scale_color_manual(values = c("spatio-temporal" = "red", "temporal" = "blue","rolling"="green","aggregate"="black"))
-    plt<-plt+scale_fill_manual(values = c("spatio-temporal" = "red", "temporal" = "blue"))
-    # folder=paste0("figures/figs_",gsub("%20","_",target),"_",gsub("-","",sd),"_to_",gsub("-","",ed),"_",family)
-    # if (!dir.exists(folder)) {
-    #   dir.create(folder, recursive = TRUE)
-    # }
-    #ggsave(paste0(folder,"/plot_", group_name, ".png"), plt, width = 8, height = 3)
-    plots[[group_name]] <- plt
-  }
-  
-  return(plots)
-  
-  
-}
 
 ############################################
 ## ESSENCE QUERY TOOLS
@@ -193,14 +128,14 @@ make_table_builder_url<-function(
 }
 
 reshape_and_join <- function(df_single, df_all) {
-  df_single_long <- df_single %>%
+  df_single_long <- df_single |>
     pivot_longer(-timeResolution, names_to = "region", values_to = "target")
   
-  df_all_long <- df_all %>%
+  df_all_long <- df_all |>
     pivot_longer(-timeResolution, names_to = "region", values_to = "overall")
   
-  df_joined <- df_single_long %>%
-    inner_join(df_all_long, by = c("timeResolution", "region")) %>%
+  df_joined <- df_single_long |>
+    inner_join(df_all_long, by = c("timeResolution", "region")) |>
     rename("date"="timeResolution")
   
   return(df_joined)

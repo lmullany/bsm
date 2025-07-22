@@ -245,12 +245,16 @@ inla_model_server <- function(id, dc, im, results) {
     id,
     function(input, output, session) {
       
-
+      # update global reactive model object
       observe(im$model <- inla_model()$model)
+      # update global reactive data_class object for current model result
+      observe(im$data_cls <- inla_model()$data_class)
+      # update global reactive posteriors for current model
       observe(im$posterior <- add_posteriors(
         data_cls = inla_model()$data_class,
         model = inla_model()$model
         )) |> bindEvent(inla_model())
+      observe(im$nforecasts <- input$nforecasts)
       
       # observe the time_res and update the forecasts label and 
       observe({
