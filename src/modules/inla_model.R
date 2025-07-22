@@ -254,6 +254,7 @@ inla_model_server <- function(id, dc, im, results) {
         data_cls = inla_model()$data_class,
         model = inla_model()$model
         )) |> bindEvent(inla_model())
+      observe(im$nforecasts <- input$nforecasts)
       
       # observe the time_res and update the forecasts label and 
       observe({

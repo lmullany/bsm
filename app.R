@@ -49,7 +49,6 @@ server <- function(input, output, session) {
   
   dc = reactiveValues() # data loader configuration reactives
   im = reactiveValues() # inla model configuration reactives
-  #results = reactiveValues(data=data.table::fread("~/../Downloads/demo_inla_data_md.csv"))  # results reactives (data, plots, model, etc)
   results = reactiveValues()  # results reactives (data, plots, model, etc)
   
   # ----------------------------------------------------------------------

@@ -1,3 +1,7 @@
+# © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
+# Development of this software was sponsored by the U.S. Government under
+# contract no. 75D30124C19958
+
 ## Plotting Functions
 
 #load("test_data_md.RData")
@@ -94,19 +98,20 @@ round_up_max <- function(x, slack=0.2, magnitude= NULL) {
 get_map_data <-function(model,
                         data_cls,
                         params){
+  
   if (!("metric" %in% names(params))){
     cli::cli_abort("Key metric must be provided.")
   }
   if (params$metric  == "mean"){
     if ("use_count" %in% names(params)){
-      use_count = params$use_count
+      use_count <- params$use_count
       if (use_count){
         display_col_name <- "Posterior mean (count)"
       } else {
         display_col_name <- "Posterior mean (proportion)"
       }
     } else {
-      use_count = FALSE
+      use_count <- FALSE
       display_col_name <- "Posterior mean (proportion)"
     }
     dt <- epistemic::get_posterior_means(model,
@@ -115,7 +120,6 @@ get_map_data <-function(model,
                                          use_count_scale = use_count)
     display_col <- "predicted_mean"
     
-    #display_col_name <- "Posterior mean (proportion)"
     minv <- 0
     maxv <- round_up_max(max(dt[,predicted_mean]))
   } else if (params$metric  == "median"){
@@ -292,64 +296,154 @@ get_map_data <-function(model,
 #' @importFrom tigris counties
 #' @export
 
-make_map <- function(
-    map_data, 
-    target_date,
-    map_year = 2020
-){
-  res <- map_data
-  dt <- res$data 
-  display_col <-res$column 
-  display_col_name <- res$name 
-  minv <- res$min 
-  maxv <- res$max
-  
-  date_col <- res$date_col
-  region_col <- res$region_col
-  
-  
-  # Subset the data using dynamic date column
-  dt_sub <- dt[get(date_col) == target_date]
-  
-  # if dt_sub has no rows, return message, with NULL
-  if(nrow(dt_sub)==0) {
-    cli::cli_alert_warning("No map data possible, check target date?")
-    return(NULL)
-  }
-  
-  # Ensure FIPS is a 5-digit string (pad with zeros)
-  dt_sub[, (region_col) := sprintf("%05s", get(region_col))]
-  dt_sub <- dt_sub[, .(countyfips = get(region_col), value = get(display_col))]
-  
-  # Load U.S. county geometries
-  # options(tigris_use_cache = TRUE)
-  #counties_sf <- tigris::counties(cb = TRUE, year = map_year, class = "sf") |>
-  counties_sf <- Rnssp::county_sf |> 
-    filter(!STATEFP %in% c("60", "66", "69", "72", "78")) |>
-    mutate(countyfips = paste0(STATEFP, COUNTYFP))
+# make_map <- function(
+#     map_data, 
+#     target_date,
+#     map_year = 2020
+# ){
+#   res <- map_data
+#   dt <- res$data 
+#   display_col <-res$column 
+#   display_col_name <- res$name 
+#   minv <- res$min 
+#   maxv <- res$max
+#   
+#   date_col <- res$date_col
+#   region_col <- res$region_col
+#   
+#   
+#   # Subset the data using dynamic date column
+#   dt_sub <- dt[get(date_col) == target_date]
+#   
+#   # if dt_sub has no rows, return message, with NULL
+#   if(nrow(dt_sub)==0) {
+#     cli::cli_alert_warning("No map data possible, check target date?")
+#     return(NULL)
+#   }
+#   
+#   # Ensure FIPS is a 5-digit string (pad with zeros)
+#   dt_sub[, (region_col) := sprintf("%05s", get(region_col))]
+#   dt_sub <- dt_sub[, .(countyfips = get(region_col), value = get(display_col))]
+#   
+#   # Load U.S. county geometries
+#   # options(tigris_use_cache = TRUE)
+#   #counties_sf <- tigris::counties(cb = TRUE, year = map_year, class = "sf") |>
+#   counties_sf <- Rnssp::county_sf |> 
+#     filter(!STATEFP %in% c("60", "66", "69", "72", "78")) |>
+#     mutate(countyfips = paste0(STATEFP, COUNTYFP))
+# 
+#   
+#   # Merge spatial and value data
+#   map_data <- right_join(counties_sf, dt_sub, by = "countyfips")
+#   map_data <- sf::st_transform(map_data, crs = 4326)
+#   
+#   map_data <- map_data |> 
+#     mutate(hover_label = paste0("County: ",NAME,"<br>",
+#                                 "FIPS Code: ",GEOID,"<br>",
+#                                 display_col_name,": ",round(value, 4)))
+#   # get centroids for labels
+#   centroids <- sf::st_centroid(map_data)
+#   centroids <- sf::st_transform(centroids, 4326)
+#   coords <- sf::st_coordinates(centroids)
+#   
+#   # define color scale
+#   pal <- leaflet::colorNumeric("plasma", domain = c(minv,maxv), na.color = "transparent")
+#   pal_rev <- leaflet::colorNumeric("plasma", domain = c(maxv,minv), reverse = TRUE, na.color = "transparent")
+#   # Plot
+#   p <- leaflet::leaflet(map_data) |>
+#     leaflet::addProviderTiles("CartoDB.Positron") |>
+#     leaflet::addPolygons(
+#       fillColor = ~pal(value),
+#       weight = 1,
+#       opacity = 1,
+#       color = "white",
+#       dashArray = "3",
+#       fillOpacity = 0.7,
+#       highlightOptions = highlightOptions(
+#         weight = 2,
+#         color = "#666",
+#         fillOpacity = 0.9,
+#         bringToFront = TRUE
+#       ),
+#       label = lapply(map_data$hover_label, htmltools::HTML)
+#     )  |> 
+#     addLabelOnlyMarkers(
+#       lng = coords[, 1],
+#       lat = coords[, 2],
+#       label = centroids$NAME,
+#       labelOptions = labelOptions(
+#         noHide = TRUE,
+#         direction = 'center',
+#         textOnly = TRUE,
+#         style = list(
+#           "font-size" = "14px",
+#           "color" = "black",
+#           "text-shadow" = "1px 1px white"
+#         )
+#       )
+#     ) |> 
+#     leaflet::addLegend(
+#       pal = pal_rev,
+#       values = c(minv,maxv),
+#       labFormat = leaflet::labelFormat(transform = function(x) sort(x, decreasing = TRUE)),
+#       title = display_col_name,
+#       position = "bottomright"
+#     ) |> 
+#     leaflet.extras::addResetMapButton() |> 
+#     leaflet.extras::addFullscreenControl()
+#   return (p)
+# }
 
+get_hover_label_county <- function(county, fips, values=NULL, value_title="") {
+  lapply(seq_along(county), \(cty) {
+    lbl <- paste0(
+      "County: ",county[cty],"<br>",
+      "FIPS Code: ",fips[cty]
+    )
+    if(!is.null(values)) {
+      lbl <- paste0(
+        lbl,
+        "<br>", value_title,": ",round(values[cty], 4)
+      )
+    }
+    lbl
+  })
+}
+
+
+polygon_info <- function(locs, map_data, target_date) {
+  # bind the location data with the map_data
+  # TODO: consider merge here instead of cbind
+  d = cbind(locs, map_data$data[date==target_date, .(outcome=get(map_data$column))])
   
-  # Merge spatial and value data
-  map_data <- right_join(counties_sf, dt_sub, by = "countyfips")
-  map_data <- sf::st_transform(map_data, crs = 4326)
+  # get min and (rounded) max
+  minv = min(d[["outcome"]])
+  maxv = round_up_max(max(d[["outcome"]]))
   
-  map_data <- map_data |> 
-    mutate(hover_label = paste0("County: ",NAME,"<br>",
-                                "FIPS Code: ",GEOID,"<br>",
-                                display_col_name,": ",round(value, 4)))
-  # get centroids for labels
-  centroids <- sf::st_centroid(map_data)
-  centroids <- sf::st_transform(centroids, 4326)
-  coords <- sf::st_coordinates(centroids)
-  
-  # define color scale
-  pal <- leaflet::colorNumeric("plasma", domain = c(minv,maxv), na.color = "transparent")
+  # get palette functions
+  pal = leaflet::colorNumeric("plasma", domain = c(min(d$outcome),max(d$outcome)), na.color = "transparent")
   pal_rev <- leaflet::colorNumeric("plasma", domain = c(maxv,minv), reverse = TRUE, na.color = "transparent")
-  # Plot
-  p <- leaflet::leaflet(map_data) |>
-    leaflet::addProviderTiles("CartoDB.Positron") |>
+  
+  # generate hover values for county
+  hover_vals <- get_hover_label_county(
+    county = d$NAME, 
+    fips = d$GEOID,
+    values = d$outcome,
+    value_title = map_data$name
+  )
+  
+  # return list of information used for rendering polygons
+  list(d = d, pal=pal, pal_rev = pal_rev, minv=minv, maxv=maxv, hover_vals=hover_vals, value_title = map_data$name)
+  
+}
+
+update_polygons <- function(p, pi) {
+  
+  p |> 
+    ## add the polygons
     leaflet::addPolygons(
-      fillColor = ~pal(value),
+      data = pi$d,
+      fillColor = pi$pal(pi$d$outcome),
       weight = 1,
       opacity = 1,
       color = "white",
@@ -361,31 +455,203 @@ make_map <- function(
         fillOpacity = 0.9,
         bringToFront = TRUE
       ),
-      label = lapply(map_data$hover_label, htmltools::HTML)
-    )  |> 
-    addLabelOnlyMarkers(
-      lng = coords[, 1],
-      lat = coords[, 2],
-      label = centroids$NAME,
-      labelOptions = labelOptions(
-        noHide = TRUE,
-        direction = 'center',
-        textOnly = TRUE,
-        style = list(
-          "font-size" = "14px",
-          "color" = "black",
-          "text-shadow" = "1px 1px white"
-        )
-      )
+      label = lapply(pi$hover_vals, htmltools::HTML)
     ) |> 
+    ## add the legend
     leaflet::addLegend(
-      pal = pal_rev,
-      values = c(minv,maxv),
+      pal = pi$pal_rev,
+      values = c(pi$minv, pi$maxv),
       labFormat = leaflet::labelFormat(transform = function(x) sort(x, decreasing = TRUE)),
-      title = display_col_name,
+      title = pi$value_title,
       position = "bottomright"
-    ) |> 
-    leaflet.extras::addResetMapButton() |> 
-    leaflet.extras::addFullscreenControl()
-  return (p)
+    )
+  
 }
+
+################################################
+## TIME SERIES PLOTS
+################################################
+
+make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_temporal=TRUE,add_rolling=TRUE,add_rescaled=TRUE){
+  
+  groups <-res_data |> group_split(countyfips)
+  
+  plots = list()
+  
+  for (i in seq_along(groups)) {
+    group <- groups[[i]]
+    if (use_prop){
+      group$target=group$target/group$overall
+      group$predicted_median = group$predicted_median/group$overall
+      group$predicted_lower = group$predicted_lower/group$overall
+      group$predicted_upper = group$predicted_upper/group$overall
+      if (add_temporal){
+        group$predicted_median_temporal = group$predicted_median_temporal/group$overall
+        group$predicted_lower_temporal = group$predicted_lower_temporal/group$overall
+        group$predicted_upper_temporal = group$predicted_upper_temporal/group$overall
+      }
+      if (add_rolling){
+        group$rolling_avg_target = group$rolling_avg_target/group$overall
+      }
+      if (add_rescaled){
+        group$rescaled_aggregate_trend = group$rescaled_aggregate_trend/group$overall
+      }
+    }
+    #group_name <- paste0("location_",unique(group$countyfips))
+    group_name <- as.character(unique(na.omit(group$region)))
+    plt<-ggplot(group, aes(x = .data[[date_col]], y = target)) +
+      geom_point(size=0.5) +
+      geom_line(aes(y=predicted_median,color='spatio-temporal'),linewidth=0.1) +
+      geom_ribbon(aes(ymin=predicted_lower,ymax=predicted_upper, fill='spatio-temporal'),alpha=0.3) + 
+      labs(title = group_name, x = "Date", y = ifelse(use_prop==TRUE, "Proportion of Visits", "Count"), fill="", color="") +
+      theme_minimal() + 
+      theme(legend.position = "bottom")
+    
+    
+    if (add_temporal){
+      plt<-plt+
+        geom_line(aes(y=predicted_median_temporal,color='temporal'),linewidth=0.1) +
+        geom_ribbon(aes(ymin=predicted_lower_temporal,ymax=predicted_upper_temporal, fill='temporal'),alpha=0.3)
+    }
+    if (add_rolling){
+      plt<-plt+
+        geom_line(aes(y=rolling_avg_target,color="rolling"),linewidth=0.1)
+    }
+    if (add_rescaled){
+      plt<-plt+
+        geom_line(aes(y=rescaled_aggregate_trend,color="aggregate"),linewidth=0.1)
+    }
+    plt<-plt+scale_color_manual(values = c("spatio-temporal" = "red", "temporal" = "blue","rolling"="green","aggregate"="black"))
+    plt<-plt+scale_fill_manual(values = c("spatio-temporal" = "red", "temporal" = "blue"))
+    # folder=paste0("figures/figs_",gsub("%20","_",target),"_",gsub("-","",sd),"_to_",gsub("-","",ed),"_",family)
+    # if (!dir.exists(folder)) {
+    #   dir.create(folder, recursive = TRUE)
+    # }
+    #ggsave(paste0(folder,"/plot_", group_name, ".png"), plt, width = 8, height = 3)
+    plots[[group_name]] <- plt
+  }
+  
+  return(plots)
+  
+  
+}
+
+plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome") {
+  # Historical ribbon
+  p <- plot_ly() |> 
+    add_ribbons(data = dt[type == "Historical"],
+                x = ~date, ymin = ~lower, ymax = ~upper,
+                fillcolor = 'rgba(173,216,230,0.4)',  # Light blue
+                line = list(color = 'rgba(0,0,0,0)'),
+                name = '95% CI (Past)',
+                legendgroup = "observed",
+                showlegend = FALSE)
+  
+  
+  # Forecast ribbon
+  p <- p |> 
+    add_ribbons(data = dt[type == "Forecast"],
+                x = ~date, ymin = ~lower, ymax = ~upper,
+                fillcolor = 'rgba(144,238,144,0.4)',  # Light green
+                line = list(color = 'rgba(0,0,0,0)'),
+                name = '95% CI (Forecast)',
+                legendgroup = "future",
+                showlegend = FALSE)
+  
+  
+  # Historical line
+  p <- p |> 
+    add_trace(data = dt[type == "Historical"],
+              x = ~date, y = ~median,
+              type = 'scatter', mode = 'lines',
+              line = list(color = 'blue'),
+              name = 'Observed Data',
+              legendgroup = 'observed',
+              showlegend = show_legend
+    )
+  
+  # Forecast line
+  p <- p |> 
+    add_trace(data = dt[type == "Forecast"],
+              x = ~date, y = ~median,
+              type = 'scatter', mode = 'lines',
+              line = list(color = 'green', dash = 'dash'),
+              name = 'Future Time Points',
+              legendgroup = "future",
+              showlegend = show_legend
+    )
+  
+  # Layout
+  p <- p |> 
+    layout(
+      annotations = list(text = unique(dt$countyfips), x=0.02, y=1, xref="paper", yref="paper",
+                         xanchor = "left", yanchor = "bottom", showarrow=FALSE),
+      xaxis = list(title = "Date",
+                   range = c(min(dt$date), max(dt$date))),
+      yaxis = list(title = y_title,
+                   range = c(0, max(dt$upper*1.1))),
+      hovermode = "x unified",
+      legend = list(orientation='h')
+    )
+  
+  p
+  
+}
+
+time_series_subplots <- function(ts_inputs, ts_plot_data) {
+  
+  plots = lapply(seq_along(ts_inputs), \(i) {
+    plot_ly_time_series(
+      ts_plot_data[[ts_inputs[i]]],
+      show_legend = (i==1)
+    )
+  })
+  
+  subplot(
+    plots,
+    nrows = ceiling(length(plots)/3),
+    shareX = TRUE, shareY = FALSE,
+    titleX = TRUE, titleY = TRUE,
+    margin = 0.04
+  ) %>%
+    layout(
+      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.1),
+      margin = list(b = 80)  # extra bottom space for legend
+    )
+}
+  
+
+prepare_plot_ly_ts_data <- function(
+    model,
+    data_cls,
+    quantile = 0.95,
+    use_count=TRUE,
+    byvar="countyfips", 
+    future_steps=0
+) {
+  
+  d = get_map_data(model, data_cls, params = list(
+    metric ="quantile",
+    quantile = quantile,
+    use_count = use_count
+  ))$data
+  
+  medians = get_map_data(model, data_cls, params = list(
+    metric = "quantile",
+    quantile = 0.5,
+    use_count = use_count
+  ))$data[, .(countyfips, date, median =lower)]
+  
+  
+  all_data = d[medians, on=.(countyfips, date)]
+  all_data[, i:=(1:.N), countyfips]
+  all_data[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), countyfips]
+  
+  rbind(
+    all_data, 
+    all_data[type=="Historical"][date==max(date)][, type:="Forecast"]
+  )[order(date)] |> split(by="countyfips")
+  
+}
+
+
