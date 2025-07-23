@@ -103,8 +103,10 @@ viz_server <- function(id, dc, im, results) {
         )
       })
       
+      # TODO: note that this assume county
       observe({
-        choices = md$data_class$data[, .(countyfips, region)] |> unique()
+        req(im$data_cls)
+        choices = im$data_cls$data[, .(countyfips, region)] |> unique()
         choices = setNames(choices$countyfips, choices$region)
         updateSelectizeInput(
           inputId = "viz_regions",
