@@ -536,7 +536,10 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
   
 }
 
-plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", location_display_name = NULL, q_value = 0.95) {
+plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", location_display_name = NULL, q_value = 0.95, axis_id=1) {
+  
+  yref <- paste0("y", if (axis_id == 1) "" else axis_id)
+  axis_name <- paste0("yaxis", if (axis_id == 1) "" else axis_id)
   
   dt[, hover_text := paste0(
     "Date: ", format(date, "%Y-%m-%d"), "<br>",
@@ -565,7 +568,8 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", locatio
                 name = '95% CI (Forecast)',
                 legendgroup = "future",
                 showlegend = FALSE, 
-                hoverinfo ="none")
+                hoverinfo ="none"
+              )
   
   
   # Historical line
@@ -600,12 +604,27 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", locatio
   if(is.null(location_display_name)) location_display_name = unique(dt$countyfips)
   p <- p |> 
     layout(
-      annotations = list(text = location_display_name, x=0.02, y=1, xref="paper", yref="paper",
-                         xanchor = "left", yanchor = "bottom", showarrow=FALSE),
-      xaxis = list(title = "Date",
-                   range = c(min(dt$date), max(dt$date))),
-      yaxis = list(title = y_title,
-                   range = c(0, max(dt$upper*1.1))),
+      annotations = list(
+        text = location_display_name,
+        x=0.02,
+        y=1,
+        xref="paper",
+        yref="paper",
+       xanchor = "left",
+       yanchor = "bottom",
+       showarrow=FALSE, 
+       font = list(size = 16, color = "black", family="Arial black")
+      ),
+      xaxis = list(
+        title = list(text = "Date", font = list(size=14)),
+        tickfont = list(size=12),
+        range = c(min(dt$date), max(dt$date))
+      ),
+      yaxis = list(
+        title = list(text = y_title, font = list(size = 14)),
+        tickfont = list(size=12),
+        range = c(0, max(dt$upper*1.1))
+      ),
       hovermode = "x unified",
       legend = list(orientation='h')
     )
@@ -620,16 +639,17 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, ...) {
     plot_ly_time_series(
       ts_plot_data[[ts_inputs[i]]],
       show_legend = (i==1), 
-      location_display_name = ts_inputs[i],
+      location_display_name = ts_inputs[i], axis_id = i,
       ...
     )
   })
   
-  subplot(
+  p <- subplot(
     plots,
     nrows = ceiling(length(plots)/3),
-    shareX = TRUE, shareY = FALSE,
-    titleX = TRUE, titleY = TRUE,
+    shareX = TRUE,
+    titleX = TRUE,
+    titleY = TRUE,
     margin = 0.04
   ) %>%
     layout(
@@ -665,10 +685,17 @@ prepare_plot_ly_ts_data <- function(
   all_data[, i:=(1:.N), countyfips]
   all_data[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), countyfips]
   
-  rbind(
+  all_data <- rbind(
     all_data, 
     all_data[type=="Historical"][date==max(date)][, type:="Forecast"]
-  )[order(date)] |> split(by="countyfips")
+  )
+  
+  if(use_count == TRUE) {
+    # DROP THE FUTURE
+    all_data <- all_data[type=="Historical"]
+  }
+  
+  all_data[order(date)] |> split(by="countyfips")
   
 }
 
