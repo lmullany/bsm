@@ -148,7 +148,6 @@ viz_server <- function(id, dc, im, results) {
           quantile = input$metric_quantile,
           threshold = input$metric_exceedance
         )
-        print(params)
         
         get_map_data(
           model = im$model,
@@ -200,8 +199,7 @@ viz_server <- function(id, dc, im, results) {
         prepare_plot_ly_ts_data(
           im$model, im$data_cls, 
           use_count = input$ts_use_count == "Count", 
-          future_steps=im$nforecasts,
-          display_col = "region"
+          future_steps=im$nforecasts
         )
       }) |> bindEvent(input$ts_use_count)
       

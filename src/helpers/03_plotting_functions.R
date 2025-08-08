@@ -573,7 +573,8 @@ plot_ly_time_series <- function(
     y_title="Outcome", 
     location_display_name = NULL, 
     ci = "95", 
-    axis_id=1
+    axis_id=1, 
+    include_observed = TRUE
 ) {
   
   
@@ -583,7 +584,8 @@ plot_ly_time_series <- function(
   q = as.numeric(ci)
   probs = c("0.5", as.character(0.5 + c(-q/2, q/2)/100))
   new_names = c("median", "lower", "upper")
-  dt <- dt[, .SD, .SDcols=c("countyfips", "date","type", probs)]
+  keep_cols = c("countyfips", "date","type", "observed", probs)
+  dt <- dt[, .SD, .SDcols=keep_cols]
   setnames(dt, old=probs, new=new_names)
   
   yref <- paste0("y", if (axis_id == 1) "" else axis_id)
@@ -646,10 +648,22 @@ plot_ly_time_series <- function(
               hoverinfo = "text"
     )
   
-  
+  # Observed Data
+  if(include_observed) {
+    p <- p |> 
+      add_trace(data = dt[type=="Historical"],
+                x=~date, y=~observed,
+                type="scatter", mode='markers',
+                marker=list(color="black"),
+                name='Observed Data',
+                showlegend = show_legend
+      )
+  }
+     
   
   # Layout
   if(is.null(location_display_name)) location_display_name = unique(dt$countyfips)
+  
   p <- p |> 
     layout(
       annotations = list(
@@ -719,16 +733,10 @@ prepare_plot_ly_ts_data <- function(
     model,
     data_cls,
     use_count=TRUE,
-    future_steps=0,
-    display_col = NULL
+    future_steps=0
 ) {
   
   byvar = data_cls$region_col
-  
-  if(!is.null(display_col)) {
-    lu <- data_cls$data[, .SD, .SDcols = c(byvar, display_col)] |> 
-      unique()
-  }
   
   d <- get_posterior_quantiles(
     model, data_cls, use_suffix = FALSE,use_count_scale = use_count,
@@ -747,10 +755,15 @@ prepare_plot_ly_ts_data <- function(
   # drop any future dates if use_count is TRUE (but this is too strong,
   # need to also consider the model)
   if(use_count == TRUE) d <- d[type=="Historical"]
+
+  # merge back on the original data  
+  d <- data_cls$data[d, on=c(names(d)[1:2])]
   
-  if(!is.null(display_col)) {
-    d <- d[lu, on=byvar]
-  }
+  # generate observed
+  
+  obs = d[[data_cls$numerator_column]]
+  if(use_count==FALSE) obs <- obs/d[[data_cls$denominator_column]]
+  d[, observed:=obs]
   
   # return a list, split by county fips
   d[order(date)] |> split(by=byvar)
