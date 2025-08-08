@@ -60,7 +60,11 @@ viz_ui <- function(id) {
             # checkboxInput(ns("add_rescaled"), "Add Rescale",value = FALSE),
             radioButtons(ns("ts_use_count"),"Scale", choices = c("Count", "Proportion"),selected = "Proportion"),
             #numericInput(ns("ts_future_steps"), "Future Steps", value=0, min=0),
-            numericInput(ns("ts_quantile"), "Quantile", value=0.95),
+            selectInput(
+              ns("ts_quantile"), "CI", 
+              choices = c("99%" = "99", "95%" = "95", "90%" = "90", "50%" = "50"),
+              selected = "95"
+            ),
             selectizeInput(ns("viz_regions"), "Select Region(s)", choices=NULL, multiple=TRUE)
           ),
           card(
@@ -196,15 +200,15 @@ viz_server <- function(id, dc, im, results) {
         prepare_plot_ly_ts_data(
           im$model, im$data_cls, 
           use_count = input$ts_use_count == "Count", 
-          future_steps=im$nforecasts, 
-          quantile = input$ts_quantile
+          future_steps=im$nforecasts,
+          display_col = "region"
         )
-      }) |> bindEvent(input$ts_use_count, input$ts_quantile)
+      }) |> bindEvent(input$ts_use_count)
       
       
       output$ts_plots <- renderPlotly({
-        time_series_subplots(input$viz_regions, ts_plot_data = tspd(), q_value = input$ts_quantile)
-      }) |> bindEvent(input$viz_regions, tspd())
+        time_series_subplots(input$viz_regions, ts_plot_data = tspd(), ci = input$ts_quantile,display_col = "region")
+      })
       
       # proxy to change the yaxes from varied to fixed does not
       # currently work well

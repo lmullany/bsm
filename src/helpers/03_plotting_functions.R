@@ -567,7 +567,24 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
   
 }
 
-plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", location_display_name = NULL, q_value = 0.95, axis_id=1) {
+plot_ly_time_series <- function(
+    dt, 
+    show_legend=TRUE, 
+    y_title="Outcome", 
+    location_display_name = NULL, 
+    ci = "95", 
+    axis_id=1
+) {
+  
+  
+  # Let's get the data just for this q_value
+  # This could break, because it is treating numeric
+  # as character, and we could get some unfortunate results
+  q = as.numeric(ci)
+  probs = c("0.5", as.character(0.5 + c(-q/2, q/2)/100))
+  new_names = c("median", "lower", "upper")
+  dt <- dt[, .SD, .SDcols=c("countyfips", "date","type", probs)]
+  setnames(dt, old=probs, new=new_names)
   
   yref <- paste0("y", if (axis_id == 1) "" else axis_id)
   axis_name <- paste0("yaxis", if (axis_id == 1) "" else axis_id)
@@ -575,7 +592,7 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", locatio
   dt[, hover_text := paste0(
     "Date: ", format(date, "%Y-%m-%d"), "<br>",
     "Estimated: ", round(median, 4), "<br>",
-    sprintf("%2.0f%%", q_value*100), " CI: [", round(lower, 4), ", ", round(upper, 4), "]"
+    sprintf("%2.0f%%", q), " CI: [", round(lower, 4), ", ", round(upper, 4), "]"
   )]
   
   # Historical ribbon
@@ -664,13 +681,21 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", locatio
   
 }
 
-time_series_subplots <- function(ts_inputs, ts_plot_data, ...) {
+time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, ...) {
   
   plots = lapply(seq_along(ts_inputs), \(i) {
+    
+    d <- ts_plot_data[[ts_inputs[i]]]
+    # if display_col is not null, then we have a column in each of the 
+    # ts_plot_data element that holds the name we should display
+    display_name <- ts_inputs[i]
+    if(!is.null(display_col)) display_name <- unique(d[[display_col]])
+    
     plot_ly_time_series(
-      ts_plot_data[[ts_inputs[i]]],
+      dt = d,
       show_legend = (i==1), 
-      location_display_name = ts_inputs[i], axis_id = i,
+      location_display_name = display_name, 
+      axis_id = i,
       ...
     )
   })
@@ -693,49 +718,42 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, ...) {
 prepare_plot_ly_ts_data <- function(
     model,
     data_cls,
-    quantile = 0.95,
     use_count=TRUE,
-    byvar="countyfips", 
-    future_steps=0
+    future_steps=0,
+    display_col = NULL
 ) {
   
-  g <- system.time({
-  d = get_map_data(model, data_cls, params = list(
-    metric ="quantile",
-    quantile = quantile,
-    use_count = use_count
-  ))$data
-  })
-  print(g)
+  byvar = data_cls$region_col
   
-  g <- system.time({
-  medians = get_map_data(model, data_cls, params = list(
-    metric = "quantile",
-    quantile = 0.5,
-    use_count = use_count
-  ))$data[, .(countyfips, date, median =lower)]
-  })
-  print(g)
-  
-
-  g <- system.time({
-  all_data = d[medians, on=.(countyfips, date)]
-  all_data[, i:=(1:.N), countyfips]
-  all_data[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), countyfips]
-  
-  all_data <- rbind(
-    all_data, 
-    all_data[type=="Historical"][date==max(date)][, type:="Forecast"]
-  )
-  })
-  print(g)
-  
-  if(use_count == TRUE) {
-    # DROP THE FUTURE
-    all_data <- all_data[type=="Historical"]
+  if(!is.null(display_col)) {
+    lu <- data_cls$data[, .SD, .SDcols = c(byvar, display_col)] |> 
+      unique()
   }
   
-  all_data[order(date)] |> split(by="countyfips")
+  d <- get_posterior_quantiles(
+    model, data_cls, use_suffix = FALSE,use_count_scale = use_count,
+    probs = c(
+      0.005, 0.01, 0.025,
+      seq(0.05, .95, 0.05),
+      0.975, 0.99, 0.995
+    )
+  )
+
+  d[, i:=(1:.N), by=byvar]
+  d[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), by=byvar]
+  d <- rbind(d,d[type=="Historical"][date==max(date)][, type:="Forecast"])
+
+
+  # drop any future dates if use_count is TRUE (but this is too strong,
+  # need to also consider the model)
+  if(use_count == TRUE) d <- d[type=="Historical"]
+  
+  if(!is.null(display_col)) {
+    d <- d[lu, on=byvar]
+  }
+  
+  # return a list, split by county fips
+  d[order(date)] |> split(by=byvar)
   
 }
 
