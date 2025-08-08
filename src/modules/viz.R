@@ -140,19 +140,23 @@ viz_server <- function(id, dc, im, results) {
       
 
       map_data <- reactive({
-        req(im$model)
-        
-        params =  list(
-          metric = input$map_metric,
-          use_count = input$metric_counts == "Counts",
-          quantile = input$metric_quantile,
-          threshold = input$metric_exceedance
+        req(
+          im$model,
+          input$map_metric,
+          input$metric_counts,
+          input$metric_quantile,
+          input$metric_exceedance
         )
-        
-        get_map_data(
+
+      get_map_data(
           model = im$model,
           data_cls = im$data_cls,
-          params = params
+          params =  list(
+            metric = input$map_metric,
+            use_count = input$metric_counts == "Counts",
+            quantile = input$metric_quantile,
+            threshold = input$metric_exceedance
+          )
         )
       })
       

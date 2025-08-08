@@ -409,6 +409,7 @@ get_map_data <-function(model,
 # }
 
 get_hover_label_county <- function(county, fips, values=NULL, value_title="") {
+  
   lapply(seq_along(county), \(cty) {
     lbl <- paste0(
       "County: ",county[cty],"<br>",
@@ -431,7 +432,7 @@ polygon_info <- function(locs, map_data, target_date) {
   d = cbind(locs, map_data$data[date==target_date, .(outcome=get(map_data$column))])
   
   # If d[["outcome]] is completely missing, then 
-  # we should return ma
+  # we should return NA
   minv <- maxv <- NA
   
   if(any(!is.na(d[["outcome"]]))) {
