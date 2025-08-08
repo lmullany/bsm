@@ -25,15 +25,12 @@ viz_ui <- function(id) {
               inline = FALSE,
               selected = "mean"
             ),
-            conditionalPanel(
-              condition = "input.map_metric != 'exceedance'",
-              radioButtons(
-                inputId = ns("metric_counts"),
-                label="Counts/Proportions",
-                choices = c("Counts", "Proportion"),
-                selected = "Counts"
-              ),
-              ns = ns
+            radioButtons(
+              inputId = ns("metric_counts"),
+              label="Counts/Proportions",
+              choices = c("Counts", "Proportion"),
+              selected = "Counts",
+              inline = TRUE
             ),
             conditionalPanel(
               condition = "input.map_metric == 'quantile'",
@@ -42,9 +39,10 @@ viz_ui <- function(id) {
               ),
               ns = ns
             ),
+            #uiOutput(outputId = ns("metric_exceedance_thresh_ui")),
             conditionalPanel(
               condition = "input.map_metric == 'exceedance'",
-              numericInput(inputId = ns("metric_exceedance"), label = "Exceedance Threshold", value=10),
+              uiOutput(outputId = ns("metric_exceedance_thresh_ui")),
               ns = ns
             ),
             position = "left"
@@ -90,7 +88,7 @@ viz_server <- function(id, dc, im, results) {
     id,
     function(input, output, session) {
       
-
+      ns = session$ns
       
       observe({
         all_dates= im$data_cls$data[[im$data_cls$date_col]] |> unique()
@@ -101,11 +99,26 @@ viz_server <- function(id, dc, im, results) {
         )
       })
       
+      # Render the exceedance threshold ui widget
+      # Note that when metrics is count, then this should be numericInput
+      # but when metrics is Proportion, then this should a slider from 0 to 1
+      output$metric_exceedance_thresh_ui <- renderUI({
+        
+        if(input$metric_counts == "Counts") {
+          widget <- numericInput(ns("metric_exceedance"), label = "Exceedance Threshold", value=10)
+        } else {
+          widget <- sliderInput(ns("metric_exceedance"), label = "Exceedance Threshold", min = 0,
+                      max=1, value=0.5,step = .001)
+        }
+        return(widget)
+      })
+      
+      
       input_region_choices <- reactive(
         im$data_cls$data[, .(countyfips, region)] |> unique()
       )
       
-      # TODO: note that this assume county
+      # TODO: note that this assumes county
       observe({
         req(im$data_cls)
         choices = setNames(input_region_choices()$countyfips, input_region_choices()$region)
@@ -124,37 +137,33 @@ viz_server <- function(id, dc, im, results) {
 
       map_data <- reactive({
         req(im$model)
+        
+        params =  list(
+          metric = input$map_metric,
+          use_count = input$metric_counts == "Counts",
+          quantile = input$metric_quantile,
+          threshold = input$metric_exceedance
+        )
+        print(params)
+        
         get_map_data(
           model = im$model,
           data_cls = im$data_cls,
-          params =  list(
-            metric = input$map_metric,
-            use_count = input$metric_counts == "Counts",
-            quantile = input$metric_quantile,
-            threshold = input$metric_exceedance
-          )
+          params = params
         )
       })
       
       map_base_locations <- reactive({
         
         req(im$data_cls)
-        
-        locs = im$data_cls$data[, .(countyfips, region)] |> unique()
-        
-        map_data <- dplyr::right_join(
-          mutate(county_sf, countyfips = paste0(STATEFP, COUNTYFP)),
-          locs,
-          by="countyfips"
-        ) |> 
-          sf::st_transform(crs = 4326)
+        get_map_locations(im$data_cls)
+      
       }) |> bindEvent(im$data_cls)
       
 
       target_date <- reactive(input$map_date)
       
-      output$region_map <- renderLeaflet({
-        
+      region_map <- reactive({
         pi = polygon_info(map_base_locations(),map_data(),target_date())
         
         leaflet::leaflet() |>
@@ -162,6 +171,10 @@ viz_server <- function(id, dc, im, results) {
           update_polygons(pi) |> 
           leaflet.extras::addFullscreenControl() |> 
           leaflet.extras::addResetMapButton()
+      })
+      
+      output$region_map <- renderLeaflet({
+        region_map()
         
       }) |> bindEvent(map_base_locations())
       

@@ -33,7 +33,11 @@
 #'
 #' @export
 round_up_max <- function(x, slack=0.2, magnitude= NULL) {
-  if (x == 0) return(1)
+  
+  
+  if(is.na(x)==TRUE || is.null(x)==TRUE || is.infinite(x)) return(NA)
+  
+  if(x==0) return(1)
   if (is.null(magnitude)){
     magnitude <- 10^floor(log10(x))
     
@@ -121,7 +125,7 @@ get_map_data <-function(model,
     display_col <- "predicted_mean"
     
     minv <- 0
-    maxv <- round_up_max(max(dt[,predicted_mean]))
+    maxv <- round_up_max(max(dt[,predicted_mean], na.rm = TRUE))
   } else if (params$metric  == "median"){
     if ("use_count" %in% names(params)){
       use_count = params$use_count
@@ -140,7 +144,7 @@ get_map_data <-function(model,
                                            use_count_scale = use_count)
     display_col <- "0.5quant"
     minv <- 0
-    maxv <- round_up_max(max(dt[,get(display_col)]))
+    maxv <- round_up_max(max(dt[,get(display_col)],na.rm = T))
   } else if (params$metric  == "quantile"){
     if ("quantile" %in% names(params)){
       q <- params$quantile 
@@ -150,13 +154,14 @@ get_map_data <-function(model,
     } else {
       cli::cli_abort("Required parameter 'quantile' for metric 'posterior_quantile' is missing from params.")
     }
-    if (q<0.5){
-      ci_width <-1-2*q
-      display_col <- "lower"
-    } else {
-      ci_width <-2*q-1
-      display_col <- "upper"
-    }
+    # if (q<0.5){
+    #   ci_width <-1-2*q
+    #   display_col <- "lower"
+    # } else {
+    #   ci_width <-2*q-1
+    #   display_col <- "upper"
+    # }
+    display_col <- paste0("q",q)
     if ("use_count" %in% names(params)){
       use_count = params$use_count
       if (use_count){
@@ -168,24 +173,33 @@ get_map_data <-function(model,
       use_count = FALSE
       display_col_name <- paste0("Posterior quantile q=",q," (proportion)")
     }
-    dt <- epistemic::get_credible_intervals (model,
+    dt <- epistemic::get_posterior_quantiles (model,
                                              data_cls,
                                              use_suffix=FALSE,
-                                             ci_width = ci_width,
+                                             probs=q,
                                              use_count = use_count
     )
+    setnames(dt, new=c(data_cls$region_col, data_cls$date_col, display_col))
     minv <- 0
-    maxv <- round_up_max(max(dt[,get(display_col)]))
+    maxv <- round_up_max(max(dt[[display_col]],na.rm = T))
+    
   } else if (params$metric  == "exceedance"){
     if (!("threshold" %in% names(params))){
       cli::cli_abort("Threshold must be provided for metric exceedance.")
     } else {
       threshold <- params$threshold
     }
+    if ("use_count" %in% names(params)) {
+      use_count = params$use_count
+    } else use_count = FALSE
+      
     dt <- epistemic::get_exceedance_probs(model,
                                           data_cls,
-                                          threshold = threshold)
-    display_col <- "exceedance_probs"
+                                          use_suffix = FALSE,
+                                          threshold = threshold,
+                                          use_count = use_count
+                                          )
+    display_col <- "exceedance_prob"
     display_col_name <- paste0("Exceedance Probability (threshold: ",threshold,")")
     minv <- 0
     maxv <- 1
@@ -416,14 +430,23 @@ polygon_info <- function(locs, map_data, target_date) {
   # TODO: consider merge here instead of cbind
   d = cbind(locs, map_data$data[date==target_date, .(outcome=get(map_data$column))])
   
-  # get min and (rounded) max
-  minv = min(d[["outcome"]])
-  maxv = round_up_max(max(d[["outcome"]]))
+  # If d[["outcome]] is completely missing, then 
+  # we should return ma
+  minv <- maxv <- NA
   
-  # get palette functions
-  pal = leaflet::colorNumeric("plasma", domain = c(min(d$outcome),max(d$outcome)), na.color = "transparent")
-  pal_rev <- leaflet::colorNumeric("plasma", domain = c(maxv,minv), reverse = TRUE, na.color = "transparent")
+  if(any(!is.na(d[["outcome"]]))) {
+    # get min and (rounded) max
+    minv = min(d[["outcome"]], na.rm=T)
+    maxv = round_up_max(max(d[["outcome"]], na.rm=T))
+  }
   
+  if(!is.na(minv) & !is.na(maxv)) {
+    # get palette functions
+    pal = leaflet::colorNumeric("plasma", domain = c(min(d$outcome),max(d$outcome)), na.color = "transparent")
+    pal_rev <- leaflet::colorNumeric("plasma", domain = c(maxv,minv), reverse = TRUE, na.color = "transparent")
+  } else {
+    pal <- pal_rev <- NULL
+  }  
   # generate hover values for county
   hover_vals <- get_hover_label_county(
     county = d$NAME, 
@@ -439,11 +462,13 @@ polygon_info <- function(locs, map_data, target_date) {
 
 update_polygons <- function(p, pi) {
   
-  p |> 
+  default_fill_color = "white"
+  
+  p <- p |> 
     ## add the polygons
     leaflet::addPolygons(
       data = pi$d,
-      fillColor = pi$pal(pi$d$outcome),
+      fillColor = {if(is.null(pi$pal)) "grey" else pi$pal(pi$d$outcome)},
       weight = 1,
       opacity = 1,
       color = "white",
@@ -456,15 +481,21 @@ update_polygons <- function(p, pi) {
         bringToFront = TRUE
       ),
       label = lapply(pi$hover_vals, htmltools::HTML)
-    ) |> 
-    ## add the legend
-    leaflet::addLegend(
-      pal = pi$pal_rev,
-      values = c(pi$minv, pi$maxv),
-      labFormat = leaflet::labelFormat(transform = function(x) sort(x, decreasing = TRUE)),
-      title = pi$value_title,
-      position = "bottomright"
     )
+  
+  if(!is.null(pi$pal)) {
+    p <- p |>
+      ## add the legend
+      leaflet::addLegend(
+        pal = pi$pal_rev,
+        values = c(pi$minv, pi$maxv),
+        labFormat = leaflet::labelFormat(transform = function(x) sort(x, decreasing = TRUE)),
+        title = pi$value_title,
+        position = "bottomright"
+      )
+  }
+  
+  return(p)
   
 }
 
@@ -668,19 +699,26 @@ prepare_plot_ly_ts_data <- function(
     future_steps=0
 ) {
   
+  g <- system.time({
   d = get_map_data(model, data_cls, params = list(
     metric ="quantile",
     quantile = quantile,
     use_count = use_count
   ))$data
+  })
+  print(g)
   
+  g <- system.time({
   medians = get_map_data(model, data_cls, params = list(
     metric = "quantile",
     quantile = 0.5,
     use_count = use_count
   ))$data[, .(countyfips, date, median =lower)]
+  })
+  print(g)
   
-  
+
+  g <- system.time({
   all_data = d[medians, on=.(countyfips, date)]
   all_data[, i:=(1:.N), countyfips]
   all_data[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), countyfips]
@@ -689,6 +727,8 @@ prepare_plot_ly_ts_data <- function(
     all_data, 
     all_data[type=="Historical"][date==max(date)][, type:="Forecast"]
   )
+  })
+  print(g)
   
   if(use_count == TRUE) {
     # DROP THE FUTURE
@@ -699,4 +739,18 @@ prepare_plot_ly_ts_data <- function(
   
 }
 
+#' Given a data class, return the unique locations and map data, including
+#' shape information, using Rnssp::county_sf. This assume county locations
+#' and the function must be provided the county display column, the county
+#' code column (which default to "region", and "countyfips", respectively)
+get_map_locations <- function(dc, county_display="region", county_code="countyfips") {
+  locs = dc$data[, .SD, .SDcols = c(county_code, county_display)] |> unique()
+  
+  map_data <- dplyr::right_join(
+    mutate(Rnssp::county_sf, !!county_code:=paste0(STATEFP, COUNTYFP)),
+    locs,
+    by=county_code
+  ) |> 
+    sf::st_transform(crs = 4326)
+}
 
