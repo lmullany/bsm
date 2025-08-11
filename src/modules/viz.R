@@ -56,7 +56,7 @@ viz_ui <- function(id) {
             width = SIDEBAR_WIDTH*2,
             radioButtons(ns("ts_use_count"),"Scale", choices = c("Count", "Proportion"),selected = "Proportion"),
             selectInput(
-              ns("ts_quantile"), "CI", 
+              ns("ts_quantile"), "Credible Interval", 
               choices = c("99%" = "99", "95%" = "95", "90%" = "90", "50%" = "50"),
               selected = "95"
             ),
@@ -102,6 +102,8 @@ viz_server <- function(id, dc, im, results) {
           )
         }
       })
+      
+      
       
       # Render the exceedance threshold ui widget
       # Note that when metrics is count, then this should be numericInput
@@ -182,6 +184,7 @@ viz_server <- function(id, dc, im, results) {
       })
       
       output$region_map <- renderLeaflet({
+        validate(need(im$posterior, "Load data and run model first"))
         region_map()
       })
       
@@ -195,6 +198,12 @@ viz_server <- function(id, dc, im, results) {
           )
       })
       
+      # update the label for credible interval when count/proportion changes
+      observe({
+        updateSelectInput(inputId = "ts_quantile",
+                          label=paste0("Credible Interval for ", input$ts_use_count)
+        )
+      }) |> bindEvent(input$ts_use_count)
 
       tspd <- reactive({
         req(im$posterior)
@@ -207,6 +216,7 @@ viz_server <- function(id, dc, im, results) {
       
       
       output$ts_plots <- renderPlotly({
+        validate(need(im$posterior, "Load data and run model first"))
         time_series_subplots(input$viz_regions, ts_plot_data = tspd(), ci = input$ts_quantile,display_col = "region")
       })
       

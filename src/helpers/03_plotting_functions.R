@@ -602,9 +602,9 @@ plot_ly_time_series <- function(
   p <- plot_ly() |> 
     add_ribbons(data = dt[type == "Historical"],
                 x = ~date, ymin = ~lower, ymax = ~upper,
-                fillcolor = 'rgba(173,216,230,0.4)',  # Light blue
+                fillcolor = 'rgba(173,216,230,0.6)',  # Light blue
                 line = list(color = 'rgba(0,0,0,0)'),
-                name = '95% CI (Past)',
+                name = '95% Credible Interval (Historical)',
                 legendgroup = "observed",
                 showlegend = FALSE, 
                 hoverinfo = "none")
@@ -614,9 +614,9 @@ plot_ly_time_series <- function(
   p <- p |> 
     add_ribbons(data = dt[type == "Forecast"],
                 x = ~date, ymin = ~lower, ymax = ~upper,
-                fillcolor = 'rgba(144,238,144,0.4)',  # Light green
+                fillcolor = 'rgba(144,238,144,0.6)',  # Light green
                 line = list(color = 'rgba(0,0,0,0)'),
-                name = '95% CI (Forecast)',
+                name = '95% Credible Interval (Forecast)',
                 legendgroup = "future",
                 showlegend = FALSE, 
                 hoverinfo ="none"
@@ -629,7 +629,7 @@ plot_ly_time_series <- function(
               x = ~date, y = ~median,
               type = 'scatter', mode = 'lines',
               line = list(color = 'blue'),
-              name = 'Observed Data',
+              name = 'Modeled Outcome',
               legendgroup = 'observed',
               showlegend = show_legend, 
               text = ~hover_text,
