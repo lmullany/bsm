@@ -19,8 +19,8 @@ viz_ui <- function(id) {
               choices = c(
                 "Mean" = "mean", 
                 "Median" = "median",
-                "Quantile" = "quantile",
-                "Exceedance" = "exceedance"
+                "Quantile" = "quantile"
+                #"Exceedance" = "exceedance"
               ),
               inline = FALSE,
               selected = "mean"
@@ -39,12 +39,11 @@ viz_ui <- function(id) {
               ),
               ns = ns
             ),
-            #uiOutput(outputId = ns("metric_exceedance_thresh_ui")),
-            conditionalPanel(
-              condition = "input.map_metric == 'exceedance'",
-              uiOutput(outputId = ns("metric_exceedance_thresh_ui")),
-              ns = ns
-            ),
+            # conditionalPanel(
+            #   condition = "input.map_metric == 'exceedance'",
+            #   uiOutput(outputId = ns("metric_exceedance_thresh_ui")),
+            #   ns = ns
+            # ),
             position = "left"
           )
         )
@@ -55,11 +54,7 @@ viz_ui <- function(id) {
           sidebar = sidebar(
             id = ns("time_series_sidebar"),
             width = SIDEBAR_WIDTH*2,
-            # checkboxInput(ns("add_temporal"), "Add Temporal Trend",value = FALSE),
-            # checkboxInput(ns("add_rolling"), "Add Rolling Average",value = FALSE),
-            # checkboxInput(ns("add_rescaled"), "Add Rescale",value = FALSE),
             radioButtons(ns("ts_use_count"),"Scale", choices = c("Count", "Proportion"),selected = "Proportion"),
-            #numericInput(ns("ts_future_steps"), "Future Steps", value=0, min=0),
             selectInput(
               ns("ts_quantile"), "CI", 
               choices = c("99%" = "99", "95%" = "95", "90%" = "90", "50%" = "50"),
@@ -95,12 +90,17 @@ viz_server <- function(id, dc, im, results) {
       ns = session$ns
       
       observe({
+        
+        req(im$data_cls)
+      
         all_dates= im$data_cls$data[[im$data_cls$date_col]] |> unique()
-        updateSelectInput(
-          inputId = "map_date",
-          choices = all_dates,
-          selected = max(all_dates)
-        )
+        if(any(!is.na(all_dates))) {
+          updateSelectInput(
+            inputId = "map_date",
+            choices = all_dates,
+            selected = max(all_dates,na.rm=T)
+          )
+        }
       })
       
       # Render the exceedance threshold ui widget
@@ -115,7 +115,7 @@ viz_server <- function(id, dc, im, results) {
                       max=1, value=0.5,step = .001)
         }
         return(widget)
-      })
+      }) |> bindEvent(input$metric_counts,ignoreNULL = F)
       
       
       input_region_choices <- reactive(
@@ -140,24 +140,22 @@ viz_server <- function(id, dc, im, results) {
       
 
       map_data <- reactive({
-        req(
-          im$model,
-          input$map_metric,
-          input$metric_counts,
-          input$metric_quantile,
-          input$metric_exceedance
-        )
 
-      get_map_data(
+        req(im$model)
+
+        params <- list(
+          metric = input$map_metric,
+          use_count = input$metric_counts == "Counts",
+          quantile = input$metric_quantile,
+          threshold = 10 # place holder as constant exceedance threshold
+        )
+      
+        md <- get_map_data(
           model = im$model,
           data_cls = im$data_cls,
-          params =  list(
-            metric = input$map_metric,
-            use_count = input$metric_counts == "Counts",
-            quantile = input$metric_quantile,
-            threshold = input$metric_exceedance
-          )
+          params = params
         )
+        return(md)
       })
       
       map_base_locations <- reactive({
@@ -165,12 +163,15 @@ viz_server <- function(id, dc, im, results) {
         req(im$data_cls)
         get_map_locations(im$data_cls)
       
-      }) |> bindEvent(im$data_cls)
+      })
       
 
       target_date <- reactive(input$map_date)
       
       region_map <- reactive({
+        
+        req(map_base_locations(), map_data(), target_date())
+        
         pi = polygon_info(map_base_locations(),map_data(),target_date())
         
         leaflet::leaflet() |>
@@ -182,20 +183,17 @@ viz_server <- function(id, dc, im, results) {
       
       output$region_map <- renderLeaflet({
         region_map()
-        
-      }) |> bindEvent(map_base_locations())
+      })
       
       observe({
-        req(map_base_locations())
-        req(map_data())
-        req(target_date())
+        req(region_map())
         leafletProxy("region_map") |>
           clearControls() |>
           clearShapes() |>
           update_polygons(
             polygon_info(map_base_locations(), map_data(), target_date())
           )
-      }) |> bindEvent(map_data(), target_date(), ignoreInit = FALSE)
+      })
       
 
       tspd <- reactive({
