@@ -32,9 +32,9 @@ library(epistemic)
 
 ##################################
 ## check minimum epistemic version
-## July 3rd, 2025: 1.0.0
+## August 8th 2025: 1.2.0
 ##################################
-min_version = "1.0.0"
+min_version = "1.2.0"
 if(packageVersion("epistemic")<min_version) {
   cli::cli_abort(
     paste0("epistemic version must be at least ", min_version)

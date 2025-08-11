@@ -33,7 +33,11 @@
 #'
 #' @export
 round_up_max <- function(x, slack=0.2, magnitude= NULL) {
-  if (x == 0) return(1)
+  
+  
+  if(is.na(x)==TRUE || is.null(x)==TRUE || is.infinite(x)) return(NA)
+  
+  if(x==0) return(1)
   if (is.null(magnitude)){
     magnitude <- 10^floor(log10(x))
     
@@ -121,7 +125,7 @@ get_map_data <-function(model,
     display_col <- "predicted_mean"
     
     minv <- 0
-    maxv <- round_up_max(max(dt[,predicted_mean]))
+    maxv <- round_up_max(max(dt[,predicted_mean], na.rm = TRUE))
   } else if (params$metric  == "median"){
     if ("use_count" %in% names(params)){
       use_count = params$use_count
@@ -140,7 +144,7 @@ get_map_data <-function(model,
                                            use_count_scale = use_count)
     display_col <- "0.5quant"
     minv <- 0
-    maxv <- round_up_max(max(dt[,get(display_col)]))
+    maxv <- round_up_max(max(dt[,get(display_col)],na.rm = T))
   } else if (params$metric  == "quantile"){
     if ("quantile" %in% names(params)){
       q <- params$quantile 
@@ -150,13 +154,14 @@ get_map_data <-function(model,
     } else {
       cli::cli_abort("Required parameter 'quantile' for metric 'posterior_quantile' is missing from params.")
     }
-    if (q<0.5){
-      ci_width <-1-2*q
-      display_col <- "lower"
-    } else {
-      ci_width <-2*q-1
-      display_col <- "upper"
-    }
+    # if (q<0.5){
+    #   ci_width <-1-2*q
+    #   display_col <- "lower"
+    # } else {
+    #   ci_width <-2*q-1
+    #   display_col <- "upper"
+    # }
+    display_col <- paste0("q",q)
     if ("use_count" %in% names(params)){
       use_count = params$use_count
       if (use_count){
@@ -168,24 +173,33 @@ get_map_data <-function(model,
       use_count = FALSE
       display_col_name <- paste0("Posterior quantile q=",q," (proportion)")
     }
-    dt <- epistemic::get_credible_intervals (model,
+    dt <- epistemic::get_posterior_quantiles (model,
                                              data_cls,
                                              use_suffix=FALSE,
-                                             ci_width = ci_width,
+                                             probs=q,
                                              use_count = use_count
     )
+    setnames(dt, new=c(data_cls$region_col, data_cls$date_col, display_col))
     minv <- 0
-    maxv <- round_up_max(max(dt[,get(display_col)]))
+    maxv <- round_up_max(max(dt[[display_col]],na.rm = T))
+    
   } else if (params$metric  == "exceedance"){
     if (!("threshold" %in% names(params))){
       cli::cli_abort("Threshold must be provided for metric exceedance.")
     } else {
       threshold <- params$threshold
     }
+    if ("use_count" %in% names(params)) {
+      use_count = params$use_count
+    } else use_count = FALSE
+      
     dt <- epistemic::get_exceedance_probs(model,
                                           data_cls,
-                                          threshold = threshold)
-    display_col <- "exceedance_probs"
+                                          use_suffix = FALSE,
+                                          threshold = threshold,
+                                          use_count = use_count
+                                          )
+    display_col <- "exceedance_prob"
     display_col_name <- paste0("Exceedance Probability (threshold: ",threshold,")")
     minv <- 0
     maxv <- 1
@@ -395,6 +409,7 @@ get_map_data <-function(model,
 # }
 
 get_hover_label_county <- function(county, fips, values=NULL, value_title="") {
+  
   lapply(seq_along(county), \(cty) {
     lbl <- paste0(
       "County: ",county[cty],"<br>",
@@ -416,14 +431,23 @@ polygon_info <- function(locs, map_data, target_date) {
   # TODO: consider merge here instead of cbind
   d = cbind(locs, map_data$data[date==target_date, .(outcome=get(map_data$column))])
   
-  # get min and (rounded) max
-  minv = min(d[["outcome"]])
-  maxv = round_up_max(max(d[["outcome"]]))
+  # If d[["outcome]] is completely missing, then 
+  # we should return NA
+  minv <- maxv <- NA
   
-  # get palette functions
-  pal = leaflet::colorNumeric("plasma", domain = c(min(d$outcome),max(d$outcome)), na.color = "transparent")
-  pal_rev <- leaflet::colorNumeric("plasma", domain = c(maxv,minv), reverse = TRUE, na.color = "transparent")
+  if(any(!is.na(d[["outcome"]]))) {
+    # get min and (rounded) max
+    minv = min(d[["outcome"]], na.rm=T)
+    maxv = round_up_max(max(d[["outcome"]], na.rm=T))
+  }
   
+  if(!is.na(minv) & !is.na(maxv)) {
+    # get palette functions
+    pal = leaflet::colorNumeric("plasma", domain = c(min(d$outcome),max(d$outcome)), na.color = "transparent")
+    pal_rev <- leaflet::colorNumeric("plasma", domain = c(maxv,minv), reverse = TRUE, na.color = "transparent")
+  } else {
+    pal <- pal_rev <- NULL
+  }  
   # generate hover values for county
   hover_vals <- get_hover_label_county(
     county = d$NAME, 
@@ -439,11 +463,13 @@ polygon_info <- function(locs, map_data, target_date) {
 
 update_polygons <- function(p, pi) {
   
-  p |> 
+  default_fill_color = "white"
+  
+  p <- p |> 
     ## add the polygons
     leaflet::addPolygons(
       data = pi$d,
-      fillColor = pi$pal(pi$d$outcome),
+      fillColor = {if(is.null(pi$pal)) "grey" else pi$pal(pi$d$outcome)},
       weight = 1,
       opacity = 1,
       color = "white",
@@ -456,15 +482,21 @@ update_polygons <- function(p, pi) {
         bringToFront = TRUE
       ),
       label = lapply(pi$hover_vals, htmltools::HTML)
-    ) |> 
-    ## add the legend
-    leaflet::addLegend(
-      pal = pi$pal_rev,
-      values = c(pi$minv, pi$maxv),
-      labFormat = leaflet::labelFormat(transform = function(x) sort(x, decreasing = TRUE)),
-      title = pi$value_title,
-      position = "bottomright"
     )
+  
+  if(!is.null(pi$pal)) {
+    p <- p |>
+      ## add the legend
+      leaflet::addLegend(
+        pal = pi$pal_rev,
+        values = c(pi$minv, pi$maxv),
+        labFormat = leaflet::labelFormat(transform = function(x) sort(x, decreasing = TRUE)),
+        title = pi$value_title,
+        position = "bottomright"
+      )
+  }
+  
+  return(p)
   
 }
 
@@ -536,21 +568,43 @@ make_timeseries_plots<-function(res_data,date_col = "date", use_prop=FALSE,add_t
   
 }
 
-plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", location_display_name = NULL, q_value = 0.95) {
+plot_ly_time_series <- function(
+    dt, 
+    show_legend=TRUE, 
+    y_title="Outcome", 
+    location_display_name = NULL, 
+    ci = "95", 
+    axis_id=1, 
+    include_observed = TRUE
+) {
+  
+  
+  # Let's get the data just for this q_value
+  # This could break, because it is treating numeric
+  # as character, and we could get some unfortunate results
+  q = as.numeric(ci)
+  probs = c("0.5", as.character(0.5 + c(-q/2, q/2)/100))
+  new_names = c("median", "lower", "upper")
+  keep_cols = c("countyfips", "date","type", "observed", probs)
+  dt <- dt[, .SD, .SDcols=keep_cols]
+  setnames(dt, old=probs, new=new_names)
+  
+  yref <- paste0("y", if (axis_id == 1) "" else axis_id)
+  axis_name <- paste0("yaxis", if (axis_id == 1) "" else axis_id)
   
   dt[, hover_text := paste0(
     "Date: ", format(date, "%Y-%m-%d"), "<br>",
     "Estimated: ", round(median, 4), "<br>",
-    sprintf("%2.0f%%", q_value*100), " CI: [", round(lower, 4), ", ", round(upper, 4), "]"
+    sprintf("%2.0f%%", q), " CI: [", round(lower, 4), ", ", round(upper, 4), "]"
   )]
   
   # Historical ribbon
   p <- plot_ly() |> 
     add_ribbons(data = dt[type == "Historical"],
                 x = ~date, ymin = ~lower, ymax = ~upper,
-                fillcolor = 'rgba(173,216,230,0.4)',  # Light blue
+                fillcolor = 'rgba(173,216,230,0.6)',  # Light blue
                 line = list(color = 'rgba(0,0,0,0)'),
-                name = '95% CI (Past)',
+                name = '95% Credible Interval (Historical)',
                 legendgroup = "observed",
                 showlegend = FALSE, 
                 hoverinfo = "none")
@@ -560,12 +614,13 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", locatio
   p <- p |> 
     add_ribbons(data = dt[type == "Forecast"],
                 x = ~date, ymin = ~lower, ymax = ~upper,
-                fillcolor = 'rgba(144,238,144,0.4)',  # Light green
+                fillcolor = 'rgba(144,238,144,0.6)',  # Light green
                 line = list(color = 'rgba(0,0,0,0)'),
-                name = '95% CI (Forecast)',
+                name = '95% Credible Interval (Forecast)',
                 legendgroup = "future",
                 showlegend = FALSE, 
-                hoverinfo ="none")
+                hoverinfo ="none"
+              )
   
   
   # Historical line
@@ -574,7 +629,7 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", locatio
               x = ~date, y = ~median,
               type = 'scatter', mode = 'lines',
               line = list(color = 'blue'),
-              name = 'Observed Data',
+              name = 'Modeled Outcome',
               legendgroup = 'observed',
               showlegend = show_legend, 
               text = ~hover_text,
@@ -594,18 +649,45 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", locatio
               hoverinfo = "text"
     )
   
-  
+  # Observed Data
+  if(include_observed) {
+    p <- p |> 
+      add_trace(data = dt[type=="Historical"],
+                x=~date, y=~observed,
+                type="scatter", mode='markers',
+                marker=list(color="black"),
+                name='Observed Data',
+                showlegend = show_legend
+      )
+  }
+     
   
   # Layout
   if(is.null(location_display_name)) location_display_name = unique(dt$countyfips)
+  
   p <- p |> 
     layout(
-      annotations = list(text = location_display_name, x=0.02, y=1, xref="paper", yref="paper",
-                         xanchor = "left", yanchor = "bottom", showarrow=FALSE),
-      xaxis = list(title = "Date",
-                   range = c(min(dt$date), max(dt$date))),
-      yaxis = list(title = y_title,
-                   range = c(0, max(dt$upper*1.1))),
+      annotations = list(
+        text = location_display_name,
+        x=0.02,
+        y=1,
+        xref="paper",
+        yref="paper",
+       xanchor = "left",
+       yanchor = "bottom",
+       showarrow=FALSE, 
+       font = list(size = 16, color = "black", family="Arial black")
+      ),
+      xaxis = list(
+        title = list(text = "Date", font = list(size=14)),
+        tickfont = list(size=12),
+        range = c(min(dt$date), max(dt$date))
+      ),
+      yaxis = list(
+        title = list(text = y_title, font = list(size = 14)),
+        tickfont = list(size=12),
+        range = c(0, max(dt$upper*1.1))
+      ),
       hovermode = "x unified",
       legend = list(orientation='h')
     )
@@ -614,22 +696,31 @@ plot_ly_time_series <- function(dt, show_legend=TRUE, y_title="Outcome", locatio
   
 }
 
-time_series_subplots <- function(ts_inputs, ts_plot_data, ...) {
+time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, ...) {
   
   plots = lapply(seq_along(ts_inputs), \(i) {
+    
+    d <- ts_plot_data[[ts_inputs[i]]]
+    # if display_col is not null, then we have a column in each of the 
+    # ts_plot_data element that holds the name we should display
+    display_name <- ts_inputs[i]
+    if(!is.null(display_col)) display_name <- unique(d[[display_col]])
+    
     plot_ly_time_series(
-      ts_plot_data[[ts_inputs[i]]],
+      dt = d,
       show_legend = (i==1), 
-      location_display_name = ts_inputs[i],
+      location_display_name = display_name, 
+      axis_id = i,
       ...
     )
   })
   
-  subplot(
+  p <- subplot(
     plots,
     nrows = ceiling(length(plots)/3),
-    shareX = TRUE, shareY = FALSE,
-    titleX = TRUE, titleY = TRUE,
+    shareX = TRUE,
+    titleX = TRUE,
+    titleY = TRUE,
     margin = 0.04
   ) %>%
     layout(
@@ -642,34 +733,56 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, ...) {
 prepare_plot_ly_ts_data <- function(
     model,
     data_cls,
-    quantile = 0.95,
     use_count=TRUE,
-    byvar="countyfips", 
     future_steps=0
 ) {
   
-  d = get_map_data(model, data_cls, params = list(
-    metric ="quantile",
-    quantile = quantile,
-    use_count = use_count
-  ))$data
+  byvar = data_cls$region_col
   
-  medians = get_map_data(model, data_cls, params = list(
-    metric = "quantile",
-    quantile = 0.5,
-    use_count = use_count
-  ))$data[, .(countyfips, date, median =lower)]
+  d <- get_posterior_quantiles(
+    model, data_cls, use_suffix = FALSE,use_count_scale = use_count,
+    probs = c(
+      0.005, 0.01, 0.025,
+      seq(0.05, .95, 0.05),
+      0.975, 0.99, 0.995
+    )
+  )
+
+  d[, i:=(1:.N), by=byvar]
+  d[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), by=byvar]
+  d <- rbind(d,d[type=="Historical"][date==max(date)][, type:="Forecast"])
+
+
+  # drop any future dates if use_count is TRUE (but this is too strong,
+  # need to also consider the model)
+  if(use_count == TRUE) d <- d[type=="Historical"]
+
+  # merge back on the original data  
+  d <- data_cls$data[d, on=c(names(d)[1:2])]
   
+  # generate observed
   
-  all_data = d[medians, on=.(countyfips, date)]
-  all_data[, i:=(1:.N), countyfips]
-  all_data[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), countyfips]
+  obs = d[[data_cls$numerator_column]]
+  if(use_count==FALSE) obs <- obs/d[[data_cls$denominator_column]]
+  d[, observed:=obs]
   
-  rbind(
-    all_data, 
-    all_data[type=="Historical"][date==max(date)][, type:="Forecast"]
-  )[order(date)] |> split(by="countyfips")
+  # return a list, split by county fips
+  d[order(date)] |> split(by=byvar)
   
 }
 
+#' Given a data class, return the unique locations and map data, including
+#' shape information, using Rnssp::county_sf. This assume county locations
+#' and the function must be provided the county display column, the county
+#' code column (which default to "region", and "countyfips", respectively)
+get_map_locations <- function(dc, county_display="region", county_code="countyfips") {
+  locs = dc$data[, .SD, .SDcols = c(county_code, county_display)] |> unique()
+  
+  map_data <- dplyr::right_join(
+    mutate(Rnssp::county_sf, !!county_code:=paste0(STATEFP, COUNTYFP)),
+    locs,
+    by=county_code
+  ) |> 
+    sf::st_transform(crs = 4326)
+}
 

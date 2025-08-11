@@ -419,7 +419,7 @@ add_posteriors <- function(data_cls, model){
     all=TRUE
   )
   
-  rename_map <- c("0.5quant_median_counts" = "predicted_median", "lower_0.95_counts" = "predicted_lower", "upper_0.95_counts"="predicted_upper") 
+  rename_map <- c("0.5quant_median_counts" = "predicted_median", "counts_0.025" = "predicted_lower", "counts_0.975"="predicted_upper") 
   existing <- intersect(names(rename_map), names(merged))
   setnames(merged, old = existing, new = rename_map[existing])
   
@@ -429,7 +429,7 @@ add_posteriors <- function(data_cls, model){
     region=data_cls$region_column,
     date=data_cls$date_column
   )
-  
+
   return (data_cls$data)
 }
 # Helper function for forecast label and default
@@ -458,7 +458,7 @@ pre_process_data <- function(data, nforecasts ) {
   )
   
 
-data_cls <- epistemic::add_future_dates(
+data_cls <- epistemic::add_missing_and_future_dates(
   num_future_steps = nforecasts,
   dc = data_cls,
   forward_fill = TRUE,
