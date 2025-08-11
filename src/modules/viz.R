@@ -93,7 +93,15 @@ viz_server <- function(id, dc, im, results) {
         
         req(im$data_cls)
       
-        all_dates= im$data_cls$data[[im$data_cls$date_col]] |> unique()
+        all_dates= im$data_cls$data[[im$data_cls$date_col]] |> unique() |> sort()
+        
+        # tag the last dates as "future"
+        names(all_dates) <- as.character(all_dates)
+        all_dates_n = length(all_dates)
+        idx = (all_dates_n-im$nforecasts+1):all_dates_n
+        
+        names(all_dates)[idx] <- paste0(names(all_dates)[idx], " (Future)")
+
         if(any(!is.na(all_dates))) {
           updateSelectInput(
             inputId = "map_date",
@@ -200,8 +208,9 @@ viz_server <- function(id, dc, im, results) {
       
       # update the label for credible interval when count/proportion changes
       observe({
-        updateSelectInput(inputId = "ts_quantile",
-                          label=paste0("Credible Interval for ", input$ts_use_count)
+        updateSelectInput(
+          inputId = "ts_quantile",
+          label=paste0("Credible Interval for Mean ", input$ts_use_count)
         )
       }) |> bindEvent(input$ts_use_count)
 
