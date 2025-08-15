@@ -12,7 +12,33 @@ viz_ui <- function(id) {
           sidebar = sidebar(
             id=ns("region_map_sidebar"),
             width = SIDEBAR_WIDTH*2,
-            selectInput(ns("map_date"),label="Map Date", choices = NULL),
+            
+            div(
+              "Date Selection",
+              style = "font-weight: 600; font-size: 0.95rem; margin-bottom: 6px;"
+            ),
+            card(
+              style = "width: 100%;",
+              class = "mb-1",
+              card_body(
+                style = "padding: 0;",
+                plotlyOutput(ns("date_spark"), height = "70px", width = "100%")
+              )
+            ),
+            sliderInput(
+              inputId = ns("map_date_slider"),
+              label = NULL,
+              min   = as.Date("1970-01-01"),
+              max   = as.Date("1970-01-02"),
+              value = as.Date("1970-01-02"),
+              step  = 1,
+              timeFormat = "%Y-%m-%d",
+              ticks = FALSE
+            ),
+            tags$style(HTML(sprintf(
+              "#%s .irs-min, #%s .irs-max { display: none !important; }",
+              ns("map_date_slider"), ns("map_date_slider")))),
+            
             radioButtons(
               inputId = ns("map_metric"),
               label="Metric",
@@ -86,32 +112,7 @@ viz_server <- function(id, dc, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
-      
       ns = session$ns
-      
-      observe({
-        
-        req(im$data_cls)
-      
-        all_dates= im$data_cls$data[[im$data_cls$date_col]] |> unique() |> sort()
-        
-        # tag the last dates as "future"
-        names(all_dates) <- as.character(all_dates)
-        all_dates_n = length(all_dates)
-        idx = (all_dates_n-im$nforecasts+1):all_dates_n
-        
-        names(all_dates)[idx] <- paste0(names(all_dates)[idx], " (Future)")
-
-        if(any(!is.na(all_dates))) {
-          updateSelectInput(
-            inputId = "map_date",
-            choices = all_dates,
-            selected = max(all_dates,na.rm=T)
-          )
-        }
-      })
-      
-      
       
       # Render the exceedance threshold ui widget
       # Note that when metrics is count, then this should be numericInput
@@ -127,7 +128,81 @@ viz_server <- function(id, dc, im, results) {
         return(widget)
       }) |> bindEvent(input$metric_counts,ignoreNULL = F)
       
+      # Helper: pick value column name for total sparkline
+      # Assumes im$data_cls has named columns for counts and proportions.
+      # Edit these if your data uses different names.
+      value_colname <- reactive({
+        if (identical(input$metric_counts, "Counts")) {
+          if (!is.null(im$data_cls$count_col)) im$data_cls$count_col else "count"
+        } else {
+          if (!is.null(im$data_cls$prop_col)) im$data_cls$prop_col else "proportion"
+        }
+      })
       
+      # --- Date domain setup & date slider updates ---
+      # Collect the real date domain once
+      all_dates <- reactive({
+        req(im$data_cls)
+        as.Date(sort(unique(im$data_cls$data[[im$data_cls$date_col]])))
+      })
+      
+      observe({
+        d <- all_dates()
+        validate(need(length(d) > 0, "No dates found"))
+        updateSliderInput(
+          session,
+          inputId = "map_date_slider",
+          min   = min(d, na.rm = TRUE),
+          max   = max(d, na.rm = TRUE),
+          value = max(d, na.rm = TRUE),
+          step  = 1
+        )
+      })
+      
+      # TODO: note that this assume county
+      target_date <- reactive({
+        req(input$map_date_slider)
+        d <- all_dates()
+        t <- as.Date(input$map_date_slider)
+        
+        # if it's not in the model dates, snap to nearest
+        if (!(t %in% d) && length(d)) {
+          d[which.min(abs(d - t))]
+        } else {
+          t
+        }
+      })
+      
+      
+      output$date_spark <- renderPlotly({
+        req(im$data_cls)
+        date_col <- im$data_cls$date_col
+        
+        dt <- data.table::as.data.table(im$data_cls$data)
+        if (!(date_col %in% names(dt))) return(NULL)
+        validate(need("expected" %in% names(dt), "Column 'expected' not found in data"))
+        
+        series <- dt[, .(total = sum(expected, na.rm = TRUE)), by = c(date_col)]
+        data.table::setnames(series, date_col, "date")
+        data.table::setorder(series, date)
+        
+        plotly::plot_ly(
+          series,
+          x = ~date, y = ~total,
+          type = "scatter", mode = "lines",
+          line = list(color = "currentColor"),   # inherits from container's CSS color
+          hoverinfo = "none"
+        ) |>
+          plotly::layout(
+            margin = list(l = 0, r = 0, t = 0, b = 0),
+            paper_bgcolor = "rgba(0,0,0,0)",
+            plot_bgcolor  = "rgba(0,0,0,0)",
+            xaxis = list(title = "", showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE),
+            yaxis = list(title = "", showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE),
+            showlegend = FALSE
+          ) |>
+          plotly::config(displayModeBar = FALSE)
+      })
       input_region_choices <- reactive(
         im$data_cls$data[, .(countyfips, region)] |> unique()
       )
@@ -169,25 +244,18 @@ viz_server <- function(id, dc, im, results) {
       })
       
       map_base_locations <- reactive({
-        
         req(im$data_cls)
         get_map_locations(im$data_cls)
-      
       })
       
-
-      target_date <- reactive(input$map_date)
       
       region_map <- reactive({
-        
         req(map_base_locations(), map_data(), target_date())
-        
-        pi = polygon_info(map_base_locations(),map_data(),target_date())
-        
+        pi = polygon_info(map_base_locations(), map_data(), target_date())
         leaflet::leaflet() |>
-          leaflet::addProviderTiles("CartoDB.Positron") |> 
-          update_polygons(pi) |> 
-          leaflet.extras::addFullscreenControl() |> 
+          leaflet::addProviderTiles("CartoDB.Positron") |>
+          update_polygons(pi) |>
+          leaflet.extras::addFullscreenControl() |>
           leaflet.extras::addResetMapButton()
       })
       
@@ -205,7 +273,18 @@ viz_server <- function(id, dc, im, results) {
             polygon_info(map_base_locations(), map_data(), target_date())
           )
       })
+      # For now, making all the plots, because they are fast
+      plots <- reactive({
+        req(im$posterior)
+        make_timeseries_plots(res_data = im$posterior, date_col = "date", use_prop = TRUE, F, F, F)
+      })
       
+      # output$plots <- renderPlot({
+      #   req(input$viz_regions)
+      #   req(plots())
+      #   subplots <- plots()[input$viz_regions]
+      #   do.call("grid.arrange", c(subplots, ncol = min(c(2, length(subplots)))))
+      # })
       # update the label for credible interval when count/proportion changes
       observe({
         updateSelectInput(
