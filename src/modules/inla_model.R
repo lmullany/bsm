@@ -188,7 +188,7 @@ inla_model_ui <- function(id) {
     card_footer(
       downloadButton(
         ns("download_data"),
-        label="Download Data", 
+        label="Download to CSV", 
         class="btn-primary"
       ),
       downloadButton(
@@ -251,6 +251,7 @@ inla_model_server <- function(id, dc, im, results) {
       observe(im$model <- inla_model()$model)
       # update global reactive data_class object for current model result
       observe(im$data_cls <- inla_model()$data_class)
+      
       # update global reactive posteriors for current model
       observe(im$posterior <- add_posteriors(
         data_cls = inla_model()$data_class,
@@ -357,12 +358,11 @@ inla_model_server <- function(id, dc, im, results) {
       ns <- session$ns
       output$zipfile_model_ui <- renderUI({
         req(input$load_model_btn)   # only after button is clicked
-        fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".zip")
+        fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model")
       })
       
       loaded_model <- reactiveVal(NULL)
       observeEvent(input$zipfile_model,{
-        print("loading model")
         req(input$zipfile_model)
         validate(need(file.exists(input$zipfile_model$datapath), "Upload did not complete yet"))
         tmpdir <- tempfile()   # creates a unique temp folder
@@ -377,35 +377,16 @@ inla_model_server <- function(id, dc, im, results) {
           need(length(rds_file) > 0, "No RDS file found in zip"),
           need(length(json_file) > 0, "No JSON file found in zip")
         )
-        print(rds_file)
-        print(json_file)
         # load dataset
         loaded_model_from_file <- readRDS(rds_file[1])
         
         # load JSON only for UI updates
         model_vals <- jsonlite::read_json(json_file[1], simplifyVector = TRUE)
-        print("updating menus")
 
         updateSelectInput(session, "nforecasts", 
                           selected = model_vals$nforecasts)
         updateSelectInput(session, "dist_family", 
                           selected = model_vals$dist_family)
-        updateCheckboxInput(session,
-                            "rre_component_chkbx", 
-                            value = model_vals$rre_component_chkbx)
-        updateCheckboxInput(session,
-                            "temporal_component_chkbx", 
-                            value = model_vals$temporal_component_chkbx)
-        updateCheckboxInput(session,
-                            "spatial_component_chkbx", 
-                            value = model_vals$spatial_component_chkbx)
-        updateRadioButtons(session, 
-                           "formula_type",
-                           selected = model_vals$formula_type)
-        updateRadioButtons(session, 
-                           "sco_adjacency_type",
-                           selected = model_vals$sco_adjacency_type)
-        print("updating displays")
         loaded_model(loaded_model_from_file)
       }) 
       
@@ -421,20 +402,14 @@ inla_model_server <- function(id, dc, im, results) {
       
       output$save_model <- downloadHandler(
         filename = function() {
-          paste0("model-", Sys.Date(), ".zip")
+          paste0("model-", Sys.Date(), ".bsm_model")
         },
         content = function(file) {
           # describe saved query
           model_vals <- list(
             nforecasts = input$nforecasts,
-            dist_family = input$dist_family,
-            rre_component_chkbx = input$rre_component_chkbx,
-            spatial_component_chkbx = input$spatial_component_chkbx,
-            temporal_component_chkbx = input$temporal_component_chkbx,
-            formula_type = input$formula_type,
-            sco_adjacency_type = input$sco_adjacency_type
+            dist_family = input$dist_family
           )
-          
           json_name <- tempfile(fileext = ".json")
           rds_name  <- tempfile(fileext = ".rds")
           jsonlite::write_json(model_vals, 
@@ -443,7 +418,8 @@ inla_model_server <- function(id, dc, im, results) {
                                auto_unbox = TRUE)
           saveRDS(inla_model(), rds_name)
           zip::zipr(file, files = c(rds_name,json_name))
-        }
+        },
+        contentType = "application/zip"
       ) 
       
       output$inla_model_object <- renderPrint({
@@ -457,10 +433,21 @@ inla_model_server <- function(id, dc, im, results) {
       })
       
       output$inla_model_data <- renderDT({
-        datatable(
-          inla_model()$data_class$data,
-          rownames=FALSE
+        req(inla_model())
+        dat <- inla_model()$data_class$data
+        # Ensure it's a proper data.frame, even if tibble/list/etc.
+        dat <- tryCatch(as.data.frame(dat), error = function(e) NULL)
+        
+        validate(
+          need(!is.null(dat), "No table available in model"),
+          need(ncol(dat) > 0, "Model table has no columns")
         )
+        res <- DT::datatable(
+          dat,
+          rownames = FALSE,
+          options = list(scrollX = TRUE)
+        )
+        res
       })
       
       output$download_data <- downloadHandler(

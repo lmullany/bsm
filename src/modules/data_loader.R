@@ -79,7 +79,7 @@ data_loader_ui <- function(id) {
         card_footer(
           downloadButton(
             ns("download_data"),
-            label="Download to csv", 
+            label="Download to CSV", 
             class="btn-primary"
           ),
           downloadButton(
@@ -164,7 +164,7 @@ data_loader_server <- function(id, dc, results, profile) {
       ns <- session$ns
       output$zipfile_ui <- renderUI({
         req(input$load_saved_query)   # only after button is clicked
-        fileInput(ns("zipfile"), "Select Saved Query", accept = ".zip")
+        fileInput(ns("zipfile"), "Select Saved Query", accept = ".bsm_query")
       })
       
       loaded_data <- reactiveVal(NULL)
@@ -213,7 +213,7 @@ data_loader_server <- function(id, dc, results, profile) {
       
       output$save_query <- downloadHandler(
         filename = function() {
-          paste0("query-", Sys.Date(), ".zip")
+          paste0("query-", Sys.Date(), ".bsm_query")
         },
         content = function(file) {
           # describe saved query
@@ -229,9 +229,10 @@ data_loader_server <- function(id, dc, results, profile) {
           json_name <- tempfile(fileext = ".json")
           rds_name  <- tempfile(fileext = ".rds")
           jsonlite::write_json(vals, json_name, pretty = TRUE, auto_unbox = TRUE)
-          saveRDS(table_data()$data, rds_name)
+          saveRDS(data()$data, rds_name)
           zip::zipr(file, files = c(rds_name,json_name))
-        }
+        },
+        contentType = "application/zip"
         ) 
       
       
