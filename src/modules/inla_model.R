@@ -190,6 +190,11 @@ inla_model_ui <- function(id) {
         ns("download_data"),
         label="Download Data", 
         class="btn-primary"
+      ),
+      downloadButton(
+        ns("save_model"),
+        label="Save Model", 
+        class="btn-primary"
       )
     )
   )
@@ -220,7 +225,9 @@ inla_model_ui <- function(id) {
         forecasts, 
         family,
         formula_panel,
-        input_task_button(ns("estimate_model_btn"), "Run Model")
+        input_task_button(ns("estimate_model_btn"), "Run Model"),
+        input_task_button(ns("load_model_btn"), "Load Saved Model"),
+        uiOutput(ns("zipfile_model_ui"))
       ),
       layout_column_wrap(
         width=NULL, height=300, 
@@ -229,11 +236,6 @@ inla_model_ui <- function(id) {
         model_card
       ),
       wellPanel(
-        downloadButton(
-          ns("model_output"),
-          label = "Download Model Outputs (.rds)",
-          class="btn-primary btn-sm"
-        ),
         actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm")
       )
     )
@@ -288,7 +290,7 @@ inla_model_server <- function(id, dc, im, results) {
       # 4. Create the formula (custom or default)
       # 5. Run the model
   
-      inla_model <- reactive({
+      inla_model_new <- reactive({
         
         # We must have data, or we can't estimate model
         validate(need(results$data, "Please load data first"))
@@ -352,6 +354,98 @@ inla_model_server <- function(id, dc, im, results) {
       }) |> bindEvent(input$estimate_model_btn)
     
     
+      ns <- session$ns
+      output$zipfile_model_ui <- renderUI({
+        req(input$load_model_btn)   # only after button is clicked
+        fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".zip")
+      })
+      
+      loaded_model <- reactiveVal(NULL)
+      observeEvent(input$zipfile_model,{
+        print("loading model")
+        req(input$zipfile_model)
+        validate(need(file.exists(input$zipfile_model$datapath), "Upload did not complete yet"))
+        tmpdir <- tempfile()   # creates a unique temp folder
+        dir.create(tmpdir)
+        
+        
+        unzip(input$zipfile_model$datapath, exdir = tmpdir)
+        files <- list.files(tmpdir, full.names = TRUE)
+        rds_file  <- files[grepl("\\.rds$", files, ignore.case = TRUE)]
+        json_file <- files[grepl("\\.json$", files, ignore.case = TRUE)]
+        validate(
+          need(length(rds_file) > 0, "No RDS file found in zip"),
+          need(length(json_file) > 0, "No JSON file found in zip")
+        )
+        print(rds_file)
+        print(json_file)
+        # load dataset
+        loaded_model_from_file <- readRDS(rds_file[1])
+        
+        # load JSON only for UI updates
+        model_vals <- jsonlite::read_json(json_file[1], simplifyVector = TRUE)
+        print("updating menus")
+
+        updateSelectInput(session, "nforecasts", 
+                          selected = model_vals$nforecasts)
+        updateSelectInput(session, "dist_family", 
+                          selected = model_vals$dist_family)
+        updateCheckboxInput(session,
+                            "rre_component_chkbx", 
+                            value = model_vals$rre_component_chkbx)
+        updateCheckboxInput(session,
+                            "temporal_component_chkbx", 
+                            value = model_vals$temporal_component_chkbx)
+        updateCheckboxInput(session,
+                            "spatial_component_chkbx", 
+                            value = model_vals$spatial_component_chkbx)
+        updateRadioButtons(session, 
+                           "formula_type",
+                           selected = model_vals$formula_type)
+        updateRadioButtons(session, 
+                           "sco_adjacency_type",
+                           selected = model_vals$sco_adjacency_type)
+        print("updating displays")
+        loaded_model(loaded_model_from_file)
+      }) 
+      
+      inla_model <- reactiveVal(NULL)
+      
+      observeEvent(loaded_model(), {
+        inla_model(loaded_model())
+      })
+      
+      observeEvent(inla_model_new(), {
+        inla_model(inla_model_new())
+      })
+      
+      output$save_model <- downloadHandler(
+        filename = function() {
+          paste0("model-", Sys.Date(), ".zip")
+        },
+        content = function(file) {
+          # describe saved query
+          model_vals <- list(
+            nforecasts = input$nforecasts,
+            dist_family = input$dist_family,
+            rre_component_chkbx = input$rre_component_chkbx,
+            spatial_component_chkbx = input$spatial_component_chkbx,
+            temporal_component_chkbx = input$temporal_component_chkbx,
+            formula_type = input$formula_type,
+            sco_adjacency_type = input$sco_adjacency_type
+          )
+          
+          json_name <- tempfile(fileext = ".json")
+          rds_name  <- tempfile(fileext = ".rds")
+          jsonlite::write_json(model_vals, 
+                               json_name, 
+                               pretty = TRUE, 
+                               auto_unbox = TRUE)
+          saveRDS(inla_model(), rds_name)
+          zip::zipr(file, files = c(rds_name,json_name))
+        }
+      ) 
+      
       output$inla_model_object <- renderPrint({
         req(inla_model())
         summary(inla_model()$model)
@@ -373,11 +467,7 @@ inla_model_server <- function(id, dc, im, results) {
         filename = "processed_data.csv" ,
         content = \(file) data.table::fwrite(inla_model()$data_class$data, file)
       )
-      
-      output$model_output <- downloadHandler(
-        filename = "model_outputs.rds" ,
-        content = \(file) saveRDS(inla_model(), file)
-      )
+  
       
       # show modal box if actual formula button is pressed
       observe({
