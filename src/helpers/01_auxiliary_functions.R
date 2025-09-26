@@ -1,3 +1,8 @@
+# © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
+# Development of this software was sponsored by the U.S. Government under
+# contract no. 75D30124C19958
+
+
 counties_by_state <- function(states) {
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
   county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
