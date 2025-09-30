@@ -77,16 +77,7 @@ data_loader_ui <- function(id) {
           )
         ),
         card_footer(
-          downloadButton(
-            ns("download_data"),
-            label="Download to CSV", 
-            class="btn-primary"
-          ),
-          downloadButton(
-            ns("save_query"),
-            label="Save Query", 
-            class="btn-primary"
-          )
+          uiOutput(ns("download_ui"))
         )
       )
     )
@@ -94,10 +85,14 @@ data_loader_ui <- function(id) {
 
 }
 
+
+
 data_loader_server <- function(id, dc, results, profile) {
   moduleServer(
     id,
     function(input, output, session) {
+      ns <- session$ns
+      data <- reactiveVal(NULL)
       
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
@@ -161,7 +156,6 @@ data_loader_server <- function(id, dc, results, profile) {
       }) |> bindEvent(input$load_data_btn)
       
       
-      ns <- session$ns
       output$zipfile_ui <- renderUI({
         req(input$load_saved_query)   # only after button is clicked
         fileInput(ns("zipfile"), "Select Saved Query", accept = ".bsm_query")
@@ -200,7 +194,6 @@ data_loader_server <- function(id, dc, results, profile) {
         loaded_data(list(data = tbl))
       }) 
       
-      data <- reactiveVal(NULL)
       
       observeEvent(query_data(), {
         data(query_data())
@@ -208,6 +201,18 @@ data_loader_server <- function(id, dc, results, profile) {
       
       observeEvent(loaded_data(), {
         data(loaded_data())
+      })
+      
+      output$download_ui <- renderUI({
+        req(!is.null(data()))
+        tagList(
+          downloadButton(ns("download_data"),
+                         "Download to CSV",
+                         class = "btn-primary"),
+          downloadButton(ns("save_query"),
+                         "Save Query",
+                         class = "btn-primary")
+        )
       })
       
       

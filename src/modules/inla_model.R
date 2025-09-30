@@ -186,16 +186,7 @@ inla_model_ui <- function(id) {
       color = bs_get_variables(theme=THEME,"primary")
     )),
     card_footer(
-      downloadButton(
-        ns("download_data"),
-        label="Download to CSV", 
-        class="btn-primary"
-      ),
-      downloadButton(
-        ns("save_model"),
-        label="Save Model", 
-        class="btn-primary"
-      )
+      uiOutput(ns("download_model_ui"))
     )
   )
   
@@ -399,6 +390,20 @@ inla_model_server <- function(id, dc, im, results) {
       observeEvent(inla_model_new(), {
         inla_model(inla_model_new())
       })
+      
+      
+      output$download_model_ui <- renderUI({
+        req(!is.null(inla_model()))
+        tagList(
+          downloadButton(ns("download_data"),
+                         "Download to CSV",
+                         class = "btn-primary"),
+          downloadButton(ns("save_model"),
+                         "Save Model",
+                         class = "btn-primary")
+        )
+      })
+      
       
       output$save_model <- downloadHandler(
         filename = function() {
