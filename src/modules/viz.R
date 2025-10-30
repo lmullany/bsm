@@ -24,7 +24,7 @@ viz_ui <- function(id) {
                 style = "padding: 0;",
                 plotlyOutput(ns("date_spark"), height = "70px", width = "100%")
               )
-            ),
+            ), # Placeholder dates to initialize
             sliderInput(
               inputId = ns("map_date_slider"),
               label = NULL,
@@ -112,6 +112,7 @@ viz_server <- function(id, dc, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
+      
       ns = session$ns
       
       # Render the exceedance threshold ui widget
@@ -128,9 +129,6 @@ viz_server <- function(id, dc, im, results) {
         return(widget)
       }) |> bindEvent(input$metric_counts,ignoreNULL = F)
       
-      # Helper: pick value column name for total sparkline
-      # Assumes im$data_cls has named columns for counts and proportions.
-      # Edit these if your data uses different names.
       value_colname <- reactive({
         if (identical(input$metric_counts, "Counts")) {
           if (!is.null(im$data_cls$count_col)) im$data_cls$count_col else "count"
@@ -139,8 +137,6 @@ viz_server <- function(id, dc, im, results) {
         }
       })
       
-      # --- Date domain setup & date slider updates ---
-      # Collect the real date domain once
       all_dates <- reactive({
         req(im$data_cls)
         as.Date(sort(unique(im$data_cls$data[[im$data_cls$date_col]])))
@@ -159,13 +155,12 @@ viz_server <- function(id, dc, im, results) {
         )
       })
       
-      # TODO: note that this assume county
       target_date <- reactive({
         req(input$map_date_slider)
         d <- all_dates()
         t <- as.Date(input$map_date_slider)
         
-        # if it's not in the model dates, snap to nearest
+        # if selection is not in the model dates, snap to nearest
         if (!(t %in% d) && length(d)) {
           d[which.min(abs(d - t))]
         } else {
@@ -180,7 +175,6 @@ viz_server <- function(id, dc, im, results) {
         
         dt <- data.table::as.data.table(im$data_cls$data)
         if (!(date_col %in% names(dt))) return(NULL)
-        validate(need("expected" %in% names(dt), "Column 'expected' not found in data"))
         
         series <- dt[, .(total = sum(expected, na.rm = TRUE)), by = c(date_col)]
         data.table::setnames(series, date_col, "date")
@@ -190,7 +184,7 @@ viz_server <- function(id, dc, im, results) {
           series,
           x = ~date, y = ~total,
           type = "scatter", mode = "lines",
-          line = list(color = "currentColor"),   # inherits from container's CSS color
+          line = list(color = "currentColor"),
           hoverinfo = "none"
         ) |>
           plotly::layout(
@@ -244,14 +238,19 @@ viz_server <- function(id, dc, im, results) {
       })
       
       map_base_locations <- reactive({
+        
         req(im$data_cls)
         get_map_locations(im$data_cls)
+      
       })
       
       
       region_map <- reactive({
+        
         req(map_base_locations(), map_data(), target_date())
-        pi = polygon_info(map_base_locations(), map_data(), target_date())
+        
+        pi = polygon_info(map_base_locations(),map_data(),target_date())
+        
         leaflet::leaflet() |>
           leaflet::addProviderTiles("CartoDB.Positron") |>
           update_polygons(pi) |>
@@ -273,18 +272,11 @@ viz_server <- function(id, dc, im, results) {
             polygon_info(map_base_locations(), map_data(), target_date())
           )
       })
-      # For now, making all the plots, because they are fast
       plots <- reactive({
         req(im$posterior)
         make_timeseries_plots(res_data = im$posterior, date_col = "date", use_prop = TRUE, F, F, F)
       })
       
-      # output$plots <- renderPlot({
-      #   req(input$viz_regions)
-      #   req(plots())
-      #   subplots <- plots()[input$viz_regions]
-      #   do.call("grid.arrange", c(subplots, ncol = min(c(2, length(subplots)))))
-      # })
       # update the label for credible interval when count/proportion changes
       observe({
         updateSelectInput(
