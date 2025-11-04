@@ -23,9 +23,9 @@ inla_model_ui <- function(id) {
     ns("dist_family"),
     label="Distributional Family",
     choices = c(
-      "Binomial" = "binomial",
-      "Negative Binomial"="nbinomial",
-      "Poisson" = "poisson"
+      "Binomial" = "binomial"#,
+      #"Negative Binomial"="nbinomial",
+      #"Poisson" = "poisson"
     ),
     selected = "binomial"
   )
@@ -126,7 +126,7 @@ inla_model_ui <- function(id) {
     div(
       class="well",
       layout_columns(
-        checkboxInput(ns("temporal_component_chkbx"), "Seasonal/Temporal Component",value = FALSE),
+        checkboxInput(ns("temporal_component_chkbx"), "Seaonal/Temporal Component",value = FALSE),
         input_switch(ns("customize_temporal_component"),label ="Advanced Customization",value = FALSE),
         col_widths = c(6,6)
       ), 
@@ -461,7 +461,6 @@ pre_process_data <- function(data, nforecasts ) {
     denominator_column = "overall",
     generate_expected = TRUE
   )
-  data_cls <- epistemic::add_mmwr_week(data_cls)
   
 
 data_cls <- epistemic::add_missing_and_future_dates(
