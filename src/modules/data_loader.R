@@ -51,20 +51,36 @@ data_loader_ui <- function(id) {
   ########################
   # Nav Panel to Return
   ########################
-  
+  geo_res_title = paste0("Select geographic resolution for ESSENCE query used to ",
+                     "retrieve training data.")
+  state_title = paste0("Select a list of states to include in query. ",
+                       "All subdivisions (based on Geographic Resolution) for ", 
+                       "the selected states will be added to the query.")
+  date_range_title = paste0(
+    "Select a start and end date (inclusive) for the ESSENCE query. ",
+    "For weekly queries, start dates should fall on a Sunday ",
+    "and end dates should fall on a Saturday to avoid partial weeks."
+  )
+  temporal_res_title = paste0(
+    "Select a temporal resolution for the ESSENCE query."
+  )
+  query_title = "Submit ESSENCE query to load data."
+  load_query_title = "Load a saved query from file."
   nav_panel(
     title = "Data Loader",
     layout_sidebar(
       sidebar = sidebar(
         id = ns("config_sidebar"),
         width = SIDEBAR_WIDTH*2,
-        geo, 
-        states,
-        drange,
-        time_res,
+        div(title =  geo_res_title, geo), 
+        div(title = state_title,states),
+        div(title = date_range_title,drange),
+        div(title = temporal_res_title,time_res),
         synd_panel,
-        input_task_button(ns("load_data_btn"), "Query ESSENCE"),
-        input_task_button(ns("load_saved_query"), "Load Saved Query"),
+        div(title = query_title, 
+            input_task_button(ns("load_data_btn"), "Query ESSENCE")),
+        div(title = load_query_title,
+            input_task_button(ns("load_saved_query"), "Load Saved Query")),
         uiOutput(ns("zipfile_ui"))
       ),
       card(
@@ -155,10 +171,16 @@ data_loader_server <- function(id, dc, results, profile) {
         
       }) |> bindEvent(input$load_data_btn)
       
-      
+      select_saved_title = paste0(
+        "Open file browser to select a saved query on your local machine. ",
+        "Saved queries are zip files containing json and rds objects with the ",
+        "file suffix .bsm_query.")
+                           
       output$zipfile_ui <- renderUI({
         req(input$load_saved_query)   # only after button is clicked
-        fileInput(ns("zipfile"), "Select Saved Query", accept = ".bsm_query")
+        div(title = select_saved_title, 
+            fileInput(ns("zipfile"), "Select Saved Query", 
+                      accept = ".bsm_query"))
       })
       
       loaded_data <- reactiveVal(NULL)
@@ -202,16 +224,21 @@ data_loader_server <- function(id, dc, results, profile) {
       observeEvent(loaded_data(), {
         data(loaded_data())
       })
-      
+      download_csv_title = paste0(
+        "Download retrieved data and save as a csv file on your local machine.")
+      save_query_title = paste0("Save the query to a bsm_query file so that ", 
+                                "it can be reloaded later.")
       output$download_ui <- renderUI({
         req(!is.null(data()))
         tagList(
-          downloadButton(ns("download_data"),
+          div(title = download_csv_title,
+              downloadButton(ns("download_data"),
                          "Download to CSV",
-                         class = "btn-primary"),
-          downloadButton(ns("save_query"),
+                         class = "btn-primary")),
+          div(title = save_query_title, 
+              downloadButton(ns("save_query"),
                          "Save Query",
-                         class = "btn-primary")
+                         class = "btn-primary"))
         )
       })
       
@@ -255,9 +282,15 @@ data_loader_server <- function(id, dc, results, profile) {
 
 ### data loader module helper functions ###
 create_syndrome_inputs <- function(ns, cats) {
-  
+  target_type_title = paste0("Select diagnostic criteria type (CCDD, syndrome ",
+                             "or subsyndrome) for filtering records in the ",
+                             "ESSENCE query.")
+  target_code_title = paste0("Select the specific diagnostic category or code ",
+                             "to use when filtering records in the ",
+                             "ESSENCE query.")
   tagList(
-    radioButtons(
+    div(title = target_type_title,
+        radioButtons(
       inputId = ns("synd_cat"),
       label = "Target Outcome",
       choices = c(
@@ -265,13 +298,14 @@ create_syndrome_inputs <- function(ns, cats) {
         "Syndrome" = "synd",
         "Sub-Syndrome" = "subsynd"
       )
-    ),
-    selectInput(
+    )),
+    div(title = target_code_title,
+        selectInput(
       inputId = ns("synd_drop_menu"),
       label="Select Type",
       choices = cats
     )
-  )
+  ))
 }
 
 
