@@ -158,14 +158,18 @@ data_loader_server <- function(id, dc, results, profile) {
         
       }) |> bindEvent(input$load_data_btn)
       
-      output$ingested_data <- renderDT(
+      output$ingested_data <- renderDT({
+        req(data()$data)
+        # identify columns to round
+        cols_to_round <- non_integer_cols_to_round(data()$data)
+        
         DT::datatable(
           data()$data,
           colnames = map_table_names_to_display(colnames(data()$data)),
           rownames = F
-        )
+        ) |> formatRound(cols_to_round, digits=4)
           
-      )
+      })
       
       output$download_data <- downloadHandler(
         filename = "data.csv" , content = \(file) data.table::fwrite(data()$data, file)

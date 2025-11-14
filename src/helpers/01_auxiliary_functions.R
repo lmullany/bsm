@@ -202,10 +202,29 @@ map_table_names_to_display <- function(names, title_case = FALSE) {
   
   # any names that have underscores should be converte
   result = sapply(result, \(r) gsub("_", " ", r) |> tools::toTitleCase(),USE.NAMES = FALSE)
-  print(result)
+  
   # convert to title case if requested (this is mainly useful for other columns)
   if(title_case) result = tools::toTitleCase(result)
   
   result
+}
+
+
+# Given a data frame, identify which columns are those that should be 
+# can be rounded, and which can be left as is because are integer. This
+# is useful for feeding to formatRound() in DT. Will return column indices;
+# set names to TRUE to get names instead of indices. Note that indices are 
+# useful, because the colnames() parameter might have been used on the DT before
+# formatRound() call, and so in this case it is better to use indices. 
+non_integer_cols_to_round <- function(d, names=FALSE) {
+  
+  is_integer_vector <- \(x) {
+    all(x==floor(x)) && all(abs(x)<=.Machine$integer.max)
+  }
+
+  cols_to_convert <- which(sapply(d, \(col) is.numeric(col) && !is_integer_vector(col), USE.NAMES = FALSE))
+  if(names) cols_to_convert <- names(d)[cols_to_convert]
+  
+  cols_to_convert
 }
 
