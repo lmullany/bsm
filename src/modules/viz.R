@@ -179,6 +179,7 @@ viz_server <- function(id, dc, im, results) {
         if (!(date_col %in% names(dt))) return(NULL)
 
         # get the spark series, depending on counts/proportion        
+
         if(input$metric_counts == "Counts") {
           series <- dt[, .(total = sum(target, na.rm = TRUE)), by = c(date_col)]
           yaxis_title = "Total Cases"
