@@ -1,3 +1,8 @@
+# © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
+# Development of this software was sponsored by the U.S. Government under
+# contract no. 75D30124C19958
+
+
 counties_by_state <- function(states) {
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
   county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
@@ -177,3 +182,49 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, cate
   
   return(list(data = merged, url_all = url_all, url_single = url_single))
 }
+
+map_table_names_to_display <- function(names, title_case = FALSE) {
+  map = list(
+    "Date" = c("date"),
+    "Region" = c("region"),
+    "County FIPS" = c("countyfips"),
+    "ED Visits (Target)" = c("target", "cases"),
+    "ED Visits (Overall)" = c("overall"),
+    "ED Visits (Expected)" = c("expected"), 
+    "Denominator Source" = c("denominator_source")
+  )
+  # convert map to datatable for fast lookup via join
+  map = rbindlist(lapply(map, data.table), id="display_name")
+  # join, but retain order of initial names, so that we can return in that order
+  result = map[data.table(V1=names)[, i:=.I], on="V1"]
+  # return display name only
+  result = result[is.na(display_name), display_name:=V1][order(i), display_name]
+  
+  # any names that have underscores should be converte
+  result = sapply(result, \(r) gsub("_", " ", r) |> tools::toTitleCase(),USE.NAMES = FALSE)
+  
+  # convert to title case if requested (this is mainly useful for other columns)
+  if(title_case) result = tools::toTitleCase(result)
+  
+  result
+}
+
+
+# Given a data frame, identify which columns are those that should be 
+# can be rounded, and which can be left as is because are integer. This
+# is useful for feeding to formatRound() in DT. Will return column indices;
+# set names to TRUE to get names instead of indices. Note that indices are 
+# useful, because the colnames() parameter might have been used on the DT before
+# formatRound() call, and so in this case it is better to use indices. 
+non_integer_cols_to_round <- function(d, names=FALSE) {
+  
+  is_integer_vector <- \(x) {
+    all(x==floor(x)) && all(abs(x)<=.Machine$integer.max)
+  }
+
+  cols_to_convert <- which(sapply(d, \(col) is.numeric(col) && !is_integer_vector(col), USE.NAMES = FALSE))
+  if(names) cols_to_convert <- names(d)[cols_to_convert]
+  
+  cols_to_convert
+}
+

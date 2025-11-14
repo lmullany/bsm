@@ -1,3 +1,7 @@
+# © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
+# Development of this software was sponsored by the U.S. Government under
+# contract no. 75D30124C19958
+
 cat_values = get_categorical_values(profile = CREDENTIALS$profile)
 
 data_loader_ui <- function(id) {
@@ -155,7 +159,6 @@ data_loader_server <- function(id, dc, results, profile) {
         
       }) |> bindEvent(input$load_data_btn)
       
-      
       output$zipfile_ui <- renderUI({
         req(input$load_saved_query)   # only after button is clicked
         fileInput(ns("zipfile"), "Select Saved Query", accept = ".bsm_query")
@@ -242,7 +245,16 @@ data_loader_server <- function(id, dc, results, profile) {
       
       
       output$ingested_data <- renderDT({
-        data()$data
+        req(data()$data)
+        # identify columns to round
+        cols_to_round <- non_integer_cols_to_round(data()$data)
+        
+        DT::datatable(
+          data()$data,
+          colnames = map_table_names_to_display(colnames(data()$data)),
+          rownames = F
+        ) |> formatRound(cols_to_round, digits=4)
+          
       })
       
       output$download_data <- downloadHandler(
@@ -261,7 +273,7 @@ create_syndrome_inputs <- function(ns, cats) {
       inputId = ns("synd_cat"),
       label = "Target Outcome",
       choices = c(
-        "CCDD" = "ccdd",
+        "Chief Complaint and Discharge Diagnosis Category" = "ccdd",
         "Syndrome" = "synd",
         "Sub-Syndrome" = "subsynd"
       )
