@@ -18,11 +18,11 @@ viz_ui <- function(id) {
               style = "font-weight: 600; font-size: 0.95rem; margin-bottom: 6px;"
             ),
             card(
-              style = "width: 100%;",
+              style = "width: 100%; height:100px;",
               class = "mb-1",
               card_body(
-                style = "padding: 0;",
-                plotlyOutput(ns("date_spark"), height = "70px", width = "100%")
+                style = "height:100%; padding: 0;",
+                plotlyOutput(ns("date_spark"), height = "100%", width = "100%")
               )
             ), # Placeholder dates to initialize
             sliderInput(
@@ -159,7 +159,7 @@ viz_server <- function(id, dc, im, results) {
         req(input$map_date_slider)
         d <- all_dates()
         t <- as.Date(input$map_date_slider)
-        
+
         # if selection is not in the model dates, snap to nearest
         if (!(t %in% d) && length(d)) {
           d[which.min(abs(d - t))]
@@ -173,34 +173,46 @@ viz_server <- function(id, dc, im, results) {
         req(im$data_cls)
         date_col <- im$data_cls$date_col
         
+        default_color <- "#636EFA"
+        
         dt <- data.table::as.data.table(im$data_cls$data)
         if (!(date_col %in% names(dt))) return(NULL)
         
-        series <- dt[, .(total = sum(expected, na.rm = TRUE)), by = c(date_col)]
+        series <- dt[, .(total = sum(target, na.rm = TRUE)), by = c(date_col)]
         data.table::setnames(series, date_col, "date")
         data.table::setorder(series, date)
         
-        plotly::plot_ly(
+        p <- plotly::plot_ly(
           series,
           x = ~date, y = ~total,
           type = "scatter", mode = "lines",
-          line = list(color = "currentColor"),
+          line = list(color = default_color),
           hoverinfo = "none"
         ) |>
           plotly::layout(
-            margin = list(l = 0, r = 0, t = 0, b = 0),
+            margin = list(l = 28, r = 6, t = 4, b = 22),
+            #margin = list(l = 0, r = 0, t = 0, b = 0),
             paper_bgcolor = "rgba(0,0,0,0)",
             plot_bgcolor  = "rgba(0,0,0,0)",
-            xaxis = list(title = "", showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE),
-            yaxis = list(title = "", showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE),
+            xaxis = list(
+              title = list(text = "", font = list(color=default_color, size=10)),
+              showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE
+            ),
+            yaxis = list(
+              title = list(text = "Total Cases", font=list(color=default_color, size=10)),
+              showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE
+            ),
             showlegend = FALSE
-          ) |>
+          ) |> 
           plotly::config(displayModeBar = FALSE)
+        return(p)
       })
+      
       input_region_choices <- reactive(
         im$data_cls$data[, .(countyfips, region)] |> unique()
       )
       
+    
       # TODO: note that this assumes county
       observe({
         req(im$data_cls)
