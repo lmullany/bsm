@@ -376,13 +376,16 @@ inla_model_server <- function(id, dc, im, results) {
       
       output$inla_model_data <- renderDT({
         d <- inla_model()$data_class$data
-        num_columns <- which(sapply(d, is.numeric) & !sapply(d, is.integer))
+        
+        # identify columns to round
+        cols_to_round <- non_integer_cols_to_round(d)
+        
         datatable(
           inla_model()$data_class$data,
           colnames = map_table_names_to_display(colnames(inla_model()$data_class$data)),
           rownames=FALSE
         ) |> 
-          DT::formatRound(columns=num_columns, digits=2)
+          DT::formatRound(columns=cols_to_round, digits=2)
       })
       
       output$download_data <- downloadHandler(

@@ -172,6 +172,8 @@ viz_server <- function(id, dc, im, results) {
       output$date_spark <- renderPlotly({
         req(im$data_cls)
         date_col <- im$data_cls$date_col
+        num_col <- im$data_cls$numerator_col
+        den_col <- im$data_cls$denominator_col
         
         default_color <- "#636EFA"
         
@@ -181,10 +183,10 @@ viz_server <- function(id, dc, im, results) {
         # get the spark series, depending on counts/proportion        
 
         if(input$metric_counts == "Counts") {
-          series <- dt[, .(total = sum(cases, na.rm = TRUE)), by = c(date_col)]
+          series <- dt[, .(total = sum(x, na.rm = TRUE)), by = c(date_col), env=list(x=num_col)]
           yaxis_title = "Total Cases"
         } else {
-          series <- dt[, .(total = sum(cases, na.rm = TRUE)/sum(expected, na.rm=TRUE)), by = c(date_col)]
+          series <- dt[, .(total = sum(x, na.rm = TRUE)/sum(y, na.rm=TRUE)), by = c(date_col), env=list(x=num_col, y=den_col)]
           yaxis_title = "Percent of ED Visits"
         }
         data.table::setnames(series, date_col, "date")
@@ -234,12 +236,15 @@ viz_server <- function(id, dc, im, results) {
       
       output$posterior_data <- renderDT({
         req(im$posterior)
-        num_columns <- which(sapply(im$posterior, is.numeric) & !sapply(im$posterior, is.integer))
+        
+        # identify columns to round
+        cols_to_round <- non_integer_cols_to_round(im$posterior)
+        
         DT::datatable(
           im$posterior,
           rownames=F,
           colnames = map_table_names_to_display(names(im$posterior))
-        ) |> formatRound(columns = num_columns, digits=2)
+        ) |> formatRound(columns = cols_to_round, digits=2)
       })
       
 
