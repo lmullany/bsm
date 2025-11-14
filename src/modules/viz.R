@@ -1,7 +1,3 @@
-# © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
-# Development of this software was sponsored by the U.S. Government under
-# contract no. 75D30124C19958
-
 viz_ui <- function(id) {
   btn_class <- "btn-primary btn-sm"
   ns <- NS(id)
@@ -181,10 +177,8 @@ viz_server <- function(id, dc, im, results) {
         
         dt <- data.table::as.data.table(im$data_cls$data)
         if (!(date_col %in% names(dt))) return(NULL)
-        
-        # Note that unless we show the yaxis ticks, it actually doesn't
-        # matter about the series, but estimating it conditionally in 
-        # case we add that
+
+        # get the spark series, depending on counts/proportion        
         if(input$metric_counts == "Counts") {
           series <- dt[, .(total = sum(target, na.rm = TRUE)), by = c(date_col)]
           yaxis_title = "Total Cases"
