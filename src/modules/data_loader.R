@@ -52,7 +52,6 @@ data_loader_ui <- function(id) {
   )
   
   
-  
   ########################
   # Nav Panel to Return
   ########################
@@ -68,7 +67,9 @@ data_loader_ui <- function(id) {
         drange,
         time_res,
         synd_panel,
-        input_task_button(ns("load_data_btn"), "Load Data")
+        input_task_button(ns("load_data_btn"), "Query ESSENCE"),
+        input_task_button(ns("load_saved_query"), "Load Saved Query"),
+        uiOutput(ns("zipfile_ui"))
       ),
       card(
         card_header("Data", class="bg-primary"),
@@ -80,11 +81,7 @@ data_loader_ui <- function(id) {
           )
         ),
         card_footer(
-          downloadButton(
-            ns("download_data"),
-            label="Download Data", 
-            class="btn-primary"
-          )
+          uiOutput(ns("download_ui"))
         )
       )
     )
@@ -92,10 +89,14 @@ data_loader_ui <- function(id) {
 
 }
 
+
+
 data_loader_server <- function(id, dc, results, profile) {
   moduleServer(
     id,
     function(input, output, session) {
+      ns <- session$ns
+      data <- reactiveVal(NULL)
       
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
@@ -120,7 +121,7 @@ data_loader_server <- function(id, dc, results, profile) {
         )
       })
       
-      data <- reactive({
+      query_data <- reactive({
         
         # --------------------------
         # Syndromic categories
@@ -157,6 +158,91 @@ data_loader_server <- function(id, dc, results, profile) {
         return(data)
         
       }) |> bindEvent(input$load_data_btn)
+      
+      output$zipfile_ui <- renderUI({
+        req(input$load_saved_query)   # only after button is clicked
+        fileInput(ns("zipfile"), "Select Saved Query", accept = ".bsm_query")
+      })
+      
+      loaded_data <- reactiveVal(NULL)
+      observeEvent(input$zipfile,{
+        req(input$zipfile)
+        validate(need(file.exists(input$zipfile$datapath), "Upload did not complete yet"))
+        tmpdir <- tempfile()   # creates a unique temp folder
+        dir.create(tmpdir)
+        
+        
+        unzip(input$zipfile$datapath, exdir = tmpdir)
+        files <- list.files(tmpdir, full.names = TRUE)
+        rds_file  <- files[grepl("\\.rds$", files, ignore.case = TRUE)]
+        json_file <- files[grepl("\\.json$", files, ignore.case = TRUE)]
+        validate(
+          need(length(rds_file) > 0, "No RDS file found in zip"),
+          need(length(json_file) > 0, "No JSON file found in zip")
+        )
+        # load dataset
+        tbl <- readRDS(rds_file[1])
+        
+        # load JSON only for UI updates
+        vals <- jsonlite::read_json(json_file[1], simplifyVector = TRUE)
+        updateSelectInput(session, "time_res", selected = vals$time_res)
+        updateDateRangeInput(session, "drange",
+                             start = vals$drange[1],
+                             end   = vals$drange[2])
+        updateSelectInput(session, "geo_res", selected = vals$geo_res)
+        updateSelectInput(session, "states", selected = vals$states)
+        updateSelectInput(session, "synd_cat", selected = vals$synd_cat)
+        updateSelectInput(session, "synd_drop_menu", selected = vals$synd_val)
+        
+        loaded_data(list(data = tbl))
+      }) 
+      
+      
+      observeEvent(query_data(), {
+        data(query_data())
+      })
+      
+      observeEvent(loaded_data(), {
+        data(loaded_data())
+      })
+      
+      output$download_ui <- renderUI({
+        req(!is.null(data()))
+        tagList(
+          downloadButton(ns("download_data"),
+                         "Download to CSV",
+                         class = "btn-primary"),
+          downloadButton(ns("save_query"),
+                         "Save Query",
+                         class = "btn-primary")
+        )
+      })
+      
+      
+      output$save_query <- downloadHandler(
+        filename = function() {
+          paste0("query-", Sys.Date(), ".bsm_query")
+        },
+        content = function(file) {
+          # describe saved query
+          vals <- list(
+            time_res    = input$time_res,
+            drange = input$drange,
+            geo_res = input$geo_res,
+            states    = input$states,
+            synd_cat = input$synd_cat,
+            synd_val = input$synd_drop_menu
+          )
+          
+          json_name <- tempfile(fileext = ".json")
+          rds_name  <- tempfile(fileext = ".rds")
+          jsonlite::write_json(vals, json_name, pretty = TRUE, auto_unbox = TRUE)
+          saveRDS(data()$data, rds_name)
+          zip::zipr(file, files = c(rds_name,json_name))
+        },
+        contentType = "application/zip"
+        ) 
+      
       
       output$ingested_data <- renderDT({
         req(data()$data)

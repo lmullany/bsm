@@ -4,8 +4,7 @@
 
 # source files --------------------------------------------------------------
 source("src/00_setup.R")
-
-
+options(shiny.maxRequestSize = 100*1024^2) 
 ui <- page(
   # get theme from the setup file
   theme = THEME,
@@ -15,6 +14,17 @@ ui <- page(
         }
         .card {border: 0;}
       "))),
+  tags$head(
+    tags$style(HTML("
+      [id$='_progress'] {
+        white-space: normal !important;
+        height: auto !important;
+        min-height: 2.2em !important;
+        overflow: visible !important;
+        margin-top: 0.5rem;
+      }
+    "))
+  ),
   useShinyjs(),
   page_navbar(
     title = "Bayesian Spatiotemporal Modeling",
