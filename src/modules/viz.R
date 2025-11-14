@@ -133,31 +133,6 @@ viz_server <- function(id, dc, im, results) {
     id,
     function(input, output, session) {
       
-# <<<<<<< HEAD
-#       observe({
-#         
-#         req(im$data_cls)
-#       
-#         all_dates= im$data_cls$data[[im$data_cls$date_col]] |> unique() |> sort()
-#         
-#         # tag the last dates as "future"
-#         names(all_dates) <- as.character(all_dates)
-#         all_dates_n = length(all_dates)
-#         idx = (all_dates_n-im$nforecasts+1):all_dates_n
-#         
-#         names(all_dates)[idx] <- paste0(names(all_dates)[idx], " (Future)")
-# 
-#         if(any(!is.na(all_dates))) {
-#           updateSelectInput(
-#             inputId = "map_date",
-#             choices = all_dates,
-#             selected = max(all_dates,na.rm=T)
-#           )
-#         }
-#       })
-#       
-#       
-# =======
       ns = session$ns
 
       # Render the exceedance threshold ui widget
@@ -402,7 +377,7 @@ viz_server <- function(id, dc, im, results) {
       
 
       default_visible <- c(
-        "countyfips","date","region","target","overall","expected","denominator_source",
+        "countyfips","date","region","target","overall",
         "predicted_median","predicted_lower","predicted_upper"
       )
       
