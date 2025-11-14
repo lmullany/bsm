@@ -175,7 +175,7 @@ inla_model_ui <- function(id) {
   
   ## Output cards:
   model_card <- card(
-    card_header("INLA Estimation Summary", class="bg-primary"),
+    #card_header("INLA Estimation Summary", class="bg-primary"),
     card_body(withSpinner(
       verbatimTextOutput(ns("inla_model_object")),
       caption = "Estimating Model ... please wait",
@@ -184,7 +184,7 @@ inla_model_ui <- function(id) {
   )
   
   model_data_card <- card(
-    card_header("Processed Data", class="bg-primary"),
+    #card_header("Processed Data", class="bg-primary"),
     card_body(withSpinner(
       DTOutput(ns("inla_model_data")),
       caption = "Estimating Model ... please wait",
@@ -200,7 +200,7 @@ inla_model_ui <- function(id) {
   )
   
   model_formula_card <- card(
-    card_header("Model/Formula", class="bg-primary"),
+    #card_header("Model/Formula", class="bg-primary"),
     card_body(withSpinner(
       verbatimTextOutput(ns("inla_model_formula")) |>
         tagAppendAttributes(style = css("white-space" = "pre-wrap")),
@@ -227,20 +227,27 @@ inla_model_ui <- function(id) {
         formula_panel,
         input_task_button(ns("estimate_model_btn"), "Run Model")
       ),
-      layout_column_wrap(
-        width=NULL, height=300, 
-        style = css(grid_template_columns = c("60%", "40%")),
-        model_data_card,
-        model_card
-      ),
-      wellPanel(
-        downloadButton(
-          ns("model_output"),
-          label = "Download Model Outputs (.rds)",
-          class="btn-primary btn-sm"
+      navset_bar(
+        nav_panel("Processed Data",  model_data_card),
+        nav_panel("Model/Formula",
+                  model_card,
+                  wellPanel(
+                    downloadButton(
+                      ns("model_output"),
+                      label = "Download Model Outputs (.rds)",
+                      class="btn-primary btn-sm"
+                    ),
+                    actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm")
+                  )
         ),
-        actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm")
+        navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
       )
+      # layout_column_wrap(
+      #   width=NULL, height=300, 
+      #   style = css(grid_template_columns = c("60%", "40%")),
+      #   model_data_card,
+      #   model_card
+      # ),
     )
   )  
 }
@@ -368,10 +375,14 @@ inla_model_server <- function(id, dc, im, results) {
       })
       
       output$inla_model_data <- renderDT({
+        d <- inla_model()$data_class$data
+        num_columns <- which(sapply(d, is.numeric) & !sapply(d, is.integer))
         datatable(
           inla_model()$data_class$data,
+          colnames = map_table_names_to_display(colnames(inla_model()$data_class$data)),
           rownames=FALSE
-        )
+        ) |> 
+          DT::formatRound(columns=num_columns, digits=2)
       })
       
       output$download_data <- downloadHandler(

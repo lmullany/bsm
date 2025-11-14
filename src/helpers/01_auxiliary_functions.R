@@ -182,3 +182,30 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, cate
   
   return(list(data = merged, url_all = url_all, url_single = url_single))
 }
+
+map_table_names_to_display <- function(names, title_case = FALSE) {
+  map = list(
+    "Date" = c("date"),
+    "Region" = c("region"),
+    "County FIPS" = c("countyfips"),
+    "ED Visits (Target)" = c("target", "cases"),
+    "ED Visits (Overall)" = c("overall"),
+    "ED Visits (Expected)" = c("expected"), 
+    "Denominator Source" = c("denominator_source")
+  )
+  # convert map to datatable for fast lookup via join
+  map = rbindlist(lapply(map, data.table), id="display_name")
+  # join, but retain order of initial names, so that we can return in that order
+  result = map[data.table(V1=names)[, i:=.I], on="V1"]
+  # return display name only
+  result = result[is.na(display_name), display_name:=V1][order(i), display_name]
+  
+  # any names that have underscores should be converte
+  result = sapply(result, \(r) gsub("_", " ", r) |> tools::toTitleCase(),USE.NAMES = FALSE)
+  print(result)
+  # convert to title case if requested (this is mainly useful for other columns)
+  if(title_case) result = tools::toTitleCase(result)
+  
+  result
+}
+

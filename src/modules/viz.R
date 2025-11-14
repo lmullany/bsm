@@ -181,10 +181,10 @@ viz_server <- function(id, dc, im, results) {
         # get the spark series, depending on counts/proportion        
 
         if(input$metric_counts == "Counts") {
-          series <- dt[, .(total = sum(target, na.rm = TRUE)), by = c(date_col)]
+          series <- dt[, .(total = sum(cases, na.rm = TRUE)), by = c(date_col)]
           yaxis_title = "Total Cases"
         } else {
-          series <- dt[, .(total = sum(target, na.rm = TRUE)/sum(expected, na.rm=TRUE)), by = c(date_col)]
+          series <- dt[, .(total = sum(cases, na.rm = TRUE)/sum(expected, na.rm=TRUE)), by = c(date_col)]
           yaxis_title = "Percent of ED Visits"
         }
         data.table::setnames(series, date_col, "date")
@@ -234,7 +234,12 @@ viz_server <- function(id, dc, im, results) {
       
       output$posterior_data <- renderDT({
         req(im$posterior)
-        im$posterior
+        num_columns <- which(sapply(im$posterior, is.numeric) & !sapply(im$posterior, is.integer))
+        DT::datatable(
+          im$posterior,
+          rownames=F,
+          colnames = map_table_names_to_display(names(im$posterior))
+        ) |> formatRound(columns = num_columns, digits=2)
       })
       
 
@@ -292,10 +297,10 @@ viz_server <- function(id, dc, im, results) {
             polygon_info(map_base_locations(), map_data(), target_date())
           )
       })
-      plots <- reactive({
-        req(im$posterior)
-        make_timeseries_plots(res_data = im$posterior, date_col = "date", use_prop = TRUE, F, F, F)
-      })
+      # plots <- reactive({
+      #   req(im$posterior)
+      #   make_timeseries_plots(res_data = im$posterior, date_col = "date", use_prop = TRUE, F, F, F)
+      # })
       
       # update the label for credible interval when count/proportion changes
       observe({
