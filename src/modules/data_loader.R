@@ -159,7 +159,12 @@ data_loader_server <- function(id, dc, results, profile) {
       }) |> bindEvent(input$load_data_btn)
       
       output$ingested_data <- renderDT(
-        data()$data
+        DT::datatable(
+          data()$data,
+          colnames = map_table_names_to_display(colnames(data()$data)),
+          rownames = F
+        )
+          
       )
       
       output$download_data <- downloadHandler(
@@ -178,7 +183,7 @@ create_syndrome_inputs <- function(ns, cats) {
       inputId = ns("synd_cat"),
       label = "Target Outcome",
       choices = c(
-        "CCDD" = "ccdd",
+        "Chief Complaint and Discharge Diagnosis Category" = "ccdd",
         "Syndrome" = "synd",
         "Sub-Syndrome" = "subsynd"
       )
