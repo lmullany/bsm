@@ -178,7 +178,16 @@ viz_server <- function(id, dc, im, results) {
         dt <- data.table::as.data.table(im$data_cls$data)
         if (!(date_col %in% names(dt))) return(NULL)
         
-        series <- dt[, .(total = sum(target, na.rm = TRUE)), by = c(date_col)]
+        # Note that unless we show the yaxis ticks, it actually doesn't
+        # matter about the series, but estimating it conditionally in 
+        # case we add that
+        if(input$metric_counts == "Counts") {
+          series <- dt[, .(total = sum(target, na.rm = TRUE)), by = c(date_col)]
+          yaxis_title = "Total Cases"
+        } else {
+          series <- dt[, .(total = sum(target, na.rm = TRUE)/sum(expected, na.rm=TRUE)), by = c(date_col)]
+          yaxis_title = "Percent of ED Visits"
+        }
         data.table::setnames(series, date_col, "date")
         data.table::setorder(series, date)
         
@@ -199,7 +208,7 @@ viz_server <- function(id, dc, im, results) {
               showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE
             ),
             yaxis = list(
-              title = list(text = "Total Cases", font=list(color=default_color, size=10)),
+              title = list(text = yaxis_title, font=list(color=default_color, size=10)),
               showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE
             ),
             showlegend = FALSE
