@@ -363,34 +363,31 @@ inla_model_server <- function(id, dc, im, results) {
         fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model")
       })
       
+      # reactive to store a loaded model
       loaded_model <- reactiveVal(NULL)
-      observeEvent(input$zipfile_model,{
+      
+      # observe for zip_file model (i.e. user uploads a saved model)
+      observe({
+        # model file required
         req(input$zipfile_model)
         validate(need(file.exists(input$zipfile_model$datapath), "Upload did not complete yet"))
-        tmpdir <- tempfile()   # creates a unique temp folder
-        dir.create(tmpdir)
         
-        
-        unzip(input$zipfile_model$datapath, exdir = tmpdir)
-        files <- list.files(tmpdir, full.names = TRUE)
-        rds_file  <- files[grepl("\\.rds$", files, ignore.case = TRUE)]
-        json_file <- files[grepl("\\.json$", files, ignore.case = TRUE)]
-        validate(
-          need(length(rds_file) > 0, "No RDS file found in zip"),
-          need(length(json_file) > 0, "No JSON file found in zip")
+        # get the model object and the model values from the zip file path
+        saved_model_info <- load_saved_model_file(
+          path = input$zipfile_model$datapath
         )
-        # load dataset
-        loaded_model_from_file <- readRDS(rds_file[1])
+      
+        updateSelectInput(
+          inputId = "nforecasts", selected = saved_model_info[["model_values"]]$nforecasts
+        )
+        updateSelectInput(
+          inputId = "dist_family", selected = saved_model_info[["model_values"]]$dist_family
+        )
         
-        # load JSON only for UI updates
-        model_vals <- jsonlite::read_json(json_file[1], simplifyVector = TRUE)
-
-        updateSelectInput(session, "nforecasts", 
-                          selected = model_vals$nforecasts)
-        updateSelectInput(session, "dist_family", 
-                          selected = model_vals$dist_family)
-        loaded_model(loaded_model_from_file)
-      }) 
+        # update the reactive
+        loaded_model(saved_model_info[["model_object"]])
+        
+      }) |> bindEvent(input$zipfile_model)
       
       inla_model <- reactiveVal(NULL)
       
