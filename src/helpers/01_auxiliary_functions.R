@@ -228,3 +228,36 @@ non_integer_cols_to_round <- function(d, names=FALSE) {
   cols_to_convert
 }
 
+
+# Given a path to a bsm_model zip file (created from this app),
+# read to temp location, unzip, and return
+load_saved_model_file <- function(path) {
+
+  # create temp folder
+  tmpdir <- tempfile()
+  dir.create(tmpdir)
+  
+  # unizip the path to the tempdir
+  unzip(path, exdir = tmpdir)
+  
+  # get files from unzipped archive
+  files <- list.files(tmpdir, full.names = TRUE)
+  
+  # identify the rds file (model object) and json file (model values)
+  rds_file  <- files[grepl("\\.rds$", files, ignore.case = TRUE)]
+  json_file <- files[grepl("\\.json$", files, ignore.case = TRUE)]
+  
+  # ensure that unzipped archive contains the expected files
+  validate(
+    need(length(rds_file) > 0, "No RDS file found in zip"),
+    need(length(json_file) > 0, "No JSON file found in zip")
+  )
+  
+  # return a list of objects (model object, model values)
+  return(list(
+    "model_object" = readRDS(rds_file[1]),
+    "model_vals" = jsonlite::read_json(json_file[1], simplifyVector = TRUE)
+  ))
+  
+}
+

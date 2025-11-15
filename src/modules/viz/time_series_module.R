@@ -25,7 +25,7 @@ viz_time_series_ui <- function(id) {
   
 }
 
-viz_times_series_server <- function(id, im, results) {
+viz_time_series_server <- function(id, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
