@@ -229,10 +229,35 @@ non_integer_cols_to_round <- function(d, names=FALSE) {
 }
 
 
-# Given a path to a bsm_model zip file (created from this app),
-# read to temp location, unzip, and return
 load_saved_model_file <- function(path) {
 
+  # unpack the archive
+  archive <- load_saved_object_from_file(path)
+  
+  # return a list of objects (model object, model values)
+  return(list(
+    "model_object" = archive[["rds"]],
+    "model_vals" = archive[["json"]]
+  ))
+  
+}
+
+load_saved_query_file <- function(path) {
+  
+  # unpack the archive
+  archive <- load_saved_object_from_file(path)
+  
+  # return a list of objects (data, query_values)
+  return(list(
+    "data" = archive[["rds"]],
+    "query_values" = archive[["json"]]
+  ))
+  
+}
+
+# Given a path to a bsm_model zip file (created from this app),
+# read to temp location, unzip, and return
+load_saved_object_from_file <- function(path) {
   # create temp folder
   tmpdir <- tempfile()
   dir.create(tmpdir)
@@ -252,12 +277,11 @@ load_saved_model_file <- function(path) {
     need(length(rds_file) > 0, "No RDS file found in zip"),
     need(length(json_file) > 0, "No JSON file found in zip")
   )
-  
-  # return a list of objects (model object, model values)
   return(list(
-    "model_object" = readRDS(rds_file[1]),
-    "model_vals" = jsonlite::read_json(json_file[1], simplifyVector = TRUE)
+    rds = readRDS(rds_file[1]),
+    json=jsonlite::read_json(json_file[1], simplifyVector = TRUE)
   ))
   
 }
+  
 
