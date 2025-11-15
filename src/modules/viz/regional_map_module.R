@@ -189,21 +189,6 @@ viz_regional_map_server <- function(id, im, results) {
         return(p)
       })
       
-      input_region_choices <- reactive(
-        im$data_cls$data[, .(countyfips, region)] |> unique()
-      )
-      
-      
-      # TODO: note that this assumes county
-      observe({
-        req(im$data_cls)
-        choices = setNames(input_region_choices()$countyfips, input_region_choices()$region)
-        updateSelectizeInput(
-          inputId = "viz_regions",
-          choices = choices,
-          selected = choices[1]
-        )
-      })
       
       map_data <- reactive({
         

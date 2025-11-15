@@ -670,18 +670,14 @@ prepare_plot_ly_ts_data <- function(
     model,
     data_cls,
     use_count=TRUE,
-    future_steps=0
+    future_steps=0, 
+    probs = c(0.005, 0.01, 0.025,seq(0.05, .95, 0.05),0.975, 0.99, 0.995)
 ) {
   
   byvar = data_cls$region_col
   
   d <- get_posterior_quantiles(
-    model, data_cls, use_suffix = FALSE,use_count_scale = use_count,
-    probs = c(
-      0.005, 0.01, 0.025,
-      seq(0.05, .95, 0.05),
-      0.975, 0.99, 0.995
-    )
+    model, data_cls, use_suffix = FALSE,use_count_scale = use_count,probs = probs
   )
 
   d[, i:=(1:.N), by=byvar]
