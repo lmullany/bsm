@@ -23,9 +23,10 @@ inla_model_ui <- function(id) {
     ns("dist_family"),
     label="Distributional Family",
     choices = c(
-      "Binomial" = "binomial",
+      "Poisson" = "poisson",
       "Negative Binomial"="nbinomial",
-      "Poisson" = "poisson"
+      "Binomial" = "binomial",
+      "Beta-Binomial" = "betabinomial"
     ),
     selected = "binomial"
   )
