@@ -81,16 +81,7 @@ data_loader_ui <- function(id) {
           )
         ),
         card_footer(
-          downloadButton(
-            ns("download_data"),
-            label="Download to CSV", 
-            class="btn-primary"
-          ),
-          downloadButton(
-            ns("save_query"),
-            label="Save Query", 
-            class="btn-primary"
-          )
+          uiOutput(ns("download_ui"))
         )
       )
     )
@@ -98,10 +89,14 @@ data_loader_ui <- function(id) {
 
 }
 
+
+
 data_loader_server <- function(id, dc, results, profile) {
   moduleServer(
     id,
     function(input, output, session) {
+      ns <- session$ns
+      data <- reactiveVal(NULL)
       
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
@@ -164,54 +159,46 @@ data_loader_server <- function(id, dc, results, profile) {
         
       }) |> bindEvent(input$load_data_btn)
       
-      
-      ns <- session$ns
       output$zipfile_ui <- renderUI({
         req(input$load_saved_query)   # only after button is clicked
         fileInput(ns("zipfile"), "Select Saved Query", accept = ".bsm_query")
       })
       
+      # set up a reactive to hold user-recalled data (previously saved)
       loaded_data <- reactiveVal(NULL)
-      observeEvent(input$zipfile,{
+      
+      
+      observe({
         req(input$zipfile)
         validate(need(file.exists(input$zipfile$datapath), "Upload did not complete yet"))
-        tmpdir <- tempfile()   # creates a unique temp folder
-        dir.create(tmpdir)
         
+        saved_query_info <- load_saved_query_file(input$zipfile$datapath)
+        vals <- saved_query_info[["query_values"]]
         
-        unzip(input$zipfile$datapath, exdir = tmpdir)
-        files <- list.files(tmpdir, full.names = TRUE)
-        rds_file  <- files[grepl("\\.rds$", files, ignore.case = TRUE)]
-        json_file <- files[grepl("\\.json$", files, ignore.case = TRUE)]
-        validate(
-          need(length(rds_file) > 0, "No RDS file found in zip"),
-          need(length(json_file) > 0, "No JSON file found in zip")
+        updateSelectInput(inputId = "time_res", selected = vals$time_res)
+        updateDateRangeInput(inputId = "drange", start = vals$drange[1],end = vals$drange[2])
+        updateSelectInput(inputId = "geo_res", selected = vals$geo_res)
+        updateSelectInput(inputId = "states", selected = vals$states)
+        updateSelectInput(inputId = "synd_cat", selected = vals$synd_cat)
+        updateSelectInput(inputId = "synd_drop_menu", selected = vals$synd_val)
+        
+        loaded_data(list(data = saved_query_info[["data"]]))
+      }) |> bindEvent(input$zipfile)
+      
+      
+      observe(data(query_data())) |> bindEvent(query_data())
+      observe(data(loaded_data())) |> bindEvent(loaded_data())  
+      
+      output$download_ui <- renderUI({
+        req(!is.null(data()))
+        tagList(
+          downloadButton(ns("download_data"),
+                         "Download to CSV",
+                         class = "btn-primary"),
+          downloadButton(ns("save_query"),
+                         "Save Query",
+                         class = "btn-primary")
         )
-        # load dataset
-        tbl <- readRDS(rds_file[1])
-        
-        # load JSON only for UI updates
-        vals <- jsonlite::read_json(json_file[1], simplifyVector = TRUE)
-        updateSelectInput(session, "time_res", selected = vals$time_res)
-        updateDateRangeInput(session, "drange",
-                             start = vals$drange[1],
-                             end   = vals$drange[2])
-        updateSelectInput(session, "geo_res", selected = vals$geo_res)
-        updateSelectInput(session, "states", selected = vals$states)
-        updateSelectInput(session, "synd_cat", selected = vals$synd_cat)
-        updateSelectInput(session, "synd_drop_menu", selected = vals$synd_val)
-        
-        loaded_data(list(data = tbl))
-      }) 
-      
-      data <- reactiveVal(NULL)
-      
-      observeEvent(query_data(), {
-        data(query_data())
-      })
-      
-      observeEvent(loaded_data(), {
-        data(loaded_data())
       })
       
       
@@ -241,7 +228,16 @@ data_loader_server <- function(id, dc, results, profile) {
       
       
       output$ingested_data <- renderDT({
-        data()$data
+        req(data()$data)
+        # identify columns to round
+        cols_to_round <- non_integer_cols_to_round(data()$data)
+        
+        DT::datatable(
+          data()$data,
+          colnames = map_table_names_to_display(colnames(data()$data)),
+          rownames = F
+        ) |> formatRound(cols_to_round, digits=4)
+          
       })
       
       output$download_data <- downloadHandler(
@@ -260,7 +256,7 @@ create_syndrome_inputs <- function(ns, cats) {
       inputId = ns("synd_cat"),
       label = "Target Outcome",
       choices = c(
-        "CCDD" = "ccdd",
+        "Chief Complaint and Discharge Diagnosis Category" = "ccdd",
         "Syndrome" = "synd",
         "Sub-Syndrome" = "subsynd"
       )
