@@ -1,3 +1,8 @@
+# © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
+# Development of this software was sponsored by the U.S. Government under
+# contract no. 75D30124C19958
+
+
 inla_model_ui <- function(id) {
   
   btn_class <- "btn-primary btn-sm"
@@ -170,7 +175,7 @@ inla_model_ui <- function(id) {
   
   ## Output cards:
   model_card <- card(
-    card_header("INLA Estimation Summary", class="bg-primary"),
+    #card_header("INLA Estimation Summary", class="bg-primary"),
     card_body(withSpinner(
       verbatimTextOutput(ns("inla_model_object")),
       caption = "Estimating Model ... please wait",
@@ -179,7 +184,7 @@ inla_model_ui <- function(id) {
   )
   
   model_data_card <- card(
-    card_header("Processed Data", class="bg-primary"),
+    #card_header("Processed Data", class="bg-primary"),
     card_body(withSpinner(
       DTOutput(ns("inla_model_data")),
       caption = "Estimating Model ... please wait",
@@ -191,7 +196,7 @@ inla_model_ui <- function(id) {
   )
   
   model_formula_card <- card(
-    card_header("Model/Formula", class="bg-primary"),
+    #card_header("Model/Formula", class="bg-primary"),
     card_body(withSpinner(
       verbatimTextOutput(ns("inla_model_formula")) |>
         tagAppendAttributes(style = css("white-space" = "pre-wrap")),
@@ -220,14 +225,20 @@ inla_model_ui <- function(id) {
         input_task_button(ns("load_model_btn"), "Load Saved Model"),
         uiOutput(ns("zipfile_model_ui"))
       ),
-      layout_column_wrap(
-        width=NULL, height=300, 
-        style = css(grid_template_columns = c("60%", "40%")),
-        model_data_card,
-        model_card
-      ),
-      wellPanel(
-        actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm")
+      navset_bar(
+        nav_panel("Processed Data",  model_data_card),
+        nav_panel("Model/Formula",
+                  model_card,
+                  wellPanel(
+                    downloadButton(
+                      ns("model_output"),
+                      label = "Download Model Outputs (.rds)",
+                      class="btn-primary btn-sm"
+                    ),
+                    actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm")
+                  )
+        ),
+        navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
       )
     )
   )  
@@ -352,34 +363,31 @@ inla_model_server <- function(id, dc, im, results) {
         fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model")
       })
       
+      # reactive to store a loaded model
       loaded_model <- reactiveVal(NULL)
-      observeEvent(input$zipfile_model,{
+      
+      # observe for zip_file model (i.e. user uploads a saved model)
+      observe({
+        # model file required
         req(input$zipfile_model)
         validate(need(file.exists(input$zipfile_model$datapath), "Upload did not complete yet"))
-        tmpdir <- tempfile()   # creates a unique temp folder
-        dir.create(tmpdir)
         
-        
-        unzip(input$zipfile_model$datapath, exdir = tmpdir)
-        files <- list.files(tmpdir, full.names = TRUE)
-        rds_file  <- files[grepl("\\.rds$", files, ignore.case = TRUE)]
-        json_file <- files[grepl("\\.json$", files, ignore.case = TRUE)]
-        validate(
-          need(length(rds_file) > 0, "No RDS file found in zip"),
-          need(length(json_file) > 0, "No JSON file found in zip")
+        # get the model object and the model values from the zip file path
+        saved_model_info <- load_saved_model_file(
+          path = input$zipfile_model$datapath
         )
-        # load dataset
-        loaded_model_from_file <- readRDS(rds_file[1])
+      
+        updateSelectInput(
+          inputId = "nforecasts", selected = saved_model_info[["model_values"]]$nforecasts
+        )
+        updateSelectInput(
+          inputId = "dist_family", selected = saved_model_info[["model_values"]]$dist_family
+        )
         
-        # load JSON only for UI updates
-        model_vals <- jsonlite::read_json(json_file[1], simplifyVector = TRUE)
-
-        updateSelectInput(session, "nforecasts", 
-                          selected = model_vals$nforecasts)
-        updateSelectInput(session, "dist_family", 
-                          selected = model_vals$dist_family)
-        loaded_model(loaded_model_from_file)
-      }) 
+        # update the reactive
+        loaded_model(saved_model_info[["model_object"]])
+        
+      }) |> bindEvent(input$zipfile_model)
       
       inla_model <- reactiveVal(NULL)
       
@@ -447,12 +455,17 @@ inla_model_server <- function(id, dc, im, results) {
           need(!is.null(dat), "No table available in model"),
           need(ncol(dat) > 0, "Model table has no columns")
         )
-        res <- DT::datatable(
+
+        # identify columns to round
+        cols_to_round <- non_integer_cols_to_round(dat)
+        
+        datatable(
           dat,
-          rownames = FALSE,
-          options = list(scrollX = TRUE)
-        )
-        res
+          colnames = map_table_names_to_display(colnames(dat)),
+          rownames=FALSE
+        ) |> 
+          DT::formatRound(columns=cols_to_round, digits=2)
+
       })
       
       output$download_data <- downloadHandler(

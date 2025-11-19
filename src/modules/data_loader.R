@@ -1,3 +1,7 @@
+# © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
+# Development of this software was sponsored by the U.S. Government under
+# contract no. 75D30124C19958
+
 cat_values = get_categorical_values(profile = CREDENTIALS$profile)
 
 data_loader_ui <- function(id) {
@@ -175,7 +179,6 @@ data_loader_server <- function(id, dc, results, profile) {
         "Open file browser to select a saved query on your local machine. ",
         "Saved queries are zip files containing json and rds objects with the ",
         "file suffix .bsm_query.")
-                           
       output$zipfile_ui <- renderUI({
         req(input$load_saved_query)   # only after button is clicked
         div(title = select_saved_title, 
@@ -183,51 +186,35 @@ data_loader_server <- function(id, dc, results, profile) {
                       accept = ".bsm_query"))
       })
       
+      # set up a reactive to hold user-recalled data (previously saved)
       loaded_data <- reactiveVal(NULL)
-      observeEvent(input$zipfile,{
+      
+      
+      observe({
         req(input$zipfile)
         validate(need(file.exists(input$zipfile$datapath), "Upload did not complete yet"))
-        tmpdir <- tempfile()   # creates a unique temp folder
-        dir.create(tmpdir)
         
+        saved_query_info <- load_saved_query_file(input$zipfile$datapath)
+        vals <- saved_query_info[["query_values"]]
         
-        unzip(input$zipfile$datapath, exdir = tmpdir)
-        files <- list.files(tmpdir, full.names = TRUE)
-        rds_file  <- files[grepl("\\.rds$", files, ignore.case = TRUE)]
-        json_file <- files[grepl("\\.json$", files, ignore.case = TRUE)]
-        validate(
-          need(length(rds_file) > 0, "No RDS file found in zip"),
-          need(length(json_file) > 0, "No JSON file found in zip")
-        )
-        # load dataset
-        tbl <- readRDS(rds_file[1])
+        updateSelectInput(inputId = "time_res", selected = vals$time_res)
+        updateDateRangeInput(inputId = "drange", start = vals$drange[1],end = vals$drange[2])
+        updateSelectInput(inputId = "geo_res", selected = vals$geo_res)
+        updateSelectInput(inputId = "states", selected = vals$states)
+        updateSelectInput(inputId = "synd_cat", selected = vals$synd_cat)
+        updateSelectInput(inputId = "synd_drop_menu", selected = vals$synd_val)
         
-        # load JSON only for UI updates
-        vals <- jsonlite::read_json(json_file[1], simplifyVector = TRUE)
-        updateSelectInput(session, "time_res", selected = vals$time_res)
-        updateDateRangeInput(session, "drange",
-                             start = vals$drange[1],
-                             end   = vals$drange[2])
-        updateSelectInput(session, "geo_res", selected = vals$geo_res)
-        updateSelectInput(session, "states", selected = vals$states)
-        updateSelectInput(session, "synd_cat", selected = vals$synd_cat)
-        updateSelectInput(session, "synd_drop_menu", selected = vals$synd_val)
-        
-        loaded_data(list(data = tbl))
-      }) 
+        loaded_data(list(data = saved_query_info[["data"]]))
+      }) |> bindEvent(input$zipfile)
       
       
-      observeEvent(query_data(), {
-        data(query_data())
-      })
-      
-      observeEvent(loaded_data(), {
-        data(loaded_data())
-      })
       download_csv_title = paste0(
         "Download retrieved data and save as a csv file on your local machine.")
       save_query_title = paste0("Save the query to a bsm_query file so that ", 
                                 "it can be reloaded later.")
+      observe(data(query_data())) |> bindEvent(query_data())
+      observe(data(loaded_data())) |> bindEvent(loaded_data())  
+      
       output$download_ui <- renderUI({
         req(!is.null(data()))
         tagList(
@@ -269,7 +256,16 @@ data_loader_server <- function(id, dc, results, profile) {
       
       
       output$ingested_data <- renderDT({
-        data()$data
+        req(data()$data)
+        # identify columns to round
+        cols_to_round <- non_integer_cols_to_round(data()$data)
+        
+        DT::datatable(
+          data()$data,
+          colnames = map_table_names_to_display(colnames(data()$data)),
+          rownames = F
+        ) |> formatRound(cols_to_round, digits=4)
+          
       })
       
       output$download_data <- downloadHandler(
@@ -294,7 +290,7 @@ create_syndrome_inputs <- function(ns, cats) {
       inputId = ns("synd_cat"),
       label = "Target Outcome",
       choices = c(
-        "CCDD" = "ccdd",
+        "Chief Complaint and Discharge Diagnosis Category" = "ccdd",
         "Syndrome" = "synd",
         "Sub-Syndrome" = "subsynd"
       )
