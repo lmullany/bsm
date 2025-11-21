@@ -128,7 +128,6 @@ make_table_builder_url<-function(
 
     url<-paste0(url,"&", categ_info[["cat_class"]], "=",categ_info[["cat_value"]])
   }
-  #url<-paste0(url,"&userId=",userid)
   return(url)
 }
 
@@ -284,4 +283,21 @@ load_saved_object_from_file <- function(path) {
   
 }
   
+# Function to place info circle tool tip on a input label
+# l must be a two element list, first element holds the label
+# 2nd element holds the tool tip message
+labeltt <- function(l, ...) {
+  tooltip(
+    trigger = list(
+      l[[1]],
+      bsicons::bs_icon(name = "info-circle-fill", class = "text-primary")
+    ),
+    p(l[[2]], style = "text-align:left;"),
+    ...
+  )
+}
+
+add_button_hover <- function(title,button) {
+  div(title=title,button)
+}
 

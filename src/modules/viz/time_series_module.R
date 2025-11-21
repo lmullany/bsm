@@ -1,6 +1,25 @@
 # © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
+
+label_list_ts <- list(
+  scale_radio = list(
+    l = "Scale",
+    m = "Select the desired scale for the displayed results. Select count to display the number of visits and proportion to display the proportion of visits with the requested diagnosis out of all visits. Note that forecasts are only available when the scale matches the natural scale of the model, i.e. count for poisson and negative binomial and proportion for binomial and beta binomial."
+  ),
+  ci_Count =  list(
+    l = "Credible Interval for Mean Count",
+    m = "Select the width of the credible interval for the mean count of the posterior distribution to display on the plot."
+  ),
+  ci_Proportion =  list(
+    l = "Credible Interval for Mean Proportion",
+    m = "Select the width of the credible interval for the mean proportion of the posterior distribution to display on the plot."
+  ),
+  region_selector =  list(
+    l = "Select Region(s)",
+    m = "Click or type the name(s) of the regions you would like to plot using the dropdown."
+  )
+)
 viz_time_series_ui <- function(id) {
   ns <- NS(id)
   
@@ -17,7 +36,10 @@ viz_time_series_ui <- function(id) {
       sidebar = sidebar(
         id = ns("time_series_sidebar"),
         width = SIDEBAR_WIDTH*2,
-        radioButtons(ns("ts_use_count"),"Scale", choices = c("Count", "Proportion"),selected = "Proportion"),
+        radioButtons(ns("ts_use_count"),
+                     labeltt(label_list_rm[["scale_radio"]]),
+                     choices = c("Count", "Proportion"),selected = "Proportion",
+                     inline=TRUE),
         radioButtons(
           inputId = ns("ts_quantile"),
           label = "Quantile",
@@ -36,7 +58,10 @@ viz_time_series_ui <- function(id) {
           ns = ns
         ),
         #numericInput(ns("ts_quantile"), "Quantile", value=0.95),
-        selectizeInput(ns("viz_regions"), "Select Region(s)", choices=NULL, multiple=TRUE)
+        selectizeInput(ns("viz_regions"), 
+                       labeltt(label_list_ts[["region_selector"]]),
+                       choices=NULL, 
+                       multiple=TRUE)
       ),
       card(
         plotlyOutput(ns("ts_plots")),
@@ -52,12 +77,11 @@ viz_time_series_server <- function(id, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
-      
       # update the label for credible interval when count/proportion changes
       observe({
         updateSelectInput(
           inputId = "ts_quantile",
-          label=paste0("Credible Interval for Mean ", input$ts_use_count)
+          label=labeltt(label_list_ts[[paste0("ci_",input$ts_use_count)]]),
         )
       }) |> bindEvent(input$ts_use_count)
       

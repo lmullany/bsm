@@ -4,9 +4,45 @@
 
 cat_values = get_categorical_values(profile = CREDENTIALS$profile)
 
+label_list_dl <- list(
+  geo_res = list( 
+    l = "Geographic Resolution",
+    m = "Select geographic resolution for ESSENCE query used to retrieve training data."
+  ),
+  state = list(
+    l = "State(s)",
+    m = "Select a list of states to include in query. All subdivisions (based on geographic resolution) for the selected states will be added to the query."
+  ),
+  date_range = list(
+    l = "Date Range",
+    m = "Select a start and end date (inclusive) for the ESSENCE query. For weekly queries, start dates should fall on a Sunday and end dates should fall on a Saturday to avoid partial weeks."
+  ),
+  temporal_res = list(
+    l = "Time Resolution",
+    m = "Select a temporal resolution for the ESSENCE query."
+  ),
+  target_type = list(
+    l = "Select Type",
+    m = "Select diagnostic criteria type (CCDD, syndrome or subsyndrome) for filtering records in the ESSENCE query."
+  ),
+  target_code = list(
+    l = "Target Outcome",
+    m = "Select the specific diagnostic category or code to use when filtering records in the ESSENCE query.")
+)
+
+button_list_dl <-list(
+  run_query = "Submit ESSENCE query to load data.",
+  load_query = "Load a saved query from file.",
+  select_saved = paste0(
+    "Open file browser to select a saved query on your local machine. ",
+    "Saved queries are zip files containing json and rds objects with the ",
+    "file suffix .bsm_query."),
+  download_csv = "Download retrieved data and save as a csv file on your local machine.",
+  save_query = "Save the query to a bsm_query file so that it can be reloaded later."
+)
+
 data_loader_ui <- function(id) {
 
-  btn_class <- "btn-primary btn-sm"
   ns <- NS(id)
   
   ########################
@@ -19,18 +55,18 @@ data_loader_ui <- function(id) {
   # geographic resolution: zip or county
   geo = selectInput(
     ns("geo_res"),
-    "Geographic Resolution",
     choices=c("County" = "county"), # "Zip Code" = "zip", 
-    selected="county"
+    selected="county",
+    label=labeltt(label_list_dl[["geo_res"]])
   )
   
   # state selection
   states = selectizeInput(
     ns("states"),
-    label = "State(s)",
     choices=sort(c("DC",state.abb)),
     multiple=T, # allow multiple,
-    selected = DEFAULT_STATES
+    selected = DEFAULT_STATES,
+    label=labeltt(label_list_dl[["state"]])
   )
   
   # date range
@@ -38,7 +74,7 @@ data_loader_ui <- function(id) {
   end = Sys.Date()-offset
   drange = dateRangeInput(
     ns("drange"),
-    "Date Range",
+    label=labeltt(label_list_dl[["date_range"]]),
     start = end - 60,
     end = end
   )
@@ -46,8 +82,8 @@ data_loader_ui <- function(id) {
   # time resolution
   time_res <- selectInput(
     ns("time_res"),
-    label = "Time Resolution",
-    choices = c("Weekly" = "weekly"),#"Daily" = "daily", , "Monthly" = "monthly"),
+    label=labeltt(label_list_dl[["temporal_res"]]),
+    choices = c("Weekly" = "weekly","Daily" = "daily"),# , "Monthly" = "monthly"),
     selected = "weekly"
   )
   
@@ -55,7 +91,6 @@ data_loader_ui <- function(id) {
   ########################
   # Nav Panel to Return
   ########################
-  
   nav_panel(
     title = "Data Loader",
     layout_sidebar(
@@ -67,8 +102,13 @@ data_loader_ui <- function(id) {
         drange,
         time_res,
         synd_panel,
-        input_task_button(ns("load_data_btn"), "Query ESSENCE"),
-        input_task_button(ns("load_saved_query"), "Load Saved Query"),
+        layout_columns(
+          add_button_hover(title = button_list_dl[["run_query"]],
+            input_task_button(ns("load_data_btn"), "Query ESSENCE")),
+          add_button_hover(title = button_list_dl[["load_query"]],
+            input_task_button(ns("load_saved_query"), "Load Saved Query")),
+          width = c(6,6)
+        ),
         uiOutput(ns("zipfile_ui"))
       ),
       card(
@@ -161,7 +201,9 @@ data_loader_server <- function(id, dc, results, profile) {
       
       output$zipfile_ui <- renderUI({
         req(input$load_saved_query)   # only after button is clicked
-        fileInput(ns("zipfile"), "Select Saved Query", accept = ".bsm_query")
+        add_button_hover(title = button_list_dl[["select_saved"]], 
+            fileInput(ns("zipfile"), "Select Saved Query", 
+                      accept = ".bsm_query"))
       })
       
       # set up a reactive to hold user-recalled data (previously saved)
@@ -192,12 +234,16 @@ data_loader_server <- function(id, dc, results, profile) {
       output$download_ui <- renderUI({
         req(!is.null(data()))
         tagList(
-          downloadButton(ns("download_data"),
-                         "Download to CSV",
-                         class = "btn-primary"),
-          downloadButton(ns("save_query"),
-                         "Save Query",
-                         class = "btn-primary")
+          layout_column_wrap(
+            add_button_hover(title = button_list_dl[["download_csv"]],
+                downloadButton(ns("download_data"),
+                           "Download to CSV",
+                           class = "btn-primary")),
+            add_button_hover(title = button_list_dl[["save_query"]], 
+                downloadButton(ns("save_query"),
+                           "Save Query",
+                           class = "btn-primary"))
+          )
         )
       })
       
@@ -250,20 +296,20 @@ data_loader_server <- function(id, dc, results, profile) {
 
 ### data loader module helper functions ###
 create_syndrome_inputs <- function(ns, cats) {
-  
   tagList(
     radioButtons(
       inputId = ns("synd_cat"),
-      label = "Target Outcome",
+      label = labeltt(label_list_dl[["target_type"]]),
       choices = c(
         "Chief Complaint and Discharge Diagnosis Category" = "ccdd",
         "Syndrome" = "synd",
         "Sub-Syndrome" = "subsynd"
       )
     ),
+  
     selectInput(
       inputId = ns("synd_drop_menu"),
-      label="Select Type",
+      label = labeltt(label_list_dl[["target_code"]]),
       choices = cats
     )
   )

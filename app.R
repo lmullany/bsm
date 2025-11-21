@@ -4,6 +4,7 @@
 
 # source files --------------------------------------------------------------
 source("src/00_setup.R")
+
 options(shiny.maxRequestSize = 100*1024^2) 
 ui <- page(
   # get theme from the setup file
@@ -25,6 +26,7 @@ ui <- page(
       }
     "))
   ),
+  # tags$head(tags$script(js_hide_all_tooltips)),
   useShinyjs(),
   page_navbar(
     title = "Bayesian Spatiotemporal Modeling",
@@ -38,8 +40,8 @@ ui <- page(
     nav_spacer(),
     # Documentation UI
     documentation_ui("documentation"),
-    # Dark Mode Toggle
-    nav_item(input_dark_mode(mode="dark")),
+    # Dark Mode and Tooltip Toggles
+    nav_item(input_dark_mode(mode="dark")), nav_item(tooltip_ui("tooltip")),
     # Options
     navbar_options = list(class = "b-primary", theme = "dark", underline=FALSE)
   )
@@ -67,6 +69,7 @@ server <- function(input, output, session) {
   data_loader_server(id = "data_load", dc, results, profile)
   inla_model_server(id = "inla_model", dc, im, results)
   viz_server("viz", dc, im, results)
+  tooltip_server("tooltip")
   documentation_server(id="documentation")
   
 }

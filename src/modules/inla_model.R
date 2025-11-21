@@ -1,11 +1,45 @@
 # © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
-
+label_list_im <- list(
+  num_forecasts_day = list( 
+    l = "Number of forecasts (days)",
+    m = "Select the number of future days where estimates will be generated."
+  ),
+  num_forecasts_week = list( 
+    l = "Number of forecasts (weeks)",
+    m = "Select the number of future weeks where estimates will be generated."
+  ),
+  num_forecasts_month = list( 
+    l = "Number of forecasts (months)",
+    m = "Select the number of future months where estimates will be generated."
+  ),
+  num_forecasts_year = list( 
+    l = "Number of forecasts (years)",
+    m = "Select the number of future years where estimates will be generated."
+  ),
+  distribution = list(
+    l = "Distributional Family",
+    m = "Select the probability distribution family used to model the observed counts. Poisson and Negative Binomial are recommended for modeling counts. Binomial and Beta Binomial are recommended for modeling proportions."
+  ),
+  model_spec = list(
+    l = "Model Specification",
+    m = "Select whether to use the default model or to customize model components (advanced users only)."
+  )
+)
+button_list_im <-list(
+    run_model = "Fit selected INLA model to data.",
+    load_saved_model = "Load a saved model from file.",
+    select_saved = paste0(
+      "Open file browser to select a saved model on your local machine. ",
+      "Saved models are zip files containing json and rds objects with the ",
+      "file suffix .bsm_model."),
+    download_csv = "Download processed data and save as a csv file on your local machine.",
+    save_model = "Save the query to a bsm_model file so that it can be reloaded later."
+  )
 
 inla_model_ui <- function(id) {
   
-  btn_class <- "btn-primary btn-sm"
   ns <- NS(id)
   
   ########################
@@ -15,13 +49,13 @@ inla_model_ui <- function(id) {
   # Number of forecasts
   forecasts = numericInput(
     ns("nforecasts"),
-    label = "Number of Forecasts (weeks)",
-    value = 4
+    label = label_list_im[["num_forecasts_week"]]$l,
+    value = 3
   )
   
   family = selectInput(
     ns("dist_family"),
-    label="Distributional Family",
+    label=labeltt(label_list_im[["distribution"]]),
     choices = c(
       "Poisson" = "poisson",
       "Negative Binomial"="nbinomial",
@@ -147,7 +181,7 @@ inla_model_ui <- function(id) {
   formula_panel = tagList(
     radioButtons(
       ns("formula_type"),
-      "Estimation Model",
+      label=labeltt(label_list_im[["model_spec"]]),
       choices = c(
         "Default Model"="default",
         "Customize Components" = "custom_components"
@@ -222,8 +256,13 @@ inla_model_ui <- function(id) {
         forecasts, 
         family,
         formula_panel,
-        input_task_button(ns("estimate_model_btn"), "Run Model"),
-        input_task_button(ns("load_model_btn"), "Load Saved Model"),
+        layout_columns(
+          add_button_hover(title = button_list_im[["run_model"]],
+                           input_task_button(ns("estimate_model_btn"), "Run Model")),
+          add_button_hover(title = button_list_im[["load_saved_model"]],
+                           input_task_button(ns("load_model_btn"), "Load Saved Model")),
+          widths = c(6,6)
+        ),
         uiOutput(ns("zipfile_model_ui"))
       ),
       navset_bar(
@@ -268,7 +307,7 @@ inla_model_server <- function(id, dc, im, results) {
         lv = update_n_forecast_widget(dc$time_res)
         updateNumericInput(
           inputId =  "nforecasts", 
-          label = lv[["label"]],
+          label = labeltt(label_list_im[[lv[["label"]]]]),
           value = lv[["value"]]
         )
       })
@@ -361,7 +400,8 @@ inla_model_server <- function(id, dc, im, results) {
       ns <- session$ns
       output$zipfile_model_ui <- renderUI({
         req(input$load_model_btn)   # only after button is clicked
-        fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model")
+        add_button_hover(title = button_list_im[["select_saved"]],
+                         fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model"))
       })
       
       # reactive to store a loaded model
@@ -404,12 +444,16 @@ inla_model_server <- function(id, dc, im, results) {
       output$download_model_ui <- renderUI({
         req(!is.null(inla_model()))
         tagList(
-          downloadButton(ns("download_data"),
+          add_button_hover(
+            title = button_list_im[["download_csv"]],
+            downloadButton(ns("download_data"),
                          "Download to CSV",
-                         class = "btn-primary"),
-          downloadButton(ns("save_model"),
+                         class = "btn-primary")),
+          add_button_hover(
+            title = button_list_im[["save_model"]],
+            downloadButton(ns("save_model"),
                          "Save Model",
-                         class = "btn-primary")
+                         class = "btn-primary"))
         )
       })
       
@@ -531,15 +575,14 @@ add_posteriors <- function(data_cls, model){
 # Helper function for forecast label and default
 update_n_forecast_widget <- function(res) {
   lu = list(
-    "daily" = list(label = "Number of forecasts (days)", value = 28),
-    "weekly" = list(label = "Number of forecasts (weeks)", value = 4),
-    "monthly" = list(label = "Number of forecasts (months)", value = 1),
-    "yearly" = list(label = "Number of forecasts (years)", value=1)
+    "daily" = list(label = "num_forecasts_day", value = 28),
+    "weekly" = list(label = "num_forecasts_week", value = 3),
+    "monthly" = list(label = "num_forecasts_month", value = 1),
+    "yearly" = list(label = "num_forecasts_year", value=1)
   )
   
   lu[[res]]
 }
-
 pre_process_data <- function(data, nforecasts ) {
   data <- add_fips(data)
   data[, date := as.data.table(date)]
