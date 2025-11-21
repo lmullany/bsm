@@ -40,17 +40,14 @@ ui <- page(
     nav_spacer(),
     # Documentation UI
     documentation_ui("documentation"),
-    # Dark Mode Toggle
-    nav_item(input_dark_mode(mode="dark")),
-    nav_item(tooltip_ui("tooltip")),
+    # Dark Mode and Tooltip Toggles
+    nav_item(input_dark_mode(mode="dark")), nav_item(tooltip_ui("tooltip")),
     # Options
     navbar_options = list(class = "b-primary", theme = "dark", underline=FALSE)
   )
 )
 
 server <- function(input, output, session) {
-  
-  tooltip_server("tooltip")
   
   # ----------------------------------------------------------------------
   # Global Reactives for Profile
@@ -72,6 +69,7 @@ server <- function(input, output, session) {
   data_loader_server(id = "data_load", dc, results, profile)
   inla_model_server(id = "inla_model", dc, im, results)
   viz_server("viz", dc, im, results)
+  tooltip_server("tooltip")
   documentation_server(id="documentation")
   
 }
