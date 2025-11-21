@@ -49,12 +49,6 @@ read_physical_adj_mat <- function(path = "data/us_county_adjacency.csv") {
 }
 
 
-
-
-
-
-
-
 ############################################
 ## ESSENCE QUERY TOOLS
 ############################################

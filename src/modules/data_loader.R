@@ -137,6 +137,11 @@ data_loader_server <- function(id, dc, results, profile) {
     function(input, output, session) {
       ns <- session$ns
       data <- reactiveVal(NULL)
+
+      
+      # Initiate the adjacency_matrix object in the dc reactives
+      dc$physical_adj <- read_physical_adj_mat()
+      dc$mobility_adj <- read_mobility_adj_mat()
       
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
