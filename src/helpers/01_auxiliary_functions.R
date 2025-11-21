@@ -128,7 +128,6 @@ make_table_builder_url<-function(
 
     url<-paste0(url,"&", categ_info[["cat_class"]], "=",categ_info[["cat_value"]])
   }
-  #url<-paste0(url,"&userId=",userid)
   return(url)
 }
 

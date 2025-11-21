@@ -9,11 +9,11 @@ label_list_ts <- list(
   ),
   ci_Count =  list(
     l = "Credible Interval for Mean Count",
-    m = "Select the width of the credible interval for the mean of the posterior distribution to display on the plot."
+    m = "Select the width of the credible interval for the mean count of the posterior distribution to display on the plot."
   ),
   ci_Proportion =  list(
     l = "Credible Interval for Mean Proportion",
-    m = "Select the width of the credible interval for the mean of the posterior distribution to display on the plot."
+    m = "Select the width of the credible interval for the mean proportion of the posterior distribution to display on the plot."
   ),
   region_selector =  list(
     l = "Select Region(s)",
@@ -38,7 +38,8 @@ viz_time_series_ui <- function(id) {
         width = SIDEBAR_WIDTH*2,
         radioButtons(ns("ts_use_count"),
                      labeltt(label_list_rm[["scale_radio"]]),
-                     choices = c("Count", "Proportion"),selected = "Proportion"),
+                     choices = c("Count", "Proportion"),selected = "Proportion",
+                     inline=TRUE),
         radioButtons(
           inputId = ns("ts_quantile"),
           label = "Quantile",
@@ -80,7 +81,7 @@ viz_time_series_server <- function(id, im, results) {
       observe({
         updateSelectInput(
           inputId = "ts_quantile",
-          label=label_list_ts[[paste0("ci_",input$ts_use_count)]]$l, # FIX NEEDED
+          label=labeltt(label_list_ts[[paste0("ci_",input$ts_use_count)]]),
         )
       }) |> bindEvent(input$ts_use_count)
       

@@ -10,7 +10,7 @@ label_list_im <- list(
     l = "Number of forecasts (weeks)",
     m = "Select the number of future weeks where estimates will be generated."
   ),
-  num_forecasts_week = list( 
+  num_forecasts_month = list( 
     l = "Number of forecasts (months)",
     m = "Select the number of future months where estimates will be generated."
   ),
@@ -50,7 +50,7 @@ inla_model_ui <- function(id) {
   # Number of forecasts
   forecasts = numericInput(
     ns("nforecasts"),
-    label = label_list_im[["num_forecasts_week"]]$l, # FIX NEEDED
+    label = label_list_im[["num_forecasts_week"]]$l,
     value = 3
   )
   
@@ -305,7 +305,7 @@ inla_model_server <- function(id, dc, im, results) {
         lv = update_n_forecast_widget(dc$time_res)
         updateNumericInput(
           inputId =  "nforecasts", 
-          label = label_list_im[[lv[["label"]]]]$l, # FIX NEEDED
+          label = labeltt(label_list_im[[lv[["label"]]]]),
           value = lv[["value"]]
         )
       })

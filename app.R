@@ -4,6 +4,7 @@
 
 # source files --------------------------------------------------------------
 source("src/00_setup.R")
+
 options(shiny.maxRequestSize = 100*1024^2) 
 ui <- page(
   # get theme from the setup file
@@ -25,6 +26,7 @@ ui <- page(
       }
     "))
   ),
+  # tags$head(tags$script(js_hide_all_tooltips)),
   useShinyjs(),
   page_navbar(
     title = "Bayesian Spatiotemporal Modeling",
@@ -40,12 +42,15 @@ ui <- page(
     documentation_ui("documentation"),
     # Dark Mode Toggle
     nav_item(input_dark_mode(mode="dark")),
+    nav_item(tooltip_ui("tooltip")),
     # Options
     navbar_options = list(class = "b-primary", theme = "dark", underline=FALSE)
   )
 )
 
 server <- function(input, output, session) {
+  
+  tooltip_server("tooltip")
   
   # ----------------------------------------------------------------------
   # Global Reactives for Profile
