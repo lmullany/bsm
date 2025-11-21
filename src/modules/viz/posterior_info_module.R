@@ -25,6 +25,13 @@ viz_posterior_ui <- function(id) {
       card(
         card_body(
           style = "overflow: visible;",
+          tags$style(HTML(sprintf("
+            #%s .dataTables_scrollBody thead,
+            #%s .dataTables_scrollBody thead * {
+              visibility: hidden !important;
+              pointer-events: none !important;
+            }
+          ", ns("posterior_wrap"), ns("posterior_wrap")))),
           div(
             id = ns("posterior_wrap"),
             style = "width: 100%;",
