@@ -357,12 +357,12 @@ inla_model_server <- function(id, dc, im, results) {
         # Note that we set it here, but we really should set to NULL
         # and pass that NULL to the fit_model function if not needed
         if(input$formula_type == "default") {
-          adj_mat_raw <- read_mobility_adj_mat()
+          adj_mat_raw <- dc$physical_adj
         } else if (input$spatial_component_chkbx == TRUE) {
           if(input$sco_adjacency_type == "mobility_adj_mat") {
-            adj_mat_raw <- read_mobility_adj_mat()
+            adj_mat_raw <- dc$mobility_adj
           } else {
-            adj_mat_raw <- read_physical_adj_mat()
+            adj_mat_raw <- dc$physical_adj
           }
         } else {
           adj_mat_raw <- NULL
