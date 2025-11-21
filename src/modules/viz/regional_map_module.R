@@ -1,6 +1,23 @@
 # © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
+
+
+label_list_rm <- list(
+  stat_radio = list( 
+    l = "Statistic",
+    m = "Select the statistic to display on the choropleth map. Hover to see the specific value."
+  ),
+  scale_radio = list(
+    l = "Scale",
+    m = "Select the desired scale for the displayed results. Select count to display the number of visits and proportion to display the proportion of visits with the requested diagnosis out of all visits. Note that forecasts are only available when the scale matches the natural scale of the model, i.e. count for poisson and negative binomial and proportion for binomial and beta binomial."
+  ),
+  date_sparkline =  list(
+    l = "Date Selection",
+    m = "The slider can be used to select the date to display on the map. The sparkline indicates the overall level across all selected regions at each date."
+  )
+)
+
 viz_regional_map_ui <- function(id) {
   ns <- NS(id)
   
@@ -15,7 +32,7 @@ viz_regional_map_ui <- function(id) {
   
   metric_buttons <- radioButtons(
     inputId = ns("map_metric"),
-    label="Metric",
+    label=labeltt(label_list_rm[["stat_radio"]]),
     choices = c(
       "Mean" = "mean", 
       "Median" = "median",
@@ -28,7 +45,7 @@ viz_regional_map_ui <- function(id) {
   
   metric_count_type <- radioButtons(
     inputId = ns("metric_counts"),
-    label="Counts/Proportions",
+    label=labeltt(label_list_rm[["scale_radio"]]),
     choices = c("Counts", "Proportion"),
     selected = "Counts",
     inline = TRUE
@@ -44,7 +61,7 @@ viz_regional_map_ui <- function(id) {
         id=ns("region_map_sidebar"),
         width = SIDEBAR_WIDTH*2,
         div(
-          "Date Selection",
+          labeltt(label_list_rm[["date_sparkline"]]),
           style = "font-weight: 600; font-size: 0.95rem; margin-bottom: 6px;"
         ),
         spark_card, 
@@ -62,8 +79,8 @@ viz_regional_map_ui <- function(id) {
           "#%s .irs-min, #%s .irs-max { display: none !important; }",
           ns("map_date_slider"), ns("map_date_slider")))),
         
-        metric_buttons,
         metric_count_type,
+        metric_buttons,
         conditionalPanel(
           condition = "input.map_metric == 'quantile'",
           sliderInput(

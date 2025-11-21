@@ -1,6 +1,20 @@
 # © 2025 The Johns Hopkins University Applied Physics Laboratory LLC
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
+label_list_pi <- list(
+  scale_radio = list(
+    l = "Scale",
+    m = "Select the desired scale for the displayed results. Select count to display the number of visits and proportion to display the proportion of visits with the requested diagnosis out of all visits. Note that forecasts are only available when the scale matches the natural scale of the model, i.e. count for poisson and negative binomial and proportion for binomial and beta binomial."
+  ),
+  quantile_slider = list(
+    l = "Quantile to add", 
+    m = "Drag the slider to select additional quantiles to include in the results. Then click add quantile."
+  )
+)
+button_list_pi <-list(
+  add_quantile = "After selecting a quantile with the slider, add an available column with the corresponding posterior quantile for display in the table.",
+  csv_button = "Download displayed data to a local csv file."
+)
 viz_posterior_ui <- function(id) {
   ns <- NS(id)
   
@@ -12,12 +26,24 @@ viz_posterior_ui <- function(id) {
         width = SIDEBAR_WIDTH*2,
         open = "open",
         title = "Options",
-        radioButtons(ns("post_scale"), "Scale",
+        radioButtons(ns("post_scale"), 
+                     labeltt(label_list_pi[["scale_radio"]]),
                      choices = c("Count", "Proportion"),
                      selected = "Proportion",
                      inline = TRUE),
-        sliderInput(ns("post_q_slider"), "Quantile to add", min=0, max=1, step=0.01, value=0.50),
-        fluidRow(column(6, actionButton(ns("post_add_q"), "Add quantile", class = "btn-primary btn-sm"))),
+        sliderInput(ns("post_q_slider"), 
+                    labeltt(label_list_pi[["quantile_slider"]]), 
+                    min=0, max=1, step=0.01, value=0.50),
+        fluidRow(column(6, 
+                        add_button_hover(
+                          button_list_pi[["add_quantile"]],
+                          actionButton(
+                            ns("post_add_q"), 
+                            "Add quantile", 
+                            class = "btn-primary btn-sm")
+                          )
+                        )
+                 ),
         tags$hr(),
         uiOutput(ns("post_col_picker")),
         numericInput(ns("dt_digits"), label = "Table decimals", value=2, min=0, max=10, step=1)
