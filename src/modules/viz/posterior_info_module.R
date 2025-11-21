@@ -51,6 +51,13 @@ viz_posterior_ui <- function(id) {
       card(
         card_body(
           style = "overflow: visible;",
+          tags$style(HTML(sprintf("
+            #%s .dataTables_scrollBody thead,
+            #%s .dataTables_scrollBody thead * {
+              visibility: hidden !important;
+              pointer-events: none !important;
+            }
+          ", ns("posterior_wrap"), ns("posterior_wrap")))),
           div(
             id = ns("posterior_wrap"),
             style = "width: 100%;",
@@ -144,6 +151,8 @@ viz_posterior_server <- function(id, im, results) {
           by = c("countyfips","date"),
           all.x = TRUE, sort = FALSE
         )
+        out$countyfips <- as.factor(out$countyfips)
+        out$region <- as.factor(out$region)
         nm <- names(out)
         has_xy <- grepl("\\.(x|y)$", nm)
         if (any(has_xy)) {
