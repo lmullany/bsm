@@ -1,7 +1,7 @@
 tooltip_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    actionButton(ns("toggle_tooltips"), "Hide Tooltips")
+    actionButton(ns("toggle_tooltips"), "Hide Tooltips", class = BUTTON_CLASS)
   )
 }
 

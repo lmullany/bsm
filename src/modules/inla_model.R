@@ -40,7 +40,6 @@ button_list_im <-list(
 
 inla_model_ui <- function(id) {
   
-  btn_class <- "btn-primary btn-sm"
   ns <- NS(id)
   
   ########################
@@ -257,10 +256,13 @@ inla_model_ui <- function(id) {
         forecasts, 
         family,
         formula_panel,
-        add_button_hover(title = button_list_im[["run_model"]],
-                         input_task_button(ns("estimate_model_btn"), "Run Model")),
-        add_button_hover(title = button_list_im[["load_saved_model"]],
-                         input_task_button(ns("load_model_btn"), "Load Saved Model")),
+        layout_columns(
+          add_button_hover(title = button_list_im[["run_model"]],
+                           input_task_button(ns("estimate_model_btn"), "Run Model")),
+          add_button_hover(title = button_list_im[["load_saved_model"]],
+                           input_task_button(ns("load_model_btn"), "Load Saved Model")),
+          widths = c(6,6)
+        ),
         uiOutput(ns("zipfile_model_ui"))
       ),
       navset_bar(

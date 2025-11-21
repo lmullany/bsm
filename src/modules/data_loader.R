@@ -43,7 +43,6 @@ button_list_dl <-list(
 
 data_loader_ui <- function(id) {
 
-  btn_class <- "btn-primary btn-sm"
   ns <- NS(id)
   
   ########################
@@ -103,10 +102,13 @@ data_loader_ui <- function(id) {
         drange,
         time_res,
         synd_panel,
-        add_button_hover(title = button_list_dl[["run_query"]],
+        layout_columns(
+          add_button_hover(title = button_list_dl[["run_query"]],
             input_task_button(ns("load_data_btn"), "Query ESSENCE")),
-        add_button_hover(title = button_list_dl[["load_query"]],
+          add_button_hover(title = button_list_dl[["load_query"]],
             input_task_button(ns("load_saved_query"), "Load Saved Query")),
+          width = c(6,6)
+        ),
         uiOutput(ns("zipfile_ui"))
       ),
       card(
@@ -232,14 +234,16 @@ data_loader_server <- function(id, dc, results, profile) {
       output$download_ui <- renderUI({
         req(!is.null(data()))
         tagList(
-          add_button_hover(title = button_list_dl[["download_csv"]],
-              downloadButton(ns("download_data"),
-                         "Download to CSV",
-                         class = "btn-primary")),
-          add_button_hover(title = button_list_dl[["save_query"]], 
-              downloadButton(ns("save_query"),
-                         "Save Query",
-                         class = "btn-primary"))
+          layout_column_wrap(
+            add_button_hover(title = button_list_dl[["download_csv"]],
+                downloadButton(ns("download_data"),
+                           "Download to CSV",
+                           class = "btn-primary")),
+            add_button_hover(title = button_list_dl[["save_query"]], 
+                downloadButton(ns("save_query"),
+                           "Save Query",
+                           class = "btn-primary"))
+          )
         )
       })
       

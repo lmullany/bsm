@@ -3,7 +3,7 @@
 # contract no. 75D30124C19958
 
 viz_ui <- function(id) {
-  btn_class <- "btn-primary btn-sm"
+
   ns <- NS(id)
   
   nav_panel(

@@ -64,7 +64,12 @@ rm(list=c("f", "grp"))
 #####################
 ## constants
 #####################
-BOOT_PRESET = "pulse"
-THEME = bs_theme(version = 5, preset = BOOT_PRESET)
-SIDEBAR_WIDTH = 300
-DEFAULT_STATES = c("MD")
+BOOT_PRESET <- "pulse"
+THEME <-  bs_theme(version = 5, preset = BOOT_PRESET,
+                   "btn-padding-y" = ".25rem",
+                   "btn-padding-x" = ".5rem",
+                   "btn-font-size" = ".875rem")
+SIDEBAR_WIDTH <- 300
+DEFAULT_STATES <-  c("MD")
+BUTTON_CLASS <- "btn-primary btn-sm"
+
