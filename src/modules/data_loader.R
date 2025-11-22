@@ -61,12 +61,23 @@ data_loader_ui <- function(id) {
   )
   
   # state selection
-  states = selectizeInput(
-    ns("states"),
-    choices=sort(c("DC",state.abb)),
-    multiple=T, # allow multiple,
-    selected = DEFAULT_STATES,
-    label=labeltt(label_list_dl[["state"]])
+  states = tagList(
+    selectizeInput(
+      ns("states"),
+      choices=c("ALL States", sort(c("DC",state.abb))),
+      multiple=T, # allow multiple,
+      selected = character(0),
+      options  = list(
+        placeholder = "Type to search states..."
+      ),
+      label=labeltt(label_list_dl[["state"]])
+    ),
+    conditionalPanel(
+      condition = "input.states.length > 0",
+      input_task_button(ns("county_selector_button"), "Customize Counties"),
+      ns = ns
+    ),
+    
   )
   
   # date range
