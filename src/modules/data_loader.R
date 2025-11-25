@@ -333,8 +333,10 @@ create_syndrome_inputs <- function(ns, cats) {
 # Helper function to validate and return message
 validate_county_selection <- function(states, ctys, mat) {
   msg = character(0)
-  if(is.null(states) || length(states)==0 || is.null(ctys) || length(ctys)<=1) {
-    msg = "Please select states/counties"
+  if(is.null(ctys) || length(ctys)<=1) {
+    if(!is.null(states)) {
+      msg = "Select counties manually"
+    } else msg = "Please select states/counties"
   } else {
     n = length(ctys)
     if(n>300) {
