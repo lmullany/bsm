@@ -44,16 +44,32 @@ wk_to_date <- function(df, date_col) {
   df[, .SD, .SDcols = c("_x", ndf[-1])] |> setnames(new=ndf)
 }
 
+## LOAD ADJACENCY MATRICES
+load_adj_matrix <- function(path) {
+  if(tools::file_ext(path) == "csv") {
+    return(read_adj_matrix_from_csv(path))
+  }
+  else if(tools::file_ext(path) == "rds") {
+    return(readRDS(path))
+  }
+  else {
+    cli::cli_abort("Only `rds` or `csv` allowed")
+  }
+}
 
-
-read_mobility_adj_mat <- function(path = "data/mobility_adj_mat.csv") {
+read_adj_matrix_from_csv <- function(path) {
   am = data.table::fread(path, drop = 1, header=TRUE)
   as.matrix(am, rownames=names(am))
 }
-read_physical_adj_mat <- function(path = "data/us_county_adjacency.csv") {
-  am = data.table::fread(path, drop = 1, header=TRUE)
-  as.matrix(am, rownames=names(am))
-}
+
+# read_mobility_adj_mat <- function(path = "data/mobility_adj_mat.csv") {
+#   am = data.table::fread(path, drop = 1, header=TRUE)
+#   as.matrix(am, rownames=names(am))
+# }
+# read_physical_adj_mat <- function(path = "data/us_county_adjacency.csv") {
+#   am = data.table::fread(path, drop = 1, header=TRUE)
+#   as.matrix(am, rownames=names(am))
+# }
 
 
 ############################################

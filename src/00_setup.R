@@ -74,3 +74,9 @@ SIDEBAR_WIDTH <- 300
 DEFAULT_STATES <-  c("MD")
 BUTTON_CLASS <- "btn-primary btn-sm"
 
+####################
+## Adjacency matrix defaults
+####################
+PHYS_ADJ_MATRIX <- "data/physical_adj_mat_rnssp.rds"
+MOB_ADJ_MATRIX <-  "data/mobility_adj_mat.rds"
+
