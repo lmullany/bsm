@@ -16,7 +16,8 @@ state_selector_ui <- function(id) {
       selected = DEFAULT_STATES,
       options  = list(
         placeholder = "Type to search states...",
-        closeAfterSelect = TRUE
+        closeAfterSelect = TRUE, 
+        plugins = list("remove_button", "clear_button")
       ),
       label=labeltt(label_list_ld[["states"]])
     ),
@@ -34,10 +35,6 @@ state_selector_server <- function(id, dc) {
     function(input, output, session) {
       
       ns = session$ns
-      
-      # Initiate the adjacency_matrix object in the dc reactives
-      dc$physical_adj <- read_physical_adj_mat()
-      dc$mobility_adj <- read_mobility_adj_mat()
       
       # Get the us county geometries and reduce to those in 
       # the dc physical adjacency matrix
@@ -63,6 +60,7 @@ state_selector_server <- function(id, dc) {
       # When the states selected change, the selected counties reactive must be
       # updated
       observe({
+        
         # If "ALL" states are selected or more than 3, we shouldn't start with selected
         if(!"ALL States" %in% input$states & length(input$states)<=3) {
           k = tibble(counties_sf()) |>
@@ -70,6 +68,8 @@ state_selector_server <- function(id, dc) {
             select(NAME, GEOID)
 
           grv$selected_counties <- setNames(k$GEOID, k$NAME)
+        } else {
+          grv$selected_counties <- character(0)
         }
       }) |> bindEvent(counties_sf(), input$states)
       

@@ -9,21 +9,21 @@ options(shiny.maxRequestSize = 100*1024^2)
 ui <- page(
   # get theme from the setup file
   theme = THEME,
-  tags$head(tags$style(HTML("
+  tags$head(
+  tags$style(HTML("
         .shiny-output-error-validation {
           color: red;
         }
-        .card {border: 0;}
-      "))),
-  tags$head(
-    tags$style(HTML("
-      [id$='_progress'] {
-        white-space: normal !important;
-        height: auto !important;
-        min-height: 2.2em !important;
-        overflow: visible !important;
-        margin-top: 0.5rem;
-      }
+        .card {
+          border: 0;
+        }
+        [id$='_progress'] {
+          white-space: normal !important;
+          height: auto !important;
+          min-height: 2.2em !important;
+          overflow: visible !important;
+          margin-top: 0.5rem;
+        }
     "))
   ),
   useShinyjs(),

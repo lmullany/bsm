@@ -58,6 +58,8 @@ data_loader_ui <- function(id) {
   
   # state selection - use module - call ui
   states = state_selector_ui(ns("state_selector"))
+  # small ui to render with warnings/invalid messages
+  county_validation <- uiOutput(ns("county_validation"))
   
   # date range
   offset = (as.POSIXlt(Sys.Date())$wday -6)%%7
@@ -89,6 +91,7 @@ data_loader_ui <- function(id) {
         width = SIDEBAR_WIDTH*2,
         geo, 
         states,
+        county_validation,
         drange,
         time_res,
         synd_panel,
@@ -127,9 +130,20 @@ data_loader_server <- function(id, dc, results, profile) {
     function(input, output, session) {
       ns <- session$ns
       data <- reactiveVal(NULL)
-
+      
+      # Initiate the adjacency_matrix object in the dc reactives
+      dc$physical_adj <- read_physical_adj_mat()
+      dc$mobility_adj <- read_mobility_adj_mat()
+      
       # Call the state selector server
       state_selector_server("state_selector", dc)
+      
+      # Render the validation on the selected counties
+      output$county_validation <- renderUI({
+        validate_county_selection(
+          dc$states, dc$selected_counties, dc$physical_adj
+        )
+      })
       
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
@@ -155,6 +169,13 @@ data_loader_server <- function(id, dc, results, profile) {
       })
       
       query_data <- reactive({
+      
+        # stop if no counties have been selected
+        req(!is.null(dc$selected_counties), length(dc$selected_counties) > 0)
+        
+        # stop if no states have been selected
+        req(!is.null(dc$states), length(dc$states) > 0)
+        
         
         # --------------------------
         # Syndromic categories
@@ -309,6 +330,36 @@ create_syndrome_inputs <- function(ns, cats) {
   )
 }
 
-
+# Helper function to validate and return message
+validate_county_selection <- function(states, ctys, mat) {
+  msg = character(0)
+  if(is.null(states) || length(states)==0 || is.null(ctys) || length(ctys)<=1) {
+    msg = "Please select states/counties"
+  } else {
+    n = length(ctys)
+    if(n>300) {
+      msg = c(msg, "Warning: more than 300 counties selected")
+    }
+    if(!selection_is_connected(ctys, mat)) {
+      msg = c(msg, "Warning: selected counties are not connected")
+    }
+  }
+  
+  if(length(msg)>0) cl = "shiny-output-error-validation"
+  else {
+    msg = paste0(length(ctys), " connected counties selected")
+    cl = "p-2 text-primary"
+  }
+  
+  return(
+    div(
+      class = cl,
+      htmltools::HTML(
+        paste(msg, collapse = "<br>")
+      )
+    )
+  )
+  
+}
 
 
