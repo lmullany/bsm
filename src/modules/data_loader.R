@@ -176,7 +176,8 @@ data_loader_server <- function(id, dc, results, profile) {
           ed=input$drange[2],
           time_res=input$time_res,
           geo_res=input$geo_res,
-          state_filter=input$states,
+          state_filter=dc$states,
+          county_filter=dc$selected_counties,
           med_group_sys = med_group_sys,
           categ_info = categ_info, 
           profile = profile()

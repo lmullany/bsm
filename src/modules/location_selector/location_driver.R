@@ -13,7 +13,7 @@ state_selector_ui <- function(id) {
       ns("states"),
       choices=c("ALL States", sort(c("DC",state.abb))),
       multiple=T, # allow multiple,
-      selected = character(0),
+      selected = DEFAULT_STATES,
       options  = list(
         placeholder = "Type to search states...",
         closeAfterSelect = TRUE
@@ -114,65 +114,12 @@ state_selector_server <- function(id, dc) {
         bindEvent(grv$modal_done)
       
       
-      # update the global reactive with selected counties
-      observe(dc$selected_counties <-grv$selected_counties) 
+      # update the global reactive with selected counties(s) and state(s)
+      observe(dc$selected_counties <-grv$selected_counties)
+      observe(dc$states <- input$states)
       
 
     }
   )
 }
 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-#   output$summary <- renderUI({
-#     # obtain the list of counties returned from the modal as selected
-#     sel <- names(grv$selected_counties)
-#     n = length(sel)
-# 
-#     if (n==0) {
-#       # instead of sending this message, we should probably just
-#       # select them all
-#       HTML("<em>No counties selected (Customize Counties if many or all states are selected).</em>")
-#     } else {
-# 
-#       # Warnings:
-#       warnings = ""
-#       if(n>300) {
-#         warnings = paste0(
-#           warnings,
-#           "<p style='color:red';><b>Warning: more than 300 counties selected.</b></p>"
-#         )
-#       }
-#       if(!selection_is_connected(selected = unname(grv$selected_counties), adj_mat)) {
-#         warnings = paste0(
-#           warnings,
-#           "<p style='color:red';><b>Warning: Selection is not connected.</b></p>"
-#         )
-#       }
-# 
-# 
-# 
-# 
-#       if(n<30) {
-#         msg <- paste0(
-#           "<b>Selected counties (", n, "):</b>",
-#           paste(sel, collapse = ", ")
-#         )
-#       } else {
-#         msg <- paste0(
-#           "<b>Selected counties (Showing first 30 of ", n, "):</b><br>",
-#           paste(sel[1:30], collapse = ", ")
-#         )
-#       }
-#       return(HTML(paste0(warnings, msg)))
-# 
-#     }
-#   })
-# 
-# }
-# 
