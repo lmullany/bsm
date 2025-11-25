@@ -10,12 +10,31 @@ label_list_rm <- list(
   ),
   scale_radio = list(
     l = "Scale",
-    m = "Select the desired scale for the displayed results. Select count to display the number of visits and proportion to display the proportion of visits with the requested diagnosis out of all visits. Note that forecasts are only available when the scale matches the natural scale of the model, i.e. count for poisson and negative binomial and proportion for binomial and beta binomial."
+    m = paste(
+      "Select the desired scale for the displayed results. Select count to display 
+      the number of visits and proportion to display the proportion of visits with
+      the requested diagnosis out of all visits. Note that forecasts are only 
+      available when the scale matches the natural scale of the model, i.e. count
+      for poisson and negative binomial and proportion for binomial and beta
+      binomial.
+      ", sep="")
   ),
   date_sparkline =  list(
     l = "Date Selection",
-    m = "The slider can be used to select the date to display on the map. The sparkline indicates the overall level across all selected regions at each date."
+    m = paste("
+    The slider can be used to select the date to display on the map. The 
+    sparkline indicates the overall level across all selected regions at each 
+    date.",sep="")
+  ),
+  exceedance_thresh_n =  list(
+    l = "Exceedance Threshold (N)",
+    m = "Threshold Count for which the probability of exceeding should be estimated"
+  ),
+  exceedance_thresh_p =  list(
+    l = "Exceedance Threshold (p)",
+    m = "Threshold proportion for which the probability of exceeding should be estimated"
   )
+  
 )
 
 viz_regional_map_ui <- function(id) {
@@ -36,8 +55,8 @@ viz_regional_map_ui <- function(id) {
     choices = c(
       "Mean" = "mean", 
       "Median" = "median",
-      "Quantile" = "quantile"
-      #"Exceedance" = "exceedance"
+      "Quantile" = "quantile",
+      "Exceedance" = "exceedance"
     ),
     inline = FALSE,
     selected = "mean"
@@ -88,11 +107,11 @@ viz_regional_map_ui <- function(id) {
           ),
           ns = ns
         ),
-        # conditionalPanel(
-        #   condition = "input.map_metric == 'exceedance'",
-        #   uiOutput(outputId = ns("metric_exceedance_thresh_ui")),
-        #   ns = ns
-        # ),
+        conditionalPanel(
+          condition = "input.map_metric == 'exceedance'",
+          uiOutput(outputId = ns("metric_exceedance_thresh_ui")),
+          ns = ns
+        ),
         position = "left"
       )
     )
@@ -103,19 +122,46 @@ viz_regional_map_server <- function(id, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
+      
+      ns = session$ns
+      
       # Render the exceedance threshold ui widget
       # Note that when metrics is count, then this should be numericInput
       # but when metrics is Proportion, then this should a slider from 0 to 1
       output$metric_exceedance_thresh_ui <- renderUI({
         
+        # get default values for the count threshold slider, and the p
+        tcol = im$data_cls[["numerator_column"]]
+        dcol = im$data_cls[["denominator_column"]]
+        
+        # set the target for the count threshold numeric Input to the rounded median
+        t_count = round(median(im$data_cls$data[[tcol]], na.rm=TRUE),0)
+        # set the target for the p threshold slider to the median
+        d = im$data_cls$data[!is.na(y) & y>0 & !is.na(x), env=list(x = tcol, y=dcol)]
+        t_prop = round(median(d[, x/y, env=list(x=tcol, y=dcol)], na.rm=TRUE),3)
+        
+        
         if(input$metric_counts == "Counts") {
-          widget <- numericInput(ns("metric_exceedance"), label = "Exceedance Threshold", value=10)
+          widget <- numericInput(
+            ns("metric_exceedance"),
+            label = labeltt(label_list_rm[["exceedance_thresh_n"]]),
+            value=t_count
+          )
         } else {
-          widget <- sliderInput(ns("metric_exceedance"), label = "Exceedance Threshold", min = 0,
-                                max=1, value=0.5,step = .001)
+          widget <- sliderInput(
+            ns("metric_exceedance"),
+            label = labeltt(label_list_rm[["exceedance_thresh_p"]]),
+            min = 0,max=min(c(1,10*t_prop)),
+            value=t_prop,
+            step = .001
+          )
         }
         return(widget)
       }) |> bindEvent(input$metric_counts,ignoreNULL = F)
+      
+      exceedance_threshold <- reactive(
+        as.numeric(input$metric_exceedance)
+      )
       
       value_colname <- reactive({
         if (identical(input$metric_counts, "Counts")) {
@@ -211,12 +257,16 @@ viz_regional_map_server <- function(id, im, results) {
         
         req(im$model)
         
+        
         params <- list(
           metric = input$map_metric,
           use_count = input$metric_counts == "Counts",
           quantile = input$metric_quantile,
-          threshold = 10 # place holder as constant exceedance threshold
+          threshold = exceedance_threshold()
         )
+        if(isolate(input$map_metric) == "exceedance") {
+          req(exceedance_threshold())
+        }
         
         md <- get_map_data(
           model = im$model,
