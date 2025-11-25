@@ -79,7 +79,7 @@ viz_time_series_server <- function(id, im, results) {
     function(input, output, session) {
       # update the label for credible interval when count/proportion changes
       observe({
-        updateSelectInput(
+        updateRadioButtons(
           inputId = "ts_quantile",
           label=labeltt(label_list_ts[[paste0("ci_",input$ts_use_count)]]),
         )
