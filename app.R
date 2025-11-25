@@ -26,7 +26,6 @@ ui <- page(
       }
     "))
   ),
-  # tags$head(tags$script(js_hide_all_tooltips)),
   useShinyjs(),
   page_navbar(
     title = "Bayesian Spatiotemporal Modeling",
