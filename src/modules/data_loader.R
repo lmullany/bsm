@@ -9,10 +9,6 @@ label_list_dl <- list(
     l = "Geographic Resolution",
     m = "Select geographic resolution for ESSENCE query used to retrieve training data."
   ),
-  state = list(
-    l = "State(s)",
-    m = "Select a list of states to include in query. All subdivisions (based on geographic resolution) for the selected states will be added to the query."
-  ),
   date_range = list(
     l = "Date Range",
     m = "Select a start and end date (inclusive) for the ESSENCE query. For weekly queries, start dates should fall on a Sunday and end dates should fall on a Saturday to avoid partial weeks."
@@ -60,25 +56,8 @@ data_loader_ui <- function(id) {
     label=labeltt(label_list_dl[["geo_res"]])
   )
   
-  # state selection
-  states = tagList(
-    selectizeInput(
-      ns("states"),
-      choices=c("ALL States", sort(c("DC",state.abb))),
-      multiple=T, # allow multiple,
-      selected = character(0),
-      options  = list(
-        placeholder = "Type to search states..."
-      ),
-      label=labeltt(label_list_dl[["state"]])
-    ),
-    conditionalPanel(
-      condition = "input.states.length > 0",
-      input_task_button(ns("county_selector_button"), "Customize Counties"),
-      ns = ns
-    ),
-    
-  )
+  # state selection - use module - call ui
+  states = state_selector_ui(ns("state_selector"))
   
   # date range
   offset = (as.POSIXlt(Sys.Date())$wday -6)%%7
@@ -149,10 +128,8 @@ data_loader_server <- function(id, dc, results, profile) {
       ns <- session$ns
       data <- reactiveVal(NULL)
 
-      
-      # Initiate the adjacency_matrix object in the dc reactives
-      dc$physical_adj <- read_physical_adj_mat()
-      dc$mobility_adj <- read_mobility_adj_mat()
+      # Call the state selector server
+      state_selector_server("state_selector", dc)
       
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
