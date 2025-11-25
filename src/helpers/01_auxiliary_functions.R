@@ -290,11 +290,11 @@ load_saved_object_from_file <- function(path) {
   
 }
   
-# Function to place info circle tool tip on a input label
-# l must be a two element list, first element holds the label
-# 2nd element holds the tool tip message
+# # Function to place info circle tool tip on a input label
+# # l must be a two element list, first element holds the label
+# # 2nd element holds the tool tip message
 labeltt <- function(l, ...) {
-  tooltip(
+  tt <- tooltip(
     trigger = list(
       l[[1]],
       bsicons::bs_icon(name = "info-circle-fill", class = "text-primary")
@@ -302,6 +302,9 @@ labeltt <- function(l, ...) {
     p(l[[2]], style = "text-align:left;"),
     ...
   )
+  
+  # lets convert the result of tooltip function to character/HTML
+  htmltools::HTML(as.character(tt))
 }
 
 add_button_hover <- function(title,button) {
