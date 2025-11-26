@@ -12,6 +12,12 @@ counties_by_state <- function(states) {
   return(df$Region)
 }
 
+counties_from_fips <- function(fips) {
+  county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
+  county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
+  county_to_fips[CJ(countyfips = fips), on="countyfips", Region]
+}
+
 add_fips<-function(data){
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
   county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
@@ -20,6 +26,7 @@ add_fips<-function(data){
   return(data)
 
 }
+
 
  
 # function takes data frame and string date column name
@@ -49,12 +56,6 @@ read_physical_adj_mat <- function(path = "data/us_county_adjacency.csv") {
 }
 
 
-
-
-
-
-
-
 ############################################
 ## ESSENCE QUERY TOOLS
 ############################################
@@ -78,7 +79,7 @@ get_county_codes <- function(){
 
 
 make_table_builder_url<-function(
-    start_date,end_date,time_resolution,geo_resolution,state_filter=NULL, med_group_sys, categ_info=NULL){
+    start_date,end_date,time_resolution,geo_resolution,state_filter=NULL,county_filter=NULL,med_group_sys, categ_info=NULL){
   
   base_url <- "https://essence.syndromicsurveillance.org/nssp_essence/api/tableBuilder/csv?"
   start_date<-format(as.Date(start_date), "%d%b%Y")
@@ -105,12 +106,16 @@ make_table_builder_url<-function(
   if (geo_resolution =="county"){
     url<-paste0(url,"&geographySystem=region")
     url<-paste0(url,"&columnField=geographyregion")
-    if (!is.null(state_filter)){
-      counties<-counties_by_state(state_filter)
-      print(paste0("Filtering to ", paste0(counties,collapse=", ")))
-      
-      url <- paste0(url,paste0("&geography=", gsub(" ","%20",tolower(counties)), collapse = ""))
-    }
+    
+    if (!is.null(state_filter)) {
+      if(is.null(county_filter)) {
+        county_filter <- counties_by_state(state_filter)
+      } else {
+        county_filter <- counties_from_fips(county_filter)
+      }
+      print(paste0("Filtering to ", paste0(county_filter,collapse=", ")))
+      url <- paste0(url,paste0("&geography=", gsub(" ","%20",tolower(county_filter)), collapse = ""))
+    } 
   } else if (geo_resolution =="state"){
     url<-paste0(url,"&geographySystem=state")
     url<-paste0(url,"&columnField=geographystate")
@@ -153,13 +158,14 @@ reshape_and_join_dt <- function(df_single, df_all) {
   ) |> setnames(new= c("date", "region", "target", "overall"))
 }
 
-get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, categ_info, profile){
+get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL,county_filter, med_group_sys, categ_info, profile){
   url_all <- make_table_builder_url(
     start_date=sd,
     end_date=ed,
     time_resolution=time_res,
     geo_resolution=geo_res,
     state_filter=state_filter,
+    county_filter=county_filter,
     med_group_sys = med_group_sys
   )
   url_single <- make_table_builder_url(
@@ -168,6 +174,7 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL, med_group_sys, cate
     time_resolution=time_res,
     geo_resolution=geo_res,
     state_filter=state_filter,
+    county_filter=county_filter,
     med_group_sys = med_group_sys,
     categ_info = categ_info
   )
@@ -283,11 +290,11 @@ load_saved_object_from_file <- function(path) {
   
 }
   
-# Function to place info circle tool tip on a input label
-# l must be a two element list, first element holds the label
-# 2nd element holds the tool tip message
+# # Function to place info circle tool tip on a input label
+# # l must be a two element list, first element holds the label
+# # 2nd element holds the tool tip message
 labeltt <- function(l, ...) {
-  tooltip(
+  tt <- bslib::tooltip(
     trigger = list(
       l[[1]],
       bsicons::bs_icon(name = "info-circle-fill", class = "text-primary")
@@ -295,6 +302,9 @@ labeltt <- function(l, ...) {
     p(l[[2]], style = "text-align:left;"),
     ...
   )
+  
+  # lets convert the result of tooltip function to character/HTML
+  tt #htmltools::HTML(as.character(tt))
 }
 
 add_button_hover <- function(title,button) {

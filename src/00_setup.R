@@ -24,7 +24,8 @@ library(INLA)
 library(gridExtra)
 library(rlang)
 library(plotly)
-
+library(geojsonsf)
+library(igraph)
 library(leaflet)
 library(leaflet.extras)
 

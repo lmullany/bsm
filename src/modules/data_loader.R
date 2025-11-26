@@ -9,10 +9,6 @@ label_list_dl <- list(
     l = "Geographic Resolution",
     m = "Select geographic resolution for ESSENCE query used to retrieve training data."
   ),
-  state = list(
-    l = "State(s)",
-    m = "Select a list of states to include in query. All subdivisions (based on geographic resolution) for the selected states will be added to the query."
-  ),
   date_range = list(
     l = "Date Range",
     m = "Select a start and end date (inclusive) for the ESSENCE query. For weekly queries, start dates should fall on a Sunday and end dates should fall on a Saturday to avoid partial weeks."
@@ -60,14 +56,10 @@ data_loader_ui <- function(id) {
     label=labeltt(label_list_dl[["geo_res"]])
   )
   
-  # state selection
-  states = selectizeInput(
-    ns("states"),
-    choices=sort(c("DC",state.abb)),
-    multiple=T, # allow multiple,
-    selected = DEFAULT_STATES,
-    label=labeltt(label_list_dl[["state"]])
-  )
+  # state selection - use module - call ui
+  states = state_selector_ui(ns("state_selector"))
+  # small ui to render with warnings/invalid messages
+  county_validation <- uiOutput(ns("county_validation"))
   
   # date range
   offset = (as.POSIXlt(Sys.Date())$wday -6)%%7
@@ -83,7 +75,7 @@ data_loader_ui <- function(id) {
   time_res <- selectInput(
     ns("time_res"),
     label=labeltt(label_list_dl[["temporal_res"]]),
-    choices = c("Weekly" = "weekly","Daily" = "daily"),# , "Monthly" = "monthly"),
+    choices = c("Weekly" = "weekly"), #, "Daily" = "daily"), #"Monthly" = "monthly"),
     selected = "weekly"
   )
   
@@ -99,6 +91,7 @@ data_loader_ui <- function(id) {
         width = SIDEBAR_WIDTH*2,
         geo, 
         states,
+        county_validation,
         drange,
         time_res,
         synd_panel,
@@ -138,6 +131,20 @@ data_loader_server <- function(id, dc, results, profile) {
       ns <- session$ns
       data <- reactiveVal(NULL)
       
+      # Initiate the adjacency_matrix object in the dc reactives
+      dc$physical_adj <- read_physical_adj_mat()
+      dc$mobility_adj <- read_mobility_adj_mat()
+      
+      # Call the state selector server
+      state_selector_server("state_selector", dc)
+      
+      # Render the validation on the selected counties
+      output$county_validation <- renderUI({
+        validate_county_selection(
+          dc$states, dc$selected_counties, dc$physical_adj
+        )
+      })
+      
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
       observe(dc$time_res <- input$time_res)
@@ -162,6 +169,13 @@ data_loader_server <- function(id, dc, results, profile) {
       })
       
       query_data <- reactive({
+      
+        # stop if no counties have been selected
+        req(!is.null(dc$selected_counties), length(dc$selected_counties) > 0)
+        
+        # stop if no states have been selected
+        req(!is.null(dc$states), length(dc$states) > 0)
+        
         
         # --------------------------
         # Syndromic categories
@@ -183,7 +197,8 @@ data_loader_server <- function(id, dc, results, profile) {
           ed=input$drange[2],
           time_res=input$time_res,
           geo_res=input$geo_res,
-          state_filter=input$states,
+          state_filter=dc$states,
+          county_filter=dc$selected_counties,
           med_group_sys = med_group_sys,
           categ_info = categ_info, 
           profile = profile()
@@ -315,6 +330,38 @@ create_syndrome_inputs <- function(ns, cats) {
   )
 }
 
-
+# Helper function to validate and return message
+validate_county_selection <- function(states, ctys, mat) {
+  msg = character(0)
+  if(is.null(ctys) || length(ctys)<=1) {
+    if(!is.null(states)) {
+      msg = "Select counties manually"
+    } else msg = "Please select states/counties"
+  } else {
+    n = length(ctys)
+    if(n>300) {
+      msg = c(msg, "Warning: more than 300 counties selected")
+    }
+    if(!selection_is_connected(ctys, mat)) {
+      msg = c(msg, "Warning: selected counties are not connected")
+    }
+  }
+  
+  if(length(msg)>0) cl = "shiny-output-error-validation"
+  else {
+    msg = paste0(length(ctys), " connected counties selected")
+    cl = "p-2 text-primary"
+  }
+  
+  return(
+    div(
+      class = cl,
+      htmltools::HTML(
+        paste(msg, collapse = "<br>")
+      )
+    )
+  )
+  
+}
 
 

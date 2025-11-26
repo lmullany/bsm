@@ -40,13 +40,7 @@ viz_time_series_ui <- function(id) {
                      labeltt(label_list_rm[["scale_radio"]]),
                      choices = c("Count", "Proportion"),selected = "Proportion",
                      inline=TRUE),
-        radioButtons(
-          inputId = ns("ts_quantile"),
-          label = "Quantile",
-          choices = c("99%" = 99, "95%" = 95, "90%" = 90, "50%" = 50, "Other"),
-          selected = 95,
-          inline = TRUE
-        ),
+        uiOutput(ns("ts_quantile_ui")),
         conditionalPanel(
           condition = "input.ts_quantile=='Other'",
           selectInput(
@@ -79,10 +73,20 @@ viz_time_series_server <- function(id, im, results) {
     function(input, output, session) {
       # update the label for credible interval when count/proportion changes
       observe({
-        updateSelectInput(
-          inputId = "ts_quantile",
-          label=labeltt(label_list_ts[[paste0("ci_",input$ts_use_count)]]),
+        # fires when ts_use_count changes
+        lbl <- labeltt(
+          label_list_ts[[paste0("ci_", input$ts_use_count)]]
         )
+        
+        output$ts_quantile_ui <- renderUI({
+          radioButtons(
+            inputId  = session$ns("ts_quantile"),
+            label    = lbl,   # tooltip label here
+            choices  = c("99%" = 99, "95%" = 95, "90%" = 90, "50%" = 50, "Other"),
+            selected = 95,
+            inline   = TRUE
+          )
+        })
       }) |> bindEvent(input$ts_use_count)
       
       # get the numeric version of quantile (either preset or custom)
