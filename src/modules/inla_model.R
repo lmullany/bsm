@@ -47,12 +47,8 @@ inla_model_ui <- function(id) {
   ########################
   
   # Number of forecasts
-  forecasts = numericInput(
-    ns("nforecasts"),
-    label = label_list_im[["num_forecasts_week"]]$l,
-    value = 3
-  )
-  
+  forecasts = uiOutput(ns("nforecasts_ui"))
+
   family = selectInput(
     ns("dist_family"),
     label=labeltt(label_list_im[["distribution"]]),
@@ -303,14 +299,17 @@ inla_model_server <- function(id, dc, im, results) {
       
       # observe the time_res and update the forecasts label and 
       observe({
-        req(dc$time_res)
-        lv = update_n_forecast_widget(dc$time_res)
-        updateNumericInput(
-          inputId =  "nforecasts", 
-          label = labeltt(label_list_im[[lv[["label"]]]]),
-          value = lv[["value"]]
-        )
+          req(dc$time_res)
+          lv = update_n_forecast_widget(dc$time_res)
+          output$nforecasts_ui <- renderUI({
+            numericInput(
+            inputId =  session$ns("nforecasts"), 
+            label = labeltt(label_list_im[[lv[["label"]]]]),
+            value = lv[["value"]]
+            )
+        })
       })
+
     
       formula_r <- reactive(
         get_formula(
