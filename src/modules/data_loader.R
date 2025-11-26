@@ -132,8 +132,8 @@ data_loader_server <- function(id, dc, results, profile) {
       data <- reactiveVal(NULL)
       
       # Initiate the adjacency_matrix object in the dc reactives
-      dc$physical_adj <- read_physical_adj_mat()
-      dc$mobility_adj <- read_mobility_adj_mat()
+      dc$physical_adj <- load_adj_matrix(PHYS_ADJ_MATRIX)
+      dc$mobility_adj <- load_adj_matrix(MOB_ADJ_MATRIX)
       
       # Call the state selector server
       state_selector_server("state_selector", dc)
@@ -363,5 +363,7 @@ validate_county_selection <- function(states, ctys, mat) {
   )
   
 }
+
+
 
 
