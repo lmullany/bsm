@@ -39,8 +39,7 @@ state_selector_server <- function(id, dc) {
       # Get the us county geometries and reduce to those in 
       # the dc physical adjacency matrix
       us_sf <- reactive({
-        create_us_sf() |> 
-          dplyr::filter(GEOID %in% colnames(dc$physical_adj))
+        create_us_sf() |> dplyr::filter(GEOID %in% colnames(dc$physical_adj))
       })
 
       # initialize some reactives
