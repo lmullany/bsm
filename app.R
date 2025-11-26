@@ -48,7 +48,7 @@ ui <- page(
 )
 
 server <- function(input, output, session) {
-  
+
   # ----------------------------------------------------------------------
   # Global Reactives for Profile
   # ----------------------------------------------------------------------
@@ -72,7 +72,18 @@ server <- function(input, output, session) {
   tooltip_server("tooltip")
   documentation_server(id="documentation")
   
+  # ----------------------------------------------------------------------
+  # Other functionality
+  # ----------------------------------------------------------------------
+  
+  # Hide the main viz panel until we have a model
+  observe(toggleState(
+    condition = !is.null(im$model), selector = 'a[data-value="viz-viz_main"]'
+  ))
+  
+  
 }
+
 
 #-----------
 shinyApp(ui, server)

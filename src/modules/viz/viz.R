@@ -8,6 +8,7 @@ viz_ui <- function(id) {
   
   nav_panel(
     title = "Visualization",
+    value = ns("viz_main"),
     navset_bar(
       viz_regional_map_ui(ns("viz_region")),
       viz_time_series_ui(ns("viz_time_series")),
