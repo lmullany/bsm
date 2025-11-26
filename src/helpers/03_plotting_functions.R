@@ -511,7 +511,8 @@ plot_ly_time_series <- function(
     location_display_name = NULL, 
     ci = "95", 
     axis_id=1, 
-    include_observed = TRUE
+    include_observed = TRUE,
+    max_y_val = NULL
 ) {
   
   
@@ -601,6 +602,10 @@ plot_ly_time_series <- function(
   # Layout
   if(is.null(location_display_name)) location_display_name = unique(dt$countyfips)
   
+  # per-panel or global max
+  if(!is.null(max_y_val)) y_max <- max_y_val
+  else y_max <- max(dt$upper * 1.1, na.rm = TRUE)
+
   p <- p |> 
     layout(
       annotations = list(
@@ -622,7 +627,7 @@ plot_ly_time_series <- function(
       yaxis = list(
         title = list(text = y_title, font = list(size = 14)),
         tickfont = list(size=12),
-        range = c(0, max(dt$upper*1.1))
+        range = c(0, y_max)
       ),
       hovermode = "x unified",
       legend = list(orientation='h')
@@ -632,7 +637,11 @@ plot_ly_time_series <- function(
   
 }
 
-time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, ...) {
+time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, fixed_y=FALSE, ci = "95", ...) {
+  
+  global_max <- NULL
+  # if fixed_y is TRUE, we have to calculate the max of the request CI
+  if(fixed_y) global_max <- get_max_y_over_plots(ts_inputs, ts_plot_data, ci)
   
   plots = lapply(seq_along(ts_inputs), \(i) {
     
@@ -647,6 +656,8 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, ..
       show_legend = (i==1), 
       location_display_name = display_name, 
       axis_id = i,
+      ci = ci, 
+      max_y_val = global_max,
       ...
     )
   })
@@ -663,7 +674,39 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, ..
       legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.1),
       margin = list(b = 80)  # extra bottom space for legend
     )
+  
+  return(p)
 }
+
+get_max_y_over_plots <- function(names, plot_data, ci) {
+  
+  
+    global_max <- NULL
+  
+    q <- as.numeric(ci)
+    upper_name <- as.character(0.5 + q / 200)
+    
+    vals <- vapply(
+      names,
+      function(f) {
+        d <- plot_data[[f]]
+        if (is.null(d) || !(upper_name %in% names(d))) {
+          return(NA_real_)
+        }
+        mx <- suppressWarnings(max(d[[upper_name]], na.rm = TRUE))
+        if (!is.finite(mx)) NA_real_ else mx
+      },
+      numeric(1)
+    )
+    
+    gmax <- max(vals, na.rm = TRUE)
+    if (is.finite(gmax) && gmax > 0) {
+      global_max <- gmax * 1.1
+    }
+    
+    global_max
+}
+
   
 
 prepare_plot_ly_ts_data <- function(
