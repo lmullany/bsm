@@ -18,6 +18,10 @@ label_list_ts <- list(
   region_selector =  list(
     l = "Select Region(s)",
     m = "Click or type the name(s) of the regions you would like to plot using the dropdown."
+  ),
+  fix_ts_y_axis = list(
+    l = "Fix y-axis",
+    m = 'Toggle on for a common/fixed axis across all plots (recommended when scale is set to "proportion"); Toggle off for independent y-axes (recommended when scale is set to "count").'
   )
 )
 viz_time_series_ui <- function(id) {
@@ -51,7 +55,6 @@ viz_time_series_ui <- function(id) {
           ),
           ns = ns
         ),
-        #numericInput(ns("ts_quantile"), "Quantile", value=0.95),
         selectizeInput(ns("viz_regions"), 
                        labeltt(label_list_ts[["region_selector"]]),
                        choices=NULL, 
@@ -59,8 +62,13 @@ viz_time_series_ui <- function(id) {
       ),
       card(
         plotlyOutput(ns("ts_plots")),
-        # fix time series toggle not working yet, so hidden
-        card_footer(hidden(input_switch(ns("fix_ts_y_axis"),"Fix y-axis",value=FALSE)))
+        card_footer(
+          input_switch(
+            id = ns("fix_ts_y_axis"),
+            label = labeltt(label_list_ts[["fix_ts_y_axis"]]),
+            value=FALSE
+          )
+        )
       )
     ),
   )
@@ -124,53 +132,25 @@ viz_time_series_server <- function(id, im, results) {
           use_count = input$ts_use_count == "Count", 
           future_steps=im$nforecasts
         )
-      }) |> bindEvent(input$ts_use_count)
+      })
       
-      
-      output$ts_plots <- renderPlotly({
-        validate(need(im$posterior, "Load data and run model first"))
+      ts_plots <- reactive({
+        req(tspd())
         time_series_subplots(
           input$viz_regions,
           ts_plot_data = tspd(),
           display_col = "region",
-          ci = ts_quantile()
-
+          ci = ts_quantile(),
+          fixed_y = input$fix_ts_y_axis
         )
       })
       
-      # proxy to change the yaxes from varied to fixed does not
-      # currently work well
-      # observe({
-      #   
-      #   req(input$viz_regions)
-      #   req(tspd())
-      # 
-      #   n_axes <- length(input$viz_regions)
-      #   axis_names <- if (n_axes == 1) "yaxis" else paste0("yaxis", c("", 2:n_axes))
-      #   
-      #   if(input$fix_ts_y_axis == TRUE) {
-      #     # Extract the y range from the data
-      #     max_y_vals <- unlist(lapply(input$viz_regions, function(name) max(tspd()[[name]]$upper*1.1)))
-      #     fixed_range <- list(range = range(0, max(max_y_vals, na.rm=TRUE)))
-      #   
-      #     # Construct the relayout update: yaxis, yaxis2, yaxis3, ...
-      #     layout_updates <- setNames(
-      #       replicate(n_axes, fixed_range, simplify = FALSE), 
-      #       axis_names
-      #     )
-      #   } else {
-      #     layout_updates <- setNames(
-      #       replicate(n_axes, list(autorange = TRUE), simplify = FALSE),
-      #       axis_names
-      #     )
-      #   }
-      #   
-      #   # Use plotlyProxy to update the layout
-      #   plotlyProxy("ts_plots", session) |> plotlyProxyInvoke("relayout", layout_updates)
-      #   
-      #   
-      # }) |> bindEvent(input$fix_ts_y_axis)
+      output$ts_plots <- renderPlotly({
+        validate(need(im$posterior, "Load data and run model first"))
+        ts_plots()
+      })
       
     }
+    
   )
 }
