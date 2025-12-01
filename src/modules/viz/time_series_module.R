@@ -21,7 +21,7 @@ label_list_ts <- list(
   ),
   fix_ts_y_axis = list(
     l = "Fix y-axis",
-    m = "Toggle on for a common/fixed axis across all plots; Toggle off for independent y-axes"
+    m = 'Toggle on for a common/fixed axis across all plots (recommended when scale is set to "proportion"); Toggle off for independent y-axes (recommended when scale is set to "count").'
   )
 )
 viz_time_series_ui <- function(id) {
