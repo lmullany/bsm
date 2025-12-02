@@ -15,6 +15,12 @@ button_list_pi <-list(
   add_quantile = "After selecting a quantile with the slider, add an available column with the corresponding posterior quantile for display in the table.",
   csv_button = "Download displayed data to a local csv file."
 )
+
+default_visible <- c(
+  "countyfips","date","region","target","overall",
+  "predicted_quantile_0.5","predicted_quantile_0.025","predicted_quantile_0.975"
+)
+
 viz_posterior_ui <- function(id) {
   ns <- NS(id)
   
@@ -73,15 +79,27 @@ viz_posterior_server <- function(id, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
+      posterior_base <- reactive({
+        req(im$posterior)
+        base <- data.table::as.data.table(im$posterior)
+        data.table::setnames(
+          base,
+          old = intersect(c("predicted_median", "predicted_lower", "predicted_upper"), names(base)),
+          new = c("predicted_quantile_0.5",
+                  "predicted_quantile_0.025",
+                  "predicted_quantile_0.975")[seq_len(sum(c("predicted_median", 
+                                                            "predicted_lower", 
+                                                            "predicted_upper") %in% names(base)))]
+        )
+        base[, countyfips := as.character(countyfips)]
+        if (!inherits(base$date, "Date")) base[, date := as.Date(date)]
+        base
+      })
+
       # Download posterior data
       output$download_posterior_btn <- downloadHandler(
-        filename = "posterior_data.csv" , content = \(file) data.table::fwrite(im$posterior, file)
-      )
-      
-      
-      default_visible <- c(
-        "countyfips","date","region","target","overall",
-        "predicted_median","predicted_lower","predicted_upper"
+        filename = "posterior_data.csv",
+        content = function(file) data.table::fwrite(posterior_base(), file)
       )
       
       `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
@@ -100,7 +118,10 @@ viz_posterior_server <- function(id, im, results) {
         q <- round(input$post_q_slider %||% 0.50, 3)
         sel_qs(sort(unique(c(sel_qs(), q))))
         qname <- sub("^\\.", "0.", prettyNum(q, digits = 12, drop0trailing = TRUE))
-        vis   <- visible_cols_rv() %||% default_visible
+        vis   <- visible_cols_rv() %||% c(
+          "countyfips","date","region","target","overall",
+          "predicted_quantile_0.5","predicted_quantile_0.025","predicted_quantile_0.975"
+        )
         if (!qname %in% vis) visible_cols_rv(unique(c(vis, qname)))
       })
       
@@ -137,11 +158,7 @@ viz_posterior_server <- function(id, im, results) {
       }) |> bindEvent(all_probs(), input$post_scale)
       
       posterior_tbl <- reactive({
-        req(im$posterior)
-        base <- data.table::as.data.table(im$posterior)
-        base[, countyfips := as.character(countyfips)]
-        if (!inherits(base$date, "Date")) base[, date := as.Date(date)]
-        
+        base <- posterior_base()
         qdf    <- posterior_qdf()
         q_only <- setdiff(names(qdf), c("countyfips","date"))
         
@@ -152,7 +169,7 @@ viz_posterior_server <- function(id, im, results) {
           all.x = TRUE, sort = FALSE
         )
         out$countyfips <- as.factor(out$countyfips)
-        out$region <- as.factor(out$region)
+        if ("region" %in% names(out)) out$region <- as.factor(out$region)
         nm <- names(out)
         has_xy <- grepl("\\.(x|y)$", nm)
         if (any(has_xy)) {
