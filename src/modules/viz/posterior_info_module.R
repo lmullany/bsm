@@ -13,8 +13,12 @@ label_list_pi <- list(
 )
 button_list_pi <-list(
   add_quantile = "After selecting a quantile with the slider, add an available column with the corresponding posterior quantile for display in the table.",
-  csv_button = "Download displayed data to a local csv file."
+  csv_button = "Download displayed data to a local csv file.",
+  clear_filters = "Reset all data filters."
 )
+
+
+
 viz_posterior_ui <- function(id) {
   ns <- NS(id)
   
@@ -62,8 +66,16 @@ viz_posterior_ui <- function(id) {
             id = ns("posterior_wrap"),
             style = "width: 100%;",
             reactable::reactableOutput(ns("posterior_data"), width = "100%"),
-            add_button_hover(title = button_list_pi[["csv_button"]],
-                             downloadButton(ns("download_posterior_csv"), "Download CSV"))
+            div(style = "display:flex; gap:10px; align-items:center;",
+              add_button_hover(title = button_list_pi[["clear_filters"]],
+                             actionButton(ns("clear_filters"),
+                                            class = "btn-primary btn-sm",
+                                            "Clear Filters")),
+              add_button_hover(title = button_list_pi[["csv_button"]],
+                             downloadButton(ns("download_posterior_csv"),
+                                            class = BUTTON_CLASS,
+                                            "Download CSV")))
+
           )
         )
       )
@@ -80,10 +92,9 @@ viz_posterior_server <- function(id, im, results) {
         filename = "posterior_data.csv" , content = \(file) data.table::fwrite(im$posterior, file)
       )
       
-      
       default_visible <- c(
         "countyfips","date","region","target","overall",
-        "predicted_median","predicted_lower","predicted_upper"
+        "0.5","0.025","0.975"
       )
       
       `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
@@ -98,13 +109,13 @@ viz_posterior_server <- function(id, im, results) {
       visible_cols_rv <- reactiveVal(NULL)
       sel_qs <- reactiveVal(0.50)
       
-      observeEvent(input$post_add_q, {
+      observe({
         q <- round(input$post_q_slider %||% 0.50, 3)
         sel_qs(sort(unique(c(sel_qs(), q))))
         qname <- sub("^\\.", "0.", prettyNum(q, digits = 12, drop0trailing = TRUE))
         vis   <- visible_cols_rv() %||% default_visible
         if (!qname %in% vis) visible_cols_rv(unique(c(vis, qname)))
-      })
+      }) |> bindEvent(input$post_add_q)
       
       all_probs <- reactive({
         qs <- tryCatch(sel_qs(), error = function(e) 0.50)
@@ -230,65 +241,81 @@ viz_posterior_server <- function(id, im, results) {
         )
       })
       
-      observeEvent(list(input$visible_cols, input$hidden_cols), {
+      observe({
         visible_cols_rv(input$visible_cols %||% character())
-      }, ignoreInit = TRUE)
+      })|>bindEvent(list(input$visible_cols, input$hidden_cols), ignoreInit = TRUE)
       
+      # clear filters on button click
+      observe({
+        session$sendCustomMessage(
+          "clear-reactable-filters",
+          list(id = table_id)
+        )
+      }) |> bindEvent(input$clear_filters, ignoreInit = TRUE)
+      
+      
+      # Add posterior data table reactable
+      table_id <- session$ns("posterior_data")
       output$posterior_data <- reactable::renderReactable({
+        
         req(input$dt_digits)
         df <- posterior_tbl(); req(df)
         
+        # filter to default columns only
         keep <- visible_cols_rv() %||% intersect(default_visible, names(df))
         keep <- intersect(keep, names(df))
         if (length(keep)) df <- df[, ..keep]
         
-        
+        # clean up table names
         display_names <- map_table_names_to_display(names(df))
         if (is.null(names(display_names))) {
           names(display_names) <- names(df)
         }
+        
         # Get the columns to round
         cols_to_round <- non_integer_cols_to_round(df)
         # check the digits requested
         digits   <- max(0, min(10, as.integer(input$dt_digits %||% 2)))
         
+        # get column types 
         num_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+        date_cols <- names(df)[sapply(df, inherits, "Date")]
         
-        if (length(num_cols)) {
-          col_min <- vapply(df[, ..num_cols], min, FUN.VALUE = numeric(1), na.rm = TRUE)
-          col_max <- vapply(df[, ..num_cols], max, FUN.VALUE = numeric(1), na.rm = TRUE)
-        } else {
-          col_min <- col_max <- numeric(0)
-        }
-        
-        
+        # define column filters
         col_defs <- lapply(names(df), function(col) {
           label <- display_names[[col]]; if (is.null(label)) label <- col
           
           is_num <- is.numeric(df[[col]])
           is_rounded <- col %in% names(cols_to_round)
+          is_date <- col %in% date_cols
           if (is_num) {
-            min_val <- col_min[[col]]
-            max_val <- col_max[[col]]
-            
             reactable::colDef(
               name        = label,
               align       = "right",
               filterable  = TRUE,
               filterMethod = numeric_range_filter_method,
-              filterInput = numeric_range_filter_input,
+              filterInput = function (values, name){ numeric_range_filter_input(values, name, table_id ) },
               format      = if (is_rounded) reactable::colFormat(digits = digits) else NULL,
+            )
+            
+          } else if (is_date){
+            reactable::colDef(
+              name        = label,
+              filterable  = TRUE,
+              filterMethod = date_filter_method,
+              filterInput = function (values, name){ date_filter_input(values, name, table_id) },
             )
             
           } else {
             reactable::colDef(
               name       = label,
-              filterable = TRUE
+              filterable = TRUE,
+              filterMethod = checkbox_filter_method,
+              filterInput = function (values, name){ checkbox_filter_input(values, name, table_id) },
             )
           }
         })
         names(col_defs) <- names(df)
-        
         
         n <- nrow(df)
         page_size <- min(n, 10L)
@@ -303,26 +330,12 @@ viz_posterior_server <- function(id, im, results) {
           highlight       = TRUE,
           striped         = TRUE,
           bordered        = TRUE,
+          resizable       = TRUE,
           wrap            = FALSE,
           defaultColDef   = reactable::colDef(minWidth = 100),
           fullWidth       = TRUE,
-          elementId = "my-table",
-          theme = reactable::reactableTheme(
-            color = "#212529",              # text color
-            backgroundColor = "#ffffff",    # main background
-            borderColor = "#666666",   # darker outer border
-            tableStyle = list(
-              border = "1px solid #666666"     # explicit outer frame
-            ),
-            
-            headerStyle = list(
-              backgroundColor = "#f8f9fa",
-              borderColor = "#dee2e6",
-              fontWeight = "600"
-            ),
-            stripedColor = "#f5f5f5",       # stripe rows
-            highlightColor = "#e9f5ff"      # row highlight
-          )
+          elementId = table_id ,
+          theme = BS_REACTABLE_THEME
         )
 
         # return

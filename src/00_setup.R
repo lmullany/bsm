@@ -81,3 +81,23 @@ BUTTON_CLASS <- "btn-primary btn-sm"
 PHYS_ADJ_MATRIX <- "data/physical_adj_mat_rnssp.rds"
 MOB_ADJ_MATRIX <-  "data/mobility_adj_mat.rds"
 
+BS_REACTABLE_THEME <- reactable::reactableTheme(
+  color           = "var(--bs-body-color)",
+  backgroundColor = "var(--bs-body-bg)",
+  borderColor = "transparent",
+  stripedColor    = "var(--bs-tertiary-bg)",
+  highlightColor  = "var(--bs-secondary-bg)",
+  tableStyle = list(
+    backgroundColor = "var(--bs-body-bg)"
+  ),
+  headerStyle = list(
+    backgroundColor = "var(--bs-secondary-bg)",
+    color           = "var(--bs-body-color)",
+    borderColor = "transparent"
+  ),
+  rowStyle = list(
+    borderColor = "transparent"
+  )
+)
+
+
