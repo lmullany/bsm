@@ -18,7 +18,6 @@ button_list_pi <-list(
 )
 
 
-
 viz_posterior_ui <- function(id) {
   ns <- NS(id)
   
@@ -317,6 +316,7 @@ viz_posterior_server <- function(id, im, results) {
         })
         names(col_defs) <- names(df)
         
+        # set table height
         n <- nrow(df)
         page_size <- min(n, 10L)
         
@@ -341,6 +341,8 @@ viz_posterior_server <- function(id, im, results) {
         # return
         tbl
       })
+      
+      # define download functionality
       output$download_posterior_csv <- downloadHandler(
         filename = function() {
           # Recreate the JS logic in R

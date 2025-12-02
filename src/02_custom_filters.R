@@ -1,4 +1,9 @@
+# The function below are used to filter columns in reactable tables
+# (see posterior_info_module.R for example.) A javascript method and an R input
+# function is provided for each method.
 
+
+# Numeric range
 numeric_range_filter_method <- reactable::JS("
     function(rows, columnId, filterValue) {
       if (filterValue == null || filterValue === '') {
@@ -81,53 +86,7 @@ numeric_range_filter_input <- function(values, name, element_id) {
   )
 }
 
-# checkbox_filter_method <- reactable::JS("
-#             function(rows, columnId, filterValue) {
-#               if (!filterValue) return rows;
-#               var selected = String(filterValue).split(',').filter(Boolean);
-#               if (!selected.length) return rows;
-# 
-#               return rows.filter(function(row) {
-#                 var value = String(row.values[columnId]);
-#                 return selected.indexOf(value) !== -1;
-#               });
-#             }
-#           ")
-
-
-# checkbox_filter_input <- function(values, name, element_id) {
-#   cats <- sort(unique(values))
-#   tags$div(
-#     style = "display:flex; flex-direction:column; max-height:80px; overflow:auto;",
-#     lapply(cats, function(cat) {
-#       id <- paste0(name, "-", make.names(cat))
-#       tags$label(
-#         style = "font-weight: normal;",
-#         tags$input(
-#           id   = id,
-#           type = "checkbox",
-#           value = cat,
-#           onchange = sprintf(
-#             "
-#                       // Collect all checked values in this filter cell
-#                       var container = this.parentElement.parentElement;
-#                       var checked = Array.from(
-#                         container.querySelectorAll('input[type=checkbox]:checked')
-#                       ).map(function(el) { return el.value; });
-# 
-#                       Reactable.setFilter('%s', '%s', checked.join(','));
-#             ",
-#             element_id,
-#             name
-#           )
-#         ),
-#         paste("", cat)  # small space before label text
-#       )
-#     })
-#   )
-# }
-
-
+# Checkboxes (for text columns)
 checkbox_filter_method <- reactable::JS("
   function(rows, columnId, filterValue) {
     if (!filterValue) return rows;
@@ -228,6 +187,8 @@ checkbox_filter_input <- function(values, name, table_id) {
   )
 }
 
+
+# Date filters
 date_filter_method <- reactable::JS("
     function(rows, columnId, filterValue) {
       if (filterValue == null || filterValue === '') {
