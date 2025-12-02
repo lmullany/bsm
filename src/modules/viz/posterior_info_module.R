@@ -61,7 +61,9 @@ viz_posterior_ui <- function(id) {
           div(
             id = ns("posterior_wrap"),
             style = "width: 100%;",
-            DTOutput(ns("posterior_data"), width = "100%")
+            reactable::reactableOutput(ns("posterior_data"), width = "100%"),
+            add_button_hover(title = button_list_pi[["csv_button"]],
+                             downloadButton(ns("download_posterior_csv"), "Download CSV"))
           )
         )
       )
@@ -232,58 +234,121 @@ viz_posterior_server <- function(id, im, results) {
         visible_cols_rv(input$visible_cols %||% character())
       }, ignoreInit = TRUE)
       
-      output$posterior_data <- renderDT({
+      output$posterior_data <- reactable::renderReactable({
         req(input$dt_digits)
         df <- posterior_tbl(); req(df)
         
         keep <- visible_cols_rv() %||% intersect(default_visible, names(df))
         keep <- intersect(keep, names(df))
         if (length(keep)) df <- df[, ..keep]
-        # CSV export logs _props or _count
-        csv_btn <- list(
-          extend = "csvHtml5",
-          text = "Download CSV",
-          title = NULL,
-          filename = DT::JS(sprintf(
-            "function(){
-                var id = '%s';
-                var v = (window.Shiny && Shiny.getInputValue) ? Shiny.getInputValue(id)
-                        : (document.querySelector('input[name=\"' + id + '\"]:checked') || {}).value;
-                var suffix = (v === 'Count') ? 'count' : 'props';
-                return 'posterior_data_' + suffix;
-              }",
-            session$ns("post_scale")
-          )),
-          exportOptions = list(columns = ":visible")
-        )
-        tbl <- DT::datatable(
-          df,
-          options = list(
-            autoWidth   = TRUE,
-            deferRender = TRUE,
-            scrollX     = TRUE,
-            pageLength  = 5,
-            lengthMenu  = list(c(5,10,15,25,50,100,-1), c("5","10","15","25","50","100","All")),
-            dom = '<"d-flex justify-content-between align-items-center mb-2"Bi><"mb-2"f>t<"mt-2 d-flex justify-content-between align-items-center"lp>',
-            buttons     = list(csv_btn)
-          ),
-          rownames = FALSE, filter = "top", extensions = c("Buttons"),
-          colnames = map_table_names_to_display(names(df)),
-          width = "100%"
-        )
         
+        
+        display_names <- map_table_names_to_display(names(df))
+        if (is.null(names(display_names))) {
+          names(display_names) <- names(df)
+        }
         # Get the columns to round
         cols_to_round <- non_integer_cols_to_round(df)
-        
         # check the digits requested
         digits   <- max(0, min(10, as.integer(input$dt_digits %||% 2)))
         
-        # format the table
-        tbl <- tbl |> DT::formatRound(cols_to_round, digits= digits)
+        num_cols <- names(df)[vapply(df, is.numeric, logical(1))]
         
+        if (length(num_cols)) {
+          col_min <- vapply(df[, ..num_cols], min, FUN.VALUE = numeric(1), na.rm = TRUE)
+          col_max <- vapply(df[, ..num_cols], max, FUN.VALUE = numeric(1), na.rm = TRUE)
+        } else {
+          col_min <- col_max <- numeric(0)
+        }
+        
+        
+        col_defs <- lapply(names(df), function(col) {
+          label <- display_names[[col]]; if (is.null(label)) label <- col
+          
+          is_num <- is.numeric(df[[col]])
+          is_rounded <- col %in% names(cols_to_round)
+          if (is_num) {
+            min_val <- col_min[[col]]
+            max_val <- col_max[[col]]
+            
+            reactable::colDef(
+              name        = label,
+              align       = "right",
+              filterable  = TRUE,
+              filterMethod = numeric_range_filter_method,
+              filterInput = numeric_range_filter_input,
+              format      = if (is_rounded) reactable::colFormat(digits = digits) else NULL,
+            )
+            
+          } else {
+            reactable::colDef(
+              name       = label,
+              filterable = TRUE
+            )
+          }
+        })
+        names(col_defs) <- names(df)
+        
+        
+        n <- nrow(df)
+        page_size <- min(n, 10L)
+        
+        tbl <- reactable::reactable(
+          df,
+          columns = col_defs,
+          defaultPageSize = page_size,
+          pageSizeOptions = c(5, 10, 15, 25, 50, 100),
+          searchable      = TRUE,
+          filterable      = TRUE,
+          highlight       = TRUE,
+          striped         = TRUE,
+          bordered        = TRUE,
+          wrap            = FALSE,
+          defaultColDef   = reactable::colDef(minWidth = 100),
+          fullWidth       = TRUE,
+          elementId = "my-table",
+          theme = reactable::reactableTheme(
+            color = "#212529",              # text color
+            backgroundColor = "#ffffff",    # main background
+            borderColor = "#666666",   # darker outer border
+            tableStyle = list(
+              border = "1px solid #666666"     # explicit outer frame
+            ),
+            
+            headerStyle = list(
+              backgroundColor = "#f8f9fa",
+              borderColor = "#dee2e6",
+              fontWeight = "600"
+            ),
+            stripedColor = "#f5f5f5",       # stripe rows
+            highlightColor = "#e9f5ff"      # row highlight
+          )
+        )
+
         # return
         tbl
       })
+      output$download_posterior_csv <- downloadHandler(
+        filename = function() {
+          # Recreate the JS logic in R
+          v <- input$post_scale %||% "Props"
+          suffix <- if (identical(v, "Count")) "count" else "props"
+          paste0("posterior_data_", suffix, ".csv")
+        },
+        content = function(file) {
+          # Start from the same base data as the table
+          df <- posterior_tbl(); req(df)
+          
+          # Apply the same visible columns logic you use for the table
+          keep <- visible_cols_rv() %||% intersect(default_visible, names(df))
+          keep <- intersect(keep, names(df))
+          if (length(keep)) df <- df[, ..keep]
+          
+          # Now write that to CSV
+          write.csv(df, file, row.names = FALSE)
+        }
+      )
+      
       
 
     }

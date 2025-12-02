@@ -28,6 +28,7 @@ library(geojsonsf)
 library(igraph)
 library(leaflet)
 library(leaflet.extras)
+library(reactable)
 
 library(epistemic)
 
