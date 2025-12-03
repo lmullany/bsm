@@ -118,7 +118,7 @@ viz_regional_map_ui <- function(id) {
   )
 }
 
-viz_regional_map_server <- function(id, im, results) {
+viz_regional_map_server <- function(id, dc, im, results) {
   moduleServer(
     id,
     function(input, output, session) {
@@ -288,13 +288,18 @@ viz_regional_map_server <- function(id, im, results) {
         
         req(map_base_locations(), map_data(), target_date())
         
+        
         pi = polygon_info(map_base_locations(),map_data(),target_date())
         
-        leaflet::leaflet() |>
-          leaflet::addProviderTiles("CartoDB.Positron") |>
-          update_polygons(pi) |>
+        m <- leaflet::leaflet()
+        if(dc$includes_alaska_hawaii == FALSE) {
+          m <- leaflet::addProviderTiles(m, "CartoDB.Positron")
+        }
+        
+        m |> update_polygons(pi) |>
           leaflet.extras::addFullscreenControl() |>
           leaflet.extras::addResetMapButton()
+        
       })
       
       output$region_map <- renderLeaflet({

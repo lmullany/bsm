@@ -26,7 +26,7 @@ viz_server <- function(id, dc, im, results) {
       
       ns = session$ns
       
-      viz_regional_map_server(id = "viz_region", im, results)
+      viz_regional_map_server(id = "viz_region", dc, im, results)
       viz_time_series_server(id = "viz_time_series", im, results)
       viz_posterior_server(id = "viz_posterior", im, results)
       
