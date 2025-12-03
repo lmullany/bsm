@@ -43,9 +43,22 @@ server <- function(input, output, session) {
   # Global Reactives for configuration and results
   # ----------------------------------------------------------------------
   
-  dc = reactiveValues() # data loader configuration reactives
-  im = reactiveValues() # inla model configuration reactives
-  results = reactiveValues()  # results reactives (data, plots, model, etc)
+  # data loader configuration reactives
+  dc = reactiveValues(
+    physical_adj = NULL, mobility_adj = NULL,
+    time_res = NULL, states = NULL, selected_counties = NULL,
+    includes_alaska_hawaii = NULL
+  )
+  
+  # inla model configuration reactives
+  im = reactiveValues(
+    model = NULL, data_cls = NULL, posterior=NULL, nforecasts=NULL
+  ) 
+  
+  # results reactives (data, plotsm etc; add to as needed for future reporting)
+  results = reactiveValues(
+    data = NULL
+  )  
   
   # ----------------------------------------------------------------------
   # Module Server calls
