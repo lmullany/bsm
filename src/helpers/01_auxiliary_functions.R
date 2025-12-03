@@ -259,7 +259,7 @@ load_saved_model_file <- function(path) {
   # return a list of objects (model object, model values)
   return(list(
     "model_object" = archive[["rds"]],
-    "model_vals" = archive[["json"]]
+    "model_values" = archive[["json"]]
   ))
   
 }

@@ -424,6 +424,11 @@ inla_model_server <- function(id, dc, im, results) {
           inputId = "dist_family", selected = saved_model_info[["model_values"]]$dist_family
         )
         
+        # update other key global reactives from saved_model_info[["model_values"]]
+        # add more as needed
+        dc$includes_alaska_hawaii <- saved_model_info[["model_values"]]$includes_alaska_hawaii
+        dc$states <- saved_model_info[["model_values"]]$states
+        
         # update the reactive
         loaded_model(saved_model_info[["model_object"]])
         
@@ -465,7 +470,10 @@ inla_model_server <- function(id, dc, im, results) {
           # describe saved query
           model_vals <- list(
             nforecasts = input$nforecasts,
-            dist_family = input$dist_family
+            dist_family = input$dist_family,
+            # also save key dc components
+            states = dc$states,
+            includes_alaska_hawaii = dc$includes_alaska_hawaii
           )
           json_name <- tempfile(fileext = ".json")
           rds_name  <- tempfile(fileext = ".rds")
@@ -584,8 +592,8 @@ update_n_forecast_widget <- function(res) {
 }
 pre_process_data <- function(data, nforecasts ) {
   data <- add_fips(data)
-  data[, date := as.data.table(date)]
-  data$date <- as.Date(data$date)
+  
+  data$date <- as.IDate(as.Date(data$date))
   data_cls <- epistemic::data_class(
     data = data,
     region_column = "countyfips",
