@@ -57,7 +57,7 @@ state_selector_server <- function(id, dc) {
       }) |> bindEvent(input$states)
       
       # When the states selected change, the selected counties reactive must be
-      # updated
+      # updated and the include ak_hi should change
       observe({
         
         # If "ALL" states are selected or more than 3, we shouldn't start with selected
@@ -70,6 +70,9 @@ state_selector_server <- function(id, dc) {
         } else {
           grv$selected_counties <- character(0)
         }
+
+        grv$includes_alaska_hawaii <- any(c("AK", "HI", "ALL States") %in% input$states)
+
       }) |> bindEvent(counties_sf(), input$states)
       
       # this is a reactive that simply increments each time the "Choose Counties"
@@ -116,7 +119,8 @@ state_selector_server <- function(id, dc) {
       # update the global reactive with selected counties(s) and state(s)
       observe(dc$selected_counties <-grv$selected_counties)
       observe(dc$states <- input$states)
-      
+      observe(dc$includes_alaska_hawaii <- grv$includes_alaska_hawaii)
+
 
     }
   )
