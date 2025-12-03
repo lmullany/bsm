@@ -50,6 +50,15 @@ if(packageVersion("epistemic")<min_version) {
 source("src/01_credentials.R")
 CREDENTIALS = get_profile(title = "Bayesian Spatiotemporal Modeling")
 
+########################################################
+## other key scripts, custom filters and the
+## global ui head tags (style, scripts)
+########################################################
+
+source("src/02_custom_filters.R")
+source("src/03_global_ui_tags.R")
+
+
 #####################
 ## Helpers and modules
 #####################
