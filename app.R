@@ -46,8 +46,8 @@ server <- function(input, output, session) {
   # data loader configuration reactives
   dc = reactiveValues(
     physical_adj = NULL, mobility_adj = NULL,
-    time_res = NULL, states = NULL, selected_counties = NULL,
-    includes_alaska_hawaii = NULL
+    time_res = NULL, geo_res=NULL, drange=NULL, synd_cat=NULL, synd_drop_menu=NULL,
+    states = NULL, selected_counties = NULL, includes_alaska_hawaii = NULL
   )
   
   # inla model configuration reactives

@@ -148,6 +148,10 @@ data_loader_server <- function(id, dc, results, profile) {
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
       observe(dc$time_res <- input$time_res)
+      observe(dc$geo_res <- input$geo_res)
+      observe(dc$drange <- input$drange)
+      observe(dc$synd_cat <- input$synd_cat)
+      observe(dc$synd_drop_menu <- input$synd_drop_menu)
       
       # Update the choices for syndromic categories
       observe({
