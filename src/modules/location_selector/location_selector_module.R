@@ -186,12 +186,15 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
       geom_sel <- if (length(sel)) geoms()[geoms()$GEOID %in% sel, ] else geoms()[0, ]
       
       output$county_map <- renderLeaflet({
-        leaflet(geoms(), options = leafletOptions(
+        m <- leaflet(geoms(), options = leafletOptions(
           preferCanvas = TRUE,
           minZoom = 3,
           maxZoom = 12
-        )) |>
-          addProviderTiles("CartoDB.Positron") |>
+        ))
+
+        if(grv$includes_alaska_hawaii == FALSE) m <- addProviderTiles(m,"CartoDB.Positron")
+        
+        m |> 
           addMapPane("base",     zIndex = 410) |>
           addMapPane("selected", zIndex = 420) |>
           addPolygons(
