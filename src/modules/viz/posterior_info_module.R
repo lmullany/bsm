@@ -334,7 +334,6 @@ viz_posterior_server <- function(id, im, results) {
           wrap            = FALSE,
           defaultColDef   = reactable::colDef(minWidth = 100),
           fullWidth       = TRUE,
-          elementId = table_id ,
           theme = BS_REACTABLE_THEME
         )
 
