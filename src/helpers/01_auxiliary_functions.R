@@ -326,4 +326,3 @@ labeltt <- function(l, ...) {
 add_button_hover <- function(title,button) {
   div(title=title,button)
 }
-

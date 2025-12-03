@@ -13,8 +13,11 @@ label_list_pi <- list(
 )
 button_list_pi <-list(
   add_quantile = "After selecting a quantile with the slider, add an available column with the corresponding posterior quantile for display in the table.",
-  csv_button = "Download displayed data to a local csv file."
+  csv_button = "Download displayed data to a local csv file.",
+  clear_filters = "Reset all data filters."
 )
+
+
 viz_posterior_ui <- function(id) {
   ns <- NS(id)
   
@@ -61,7 +64,17 @@ viz_posterior_ui <- function(id) {
           div(
             id = ns("posterior_wrap"),
             style = "width: 100%;",
-            DTOutput(ns("posterior_data"), width = "100%")
+            reactable::reactableOutput(ns("posterior_data"), width = "100%"),
+            div(style = "display:flex; gap:10px; align-items:center;",
+              add_button_hover(title = button_list_pi[["clear_filters"]],
+                             actionButton(ns("clear_filters"),
+                                            class = "btn-primary btn-sm",
+                                            "Clear Filters")),
+              add_button_hover(title = button_list_pi[["csv_button"]],
+                             downloadButton(ns("download_posterior_csv"),
+                                            class = BUTTON_CLASS,
+                                            "Download CSV")))
+
           )
         )
       )
@@ -78,10 +91,9 @@ viz_posterior_server <- function(id, im, results) {
         filename = "posterior_data.csv" , content = \(file) data.table::fwrite(im$posterior, file)
       )
       
-      
       default_visible <- c(
         "countyfips","date","region","target","overall",
-        "predicted_median","predicted_lower","predicted_upper"
+        "0.5","0.025","0.975"
       )
       
       `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
@@ -96,13 +108,13 @@ viz_posterior_server <- function(id, im, results) {
       visible_cols_rv <- reactiveVal(NULL)
       sel_qs <- reactiveVal(0.50)
       
-      observeEvent(input$post_add_q, {
+      observe({
         q <- round(input$post_q_slider %||% 0.50, 3)
         sel_qs(sort(unique(c(sel_qs(), q))))
         qname <- sub("^\\.", "0.", prettyNum(q, digits = 12, drop0trailing = TRUE))
         vis   <- visible_cols_rv() %||% default_visible
         if (!qname %in% vis) visible_cols_rv(unique(c(vis, qname)))
-      })
+      }) |> bindEvent(input$post_add_q)
       
       all_probs <- reactive({
         qs <- tryCatch(sel_qs(), error = function(e) 0.50)
@@ -228,62 +240,129 @@ viz_posterior_server <- function(id, im, results) {
         )
       })
       
-      observeEvent(list(input$visible_cols, input$hidden_cols), {
+      observe({
         visible_cols_rv(input$visible_cols %||% character())
-      }, ignoreInit = TRUE)
+      })|>bindEvent(list(input$visible_cols, input$hidden_cols), ignoreInit = TRUE)
       
-      output$posterior_data <- renderDT({
+      # clear filters on button click
+      observe({
+        session$sendCustomMessage(
+          "clear-reactable-filters",
+          list(id = table_id)
+        )
+      }) |> bindEvent(input$clear_filters, ignoreInit = TRUE)
+      
+      
+      # Add posterior data table reactable
+      table_id <- session$ns("posterior_data")
+      output$posterior_data <- reactable::renderReactable({
+        
         req(input$dt_digits)
         df <- posterior_tbl(); req(df)
         
+        # filter to default columns only
         keep <- visible_cols_rv() %||% intersect(default_visible, names(df))
         keep <- intersect(keep, names(df))
         if (length(keep)) df <- df[, ..keep]
-        # CSV export logs _props or _count
-        csv_btn <- list(
-          extend = "csvHtml5",
-          text = "Download CSV",
-          title = NULL,
-          filename = DT::JS(sprintf(
-            "function(){
-                var id = '%s';
-                var v = (window.Shiny && Shiny.getInputValue) ? Shiny.getInputValue(id)
-                        : (document.querySelector('input[name=\"' + id + '\"]:checked') || {}).value;
-                var suffix = (v === 'Count') ? 'count' : 'props';
-                return 'posterior_data_' + suffix;
-              }",
-            session$ns("post_scale")
-          )),
-          exportOptions = list(columns = ":visible")
-        )
-        tbl <- DT::datatable(
-          df,
-          options = list(
-            autoWidth   = TRUE,
-            deferRender = TRUE,
-            scrollX     = TRUE,
-            pageLength  = 5,
-            lengthMenu  = list(c(5,10,15,25,50,100,-1), c("5","10","15","25","50","100","All")),
-            dom = '<"d-flex justify-content-between align-items-center mb-2"Bi><"mb-2"f>t<"mt-2 d-flex justify-content-between align-items-center"lp>',
-            buttons     = list(csv_btn)
-          ),
-          rownames = FALSE, filter = "top", extensions = c("Buttons"),
-          colnames = map_table_names_to_display(names(df)),
-          width = "100%"
-        )
+        
+        # clean up table names
+        display_names <- map_table_names_to_display(names(df))
+        if (is.null(names(display_names))) {
+          names(display_names) <- names(df)
+        }
         
         # Get the columns to round
         cols_to_round <- non_integer_cols_to_round(df)
-        
         # check the digits requested
         digits   <- max(0, min(10, as.integer(input$dt_digits %||% 2)))
         
-        # format the table
-        tbl <- tbl |> DT::formatRound(cols_to_round, digits= digits)
+        # get column types 
+        num_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+        date_cols <- names(df)[sapply(df, inherits, "Date")]
         
+        # define column filters
+        col_defs <- lapply(names(df), function(col) {
+          label <- display_names[[col]]; if (is.null(label)) label <- col
+          
+          is_num <- is.numeric(df[[col]])
+          is_rounded <- col %in% names(cols_to_round)
+          is_date <- col %in% date_cols
+          if (is_num) {
+            reactable::colDef(
+              name        = label,
+              align       = "right",
+              filterable  = TRUE,
+              filterMethod = numeric_range_filter_method,
+              filterInput = function (values, name){ numeric_range_filter_input(values, name, table_id ) },
+              format      = if (is_rounded) reactable::colFormat(digits = digits) else NULL,
+            )
+            
+          } else if (is_date){
+            reactable::colDef(
+              name        = label,
+              filterable  = TRUE,
+              filterMethod = date_filter_method,
+              filterInput = function (values, name){ date_filter_input(values, name, table_id) },
+            )
+            
+          } else {
+            reactable::colDef(
+              name       = label,
+              filterable = TRUE,
+              filterMethod = checkbox_filter_method,
+              filterInput = function (values, name){ checkbox_filter_input(values, name, table_id) },
+            )
+          }
+        })
+        names(col_defs) <- names(df)
+        
+        # set table height
+        n <- nrow(df)
+        page_size <- min(n, 10L)
+        
+        tbl <- reactable::reactable(
+          df,
+          columns = col_defs,
+          defaultPageSize = page_size,
+          pageSizeOptions = c(5, 10, 15, 25, 50, 100),
+          searchable      = TRUE,
+          filterable      = TRUE,
+          highlight       = TRUE,
+          striped         = TRUE,
+          bordered        = TRUE,
+          resizable       = TRUE,
+          wrap            = FALSE,
+          defaultColDef   = reactable::colDef(minWidth = 100),
+          fullWidth       = TRUE,
+          theme = BS_REACTABLE_THEME
+        )
+
         # return
         tbl
       })
+      
+      # define download functionality
+      output$download_posterior_csv <- downloadHandler(
+        filename = function() {
+          # Recreate the JS logic in R
+          v <- input$post_scale %||% "Props"
+          suffix <- if (identical(v, "Count")) "count" else "props"
+          paste0("posterior_data_", suffix, ".csv")
+        },
+        content = function(file) {
+          # Start from the same base data as the table
+          df <- posterior_tbl(); req(df)
+          
+          # Apply the same visible columns logic you use for the table
+          keep <- visible_cols_rv() %||% intersect(default_visible, names(df))
+          keep <- intersect(keep, names(df))
+          if (length(keep)) df <- df[, ..keep]
+          
+          # Now write that to CSV
+          write.csv(df, file, row.names = FALSE)
+        }
+      )
+      
       
 
     }
