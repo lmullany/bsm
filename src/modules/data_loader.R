@@ -130,7 +130,7 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
     function(input, output, session) {
       ns <- session$ns
       data <- reactiveVal(NULL)
-      
+
       # observe for transition changes
       observe(update_cache_data_loader(session, cache_transitions)) |>
         bindEvent(reactiveValuesToList(cache_transitions))
@@ -164,10 +164,14 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
         sc = list(ccdd=cat_values$ccdd_cats,
                   synd=cat_values$syndromes,
                   subsynd=cat_values$subsyndromes)[[input$synd_cat]]
-        
-        if(input$synd_cat == "ccdd") selected="CDC COVID-Specific DD v1"
-        else selected = NULL
-        
+        if (!is.null(cache_transitions$synd_drop_menu) && cache_transitions$synd_drop_menu %in% sc) {
+          selected <- cache_transitions$synd_drop_menu
+        } else if (input$synd_cat == "ccdd") {
+          selected <- "CDC COVID-Specific DD v1"
+        } else {
+          selected <- NULL
+        }
+
         updateSelectInput(
           session = session,
           inputId = "synd_drop_menu",
@@ -175,6 +179,7 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
           selected = selected
         )
       })
+      
       
       query_data <- reactive({
       
@@ -232,24 +237,18 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
       # set up a reactive to hold user-recalled data (previously saved)
       loaded_data <- reactiveVal(NULL)
       
-      
       observe({
         req(input$zipfile)
         validate(need(file.exists(input$zipfile$datapath), "Upload did not complete yet"))
         
         saved_query_info <- load_saved_query_file(input$zipfile$datapath)
         vals <- saved_query_info[["query_values"]]
-        
-        # Now, load the cache transitions reactives with any model values
-        for(n in names(vals))  cache_transitions[[n]] <- vals[[n]]
-        print(vals)
-        
-        # updateSelectInput(inputId = "time_res", selected = vals$time_res)
-        # updateDateRangeInput(inputId = "drange", start = vals$drange[1],end = vals$drange[2])
-        # updateSelectInput(inputId = "geo_res", selected = vals$geo_res)
-        # updateSelectInput(inputId = "synd_cat", selected = vals$synd_cat)
-        # updateSelectInput(inputId = "synd_drop_menu", selected = vals$synd_val)
-        
+        for (nm in names(vals)) {
+          if (nm %in% names(cache_transitions)) {
+            cache_transitions[[nm]] <- vals[[nm]]
+          }
+        }
+        cache_transitions[["synd_drop_menu"]] <- vals$synd_val
         loaded_data(list(data = saved_query_info[["data"]]))
       }) |> bindEvent(input$zipfile)
       
@@ -284,8 +283,7 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
             time_res    = input$time_res,
             drange = input$drange,
             geo_res = input$geo_res,
-            states    = dc$states,
-            selected_counties = dc$selected_counties,
+            states    = input$states,
             synd_cat = input$synd_cat,
             synd_val = input$synd_drop_menu
           )
@@ -386,7 +384,6 @@ update_cache_data_loader <- function(session, cache_transitions) {
   updateDateRangeInput(session=session, "drange", start = cache_transitions$drange[1],end = cache_transitions$drange[2])
   updateRadioButtons(session=session, "synd_cat", selected = cache_transitions$synd_cat)
   updateSelectInput(session=session, "synd_drop_menu", selected = cache_transitions$synd_drop_menu)
-  
 }
 
 
