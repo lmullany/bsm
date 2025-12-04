@@ -124,19 +124,23 @@ data_loader_ui <- function(id) {
 
 
 
-data_loader_server <- function(id, dc, results, profile) {
+data_loader_server <- function(id, dc, results, profile, cache_transitions) {
   moduleServer(
     id,
     function(input, output, session) {
       ns <- session$ns
       data <- reactiveVal(NULL)
+
+      # observe for transition changes
+      observe(update_cache_data_loader(session, cache_transitions)) |>
+        bindEvent(reactiveValuesToList(cache_transitions))
       
       # Initiate the adjacency_matrix object in the dc reactives
       dc$physical_adj <- load_adj_matrix(PHYS_ADJ_MATRIX)
       dc$mobility_adj <- load_adj_matrix(MOB_ADJ_MATRIX)
       
       # Call the state selector server
-      state_selector_server("state_selector", dc)
+      state_selector_server("state_selector", dc, cache_transitions)
       
       # Render the validation on the selected counties
       output$county_validation <- renderUI({
@@ -148,6 +152,10 @@ data_loader_server <- function(id, dc, results, profile) {
       # Monitor to fill global reactives
       observe(results$data <- data()$data)
       observe(dc$time_res <- input$time_res)
+      observe(dc$geo_res <- input$geo_res)
+      observe(dc$drange <- input$drange)
+      observe(dc$synd_cat <- input$synd_cat)
+      observe(dc$synd_drop_menu <- input$synd_drop_menu)
       
       # Update the choices for syndromic categories
       observe({
@@ -156,10 +164,14 @@ data_loader_server <- function(id, dc, results, profile) {
         sc = list(ccdd=cat_values$ccdd_cats,
                   synd=cat_values$syndromes,
                   subsynd=cat_values$subsyndromes)[[input$synd_cat]]
-        
-        if(input$synd_cat == "ccdd") selected="CDC COVID-Specific DD v1"
-        else selected = NULL
-        
+        if (!is.null(cache_transitions$synd_drop_menu) && cache_transitions$synd_drop_menu %in% sc) {
+          selected <- cache_transitions$synd_drop_menu
+        } else if (input$synd_cat == "ccdd") {
+          selected <- "CDC COVID-Specific DD v1"
+        } else {
+          selected <- NULL
+        }
+
         updateSelectInput(
           session = session,
           inputId = "synd_drop_menu",
@@ -167,6 +179,7 @@ data_loader_server <- function(id, dc, results, profile) {
           selected = selected
         )
       })
+      
       
       query_data <- reactive({
       
@@ -224,21 +237,18 @@ data_loader_server <- function(id, dc, results, profile) {
       # set up a reactive to hold user-recalled data (previously saved)
       loaded_data <- reactiveVal(NULL)
       
-      
       observe({
         req(input$zipfile)
         validate(need(file.exists(input$zipfile$datapath), "Upload did not complete yet"))
         
         saved_query_info <- load_saved_query_file(input$zipfile$datapath)
         vals <- saved_query_info[["query_values"]]
-        
-        updateSelectInput(inputId = "time_res", selected = vals$time_res)
-        updateDateRangeInput(inputId = "drange", start = vals$drange[1],end = vals$drange[2])
-        updateSelectInput(inputId = "geo_res", selected = vals$geo_res)
-        updateSelectInput(inputId = "states", selected = vals$states)
-        updateSelectInput(inputId = "synd_cat", selected = vals$synd_cat)
-        updateSelectInput(inputId = "synd_drop_menu", selected = vals$synd_val)
-        
+        for (nm in names(vals)) {
+          if (nm %in% names(cache_transitions)) {
+            cache_transitions[[nm]] <- vals[[nm]]
+          }
+        }
+        cache_transitions[["synd_drop_menu"]] <- vals$synd_val
         loaded_data(list(data = saved_query_info[["data"]]))
       }) |> bindEvent(input$zipfile)
       
@@ -273,7 +283,8 @@ data_loader_server <- function(id, dc, results, profile) {
             time_res    = input$time_res,
             drange = input$drange,
             geo_res = input$geo_res,
-            states    = input$states,
+            states    = dc$states,
+            selected_counties = dc$selected_counties,
             synd_cat = input$synd_cat,
             synd_val = input$synd_drop_menu
           )
@@ -362,6 +373,18 @@ validate_county_selection <- function(states, ctys, mat) {
     )
   )
   
+}
+
+# Small data loader helper function that will update the widgets
+# if the cache transitions reactives have been updated, for example
+# when loaded a previously saved model.
+update_cache_data_loader <- function(session, cache_transitions) {
+  
+  updateSelectInput(session=session, "time_res", selected=cache_transitions$time_res)
+  updateSelectInput(session=session, "geo_res", selected=cache_transitions$geo_res)
+  updateDateRangeInput(session=session, "drange", start = cache_transitions$drange[1],end = cache_transitions$drange[2])
+  updateRadioButtons(session=session, "synd_cat", selected = cache_transitions$synd_cat)
+  updateSelectInput(session=session, "synd_drop_menu", selected = cache_transitions$synd_drop_menu)
 }
 
 

@@ -280,7 +280,7 @@ inla_model_ui <- function(id) {
   )  
 }
 
-inla_model_server <- function(id, dc, im, results) {
+inla_model_server <- function(id, dc, im, results, cache_transitions) {
   moduleServer(
     id,
     function(input, output, session) {
@@ -417,6 +417,7 @@ inla_model_server <- function(id, dc, im, results) {
           path = input$zipfile_model$datapath
         )
       
+        
         updateSelectInput(
           inputId = "nforecasts", selected = saved_model_info[["model_values"]]$nforecasts
         )
@@ -424,6 +425,14 @@ inla_model_server <- function(id, dc, im, results) {
           inputId = "dist_family", selected = saved_model_info[["model_values"]]$dist_family
         )
         
+        # update other key global reactives from saved_model_info[["model_values"]]
+        dc$includes_alaska_hawaii <- saved_model_info[["model_values"]]$includes_alaska_hawaii
+        
+        # Now, load the cache transitions reactives with any model values
+        for(n in names(saved_model_info[["model_values"]])) {
+          cache_transitions[[n]] <- saved_model_info[["model_values"]][[n]]
+        }
+
         # update the reactive
         loaded_model(saved_model_info[["model_object"]])
         
@@ -465,7 +474,16 @@ inla_model_server <- function(id, dc, im, results) {
           # describe saved query
           model_vals <- list(
             nforecasts = input$nforecasts,
-            dist_family = input$dist_family
+            dist_family = input$dist_family,
+            # also save key dc components
+            states = dc$states,
+            selected_counties = dc$selected_counties,
+            includes_alaska_hawaii = dc$includes_alaska_hawaii,
+            geo_res = dc$geo_res,
+            drange = dc$drange,
+            time_res = dc$time_res,
+            synd_cat = dc$synd_cat,
+            synd_drop_menu = dc$synd_drop_menu
           )
           json_name <- tempfile(fileext = ".json")
           rds_name  <- tempfile(fileext = ".rds")
@@ -584,8 +602,8 @@ update_n_forecast_widget <- function(res) {
 }
 pre_process_data <- function(data, nforecasts ) {
   data <- add_fips(data)
-  data[, date := as.data.table(date)]
-  data$date <- as.Date(data$date)
+  
+  data$date <- as.IDate(as.Date(data$date))
   data_cls <- epistemic::data_class(
     data = data,
     region_column = "countyfips",

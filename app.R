@@ -43,15 +43,35 @@ server <- function(input, output, session) {
   # Global Reactives for configuration and results
   # ----------------------------------------------------------------------
   
-  dc = reactiveValues() # data loader configuration reactives
-  im = reactiveValues() # inla model configuration reactives
-  results = reactiveValues()  # results reactives (data, plots, model, etc)
+  # data loader configuration reactives
+  dc <- reactiveValues(
+    physical_adj = NULL, mobility_adj = NULL,
+    time_res = NULL, geo_res=NULL, drange=NULL, synd_cat=NULL, synd_drop_menu=NULL,
+    states = NULL, selected_counties = NULL, includes_alaska_hawaii = NULL
+  )
+  
+  # use this to transfer cachee widget values from load query or load model
+  # through modules
+  cache_transitions <- reactiveValues(
+    states=NULL, selected_counties=NULL, geo_res=NULL, time_res=NULL, drange=NULL,
+    synd_cat=NULL, synd_drop_menu=NULL
+  )
+  
+  # inla model configuration reactives
+  im <- reactiveValues(
+    model = NULL, data_cls = NULL, posterior=NULL, nforecasts=NULL
+  ) 
+  
+  # results reactives (data, plotsm etc; add to as needed for future reporting)
+  results <- reactiveValues(
+    data = NULL
+  )  
   
   # ----------------------------------------------------------------------
   # Module Server calls
   # ----------------------------------------------------------------------
-  data_loader_server(id = "data_load", dc, results, profile)
-  inla_model_server(id = "inla_model", dc, im, results)
+  data_loader_server(id = "data_load", dc, results, profile, cache_transitions)
+  inla_model_server(id = "inla_model", dc, im, results, cache_transitions)
   viz_server("viz", dc, im, results)
   tooltip_server("tooltip")
   documentation_server(id="documentation")
