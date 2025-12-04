@@ -29,12 +29,19 @@ state_selector_ui <- function(id) {
   )
 }
 
-state_selector_server <- function(id, dc) {
+state_selector_server <- function(id, dc, cache_transitions) {
   moduleServer(
     id,
     function(input, output, session) {
       
       ns = session$ns
+      
+      # if cache reactives change, update the states
+      observe(
+        updateSelectizeInput(
+          inputId = "states", selected = cache_transitions$states
+        )
+      )
       
       # Get the us county geometries and reduce to those in 
       # the dc physical adjacency matrix
