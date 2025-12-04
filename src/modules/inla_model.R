@@ -280,7 +280,7 @@ inla_model_ui <- function(id) {
   )  
 }
 
-inla_model_server <- function(id, dc, im, results) {
+inla_model_server <- function(id, dc, im, results, cache_transitions) {
   moduleServer(
     id,
     function(input, output, session) {
@@ -417,6 +417,7 @@ inla_model_server <- function(id, dc, im, results) {
           path = input$zipfile_model$datapath
         )
       
+        
         updateSelectInput(
           inputId = "nforecasts", selected = saved_model_info[["model_values"]]$nforecasts
         )
@@ -425,10 +426,13 @@ inla_model_server <- function(id, dc, im, results) {
         )
         
         # update other key global reactives from saved_model_info[["model_values"]]
-        # add more as needed
         dc$includes_alaska_hawaii <- saved_model_info[["model_values"]]$includes_alaska_hawaii
-        dc$states <- saved_model_info[["model_values"]]$states
         
+        # Now, load the cache transitions reactives with any model values
+        for(n in names(saved_model_info[["model_values"]])) {
+          cache_transitions[[n]] <- saved_model_info[["model_values"]][[n]]
+        }
+
         # update the reactive
         loaded_model(saved_model_info[["model_object"]])
         
@@ -473,7 +477,12 @@ inla_model_server <- function(id, dc, im, results) {
             dist_family = input$dist_family,
             # also save key dc components
             states = dc$states,
-            includes_alaska_hawaii = dc$includes_alaska_hawaii
+            includes_alaska_hawaii = dc$includes_alaska_hawaii,
+            geo_res = dc$geo_res,
+            drange = dc$drange,
+            time_res = dc$time_res,
+            synd_cat = dc$synd_cat,
+            synd_drop_menu = dc$synd_drop_menu
           )
           json_name <- tempfile(fileext = ".json")
           rds_name  <- tempfile(fileext = ".rds")
