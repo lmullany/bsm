@@ -240,12 +240,14 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
         saved_query_info <- load_saved_query_file(input$zipfile$datapath)
         vals <- saved_query_info[["query_values"]]
         
-        updateSelectInput(inputId = "time_res", selected = vals$time_res)
-        updateDateRangeInput(inputId = "drange", start = vals$drange[1],end = vals$drange[2])
-        updateSelectInput(inputId = "geo_res", selected = vals$geo_res)
-        updateSelectInput(inputId = "states", selected = vals$states)
-        updateSelectInput(inputId = "synd_cat", selected = vals$synd_cat)
-        updateSelectInput(inputId = "synd_drop_menu", selected = vals$synd_val)
+        # Now, load the cache transitions reactives with any model values
+        for(n in names(vals))  cache_transitions[[n]] <- vals[[n]]
+        
+        # updateSelectInput(inputId = "time_res", selected = vals$time_res)
+        # updateDateRangeInput(inputId = "drange", start = vals$drange[1],end = vals$drange[2])
+        # updateSelectInput(inputId = "geo_res", selected = vals$geo_res)
+        # updateSelectInput(inputId = "synd_cat", selected = vals$synd_cat)
+        # updateSelectInput(inputId = "synd_drop_menu", selected = vals$synd_val)
         
         loaded_data(list(data = saved_query_info[["data"]]))
       }) |> bindEvent(input$zipfile)
@@ -281,7 +283,7 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
             time_res    = input$time_res,
             drange = input$drange,
             geo_res = input$geo_res,
-            states    = input$states,
+            states    = dc$states,
             synd_cat = input$synd_cat,
             synd_val = input$synd_drop_menu
           )
