@@ -283,7 +283,8 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
             time_res    = input$time_res,
             drange = input$drange,
             geo_res = input$geo_res,
-            states    = input$states,
+            states    = dc$states,
+            selected_counties = dc$selected_counties,
             synd_cat = input$synd_cat,
             synd_val = input$synd_drop_menu
           )
