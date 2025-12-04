@@ -124,19 +124,23 @@ data_loader_ui <- function(id) {
 
 
 
-data_loader_server <- function(id, dc, results, profile) {
+data_loader_server <- function(id, dc, results, profile, cache_transitions) {
   moduleServer(
     id,
     function(input, output, session) {
       ns <- session$ns
       data <- reactiveVal(NULL)
       
+      # observe for transition changes
+      observe(update_cache_data_loader(session, cache_transitions)) |>
+        bindEvent(reactiveValuesToList(cache_transitions))
+      
       # Initiate the adjacency_matrix object in the dc reactives
       dc$physical_adj <- load_adj_matrix(PHYS_ADJ_MATRIX)
       dc$mobility_adj <- load_adj_matrix(MOB_ADJ_MATRIX)
       
       # Call the state selector server
-      state_selector_server("state_selector", dc)
+      state_selector_server("state_selector", dc, cache_transitions)
       
       # Render the validation on the selected counties
       output$county_validation <- renderUI({
@@ -365,6 +369,19 @@ validate_county_selection <- function(states, ctys, mat) {
       )
     )
   )
+  
+}
+
+# Small data loader helper function that will update the widgets
+# if the cache transitions reactives have been updated, for example
+# when loaded a previously saved model.
+update_cache_data_loader <- function(session, cache_transitions) {
+  
+  updateSelectInput(session=session, "time_res", selected=cache_transitions$time_res)
+  updateSelectInput(session=session, "geo_res", selected=cache_transitions$geo_res)
+  updateDateRangeInput(session=session, "drange", start = cache_transitions$drange[1],end = cache_transitions$drange[2])
+  updateRadioButtons(session=session, "synd_cat", selected = cache_transitions$synd_cat)
+  updateSelectInput(session=session, "synd_drop_menu", selected = cache_transitions$synd_drop_menu)
   
 }
 
