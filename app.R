@@ -53,7 +53,7 @@ server <- function(input, output, session) {
   # use this to transfer cachee widget values from load query or load model
   # through modules
   cache_transitions <- reactiveValues(
-    states=NULL, selected_counties=NULL, geo_res=NULL, time_res=NULL, 
+    states=NULL, selected_counties=NULL, geo_res=NULL, time_res=NULL, drange=NULL,
     synd_cat=NULL, synd_drop_menu=NULL
   )
   

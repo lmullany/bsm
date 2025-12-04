@@ -242,6 +242,7 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
         
         # Now, load the cache transitions reactives with any model values
         for(n in names(vals))  cache_transitions[[n]] <- vals[[n]]
+        print(vals)
         
         # updateSelectInput(inputId = "time_res", selected = vals$time_res)
         # updateDateRangeInput(inputId = "drange", start = vals$drange[1],end = vals$drange[2])
@@ -284,6 +285,7 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
             drange = input$drange,
             geo_res = input$geo_res,
             states    = dc$states,
+            selected_counties = dc$selected_counties,
             synd_cat = input$synd_cat,
             synd_val = input$synd_drop_menu
           )

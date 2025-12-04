@@ -477,6 +477,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
             dist_family = input$dist_family,
             # also save key dc components
             states = dc$states,
+            selected_counties = dc$selected_counties,
             includes_alaska_hawaii = dc$includes_alaska_hawaii,
             geo_res = dc$geo_res,
             drange = dc$drange,

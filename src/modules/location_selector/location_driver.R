@@ -36,12 +36,14 @@ state_selector_server <- function(id, dc, cache_transitions) {
       
       ns = session$ns
       
-      # if cache reactives change, update the states
-      observe(
-        updateSelectizeInput(
-          inputId = "states", selected = cache_transitions$states
-        )
+      # initialize some reactives
+      grv <- reactiveValues(
+        selected_counties = character(0), modal_done = 0
       )
+      
+      # if cache reactives change, update the states
+      observe(updateSelectizeInput(inputId = "states", selected = cache_transitions$states))
+      
       
       # Get the us county geometries and reduce to those in 
       # the dc physical adjacency matrix
@@ -49,10 +51,6 @@ state_selector_server <- function(id, dc, cache_transitions) {
         create_us_sf() |> dplyr::filter(GEOID %in% colnames(dc$physical_adj))
       })
 
-      # initialize some reactives
-      grv <- reactiveValues(
-        selected_counties = character(0), modal_done = 0
-      )
       
       # When the selected states change, we downselect the us_sf to the 
       # subset that is relevant to the state(s) selected
@@ -77,10 +75,16 @@ state_selector_server <- function(id, dc, cache_transitions) {
         } else {
           grv$selected_counties <- character(0)
         }
+        # override if cache transition is not null
+        if(!is.null(cache_transitions$selected_counties)) {
+          grv$selected_counties <- grv$selected_counties[
+            which(grv$selected_counties %in% cache_transitions$selected_counties)
+          ]
+        }
 
         grv$includes_alaska_hawaii <- any(c("AK", "HI", "ALL States") %in% input$states)
 
-      }) |> bindEvent(counties_sf(), input$states)
+      }) |> bindEvent(counties_sf(), input$states, cache_transitions$selected_counties)
       
       # this is a reactive that simply increments each time the "Choose Counties"
       # button is pressed; its like a flag indicating that the modal has been opened
