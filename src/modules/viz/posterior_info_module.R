@@ -187,11 +187,16 @@ viz_posterior_server <- function(id, im, results) {
         df <- posterior_tbl(); req(df)
         cols_now <- names(df)
         
+        display_names <- map_table_names_to_display(cols_now)
+        if (is.null(names(display_names))) names(display_names) <- cols_now
         vis <- visible_cols_rv()
         if (is.null(vis)) vis <- intersect(default_visible, cols_now)
         vis    <- intersect(vis, cols_now)
         hidden <- setdiff(cols_now, vis)
         
+        make_option <- function(col) {
+          tags$option(value = col, display_names[[col]])
+        }
         tags$div(
           style = "display:flex; gap:12px; align-items:flex-start;",
           tags$div(
@@ -199,7 +204,7 @@ viz_posterior_server <- function(id, im, results) {
             tags$label("Hidden"),
             tags$select(
               id = session$ns("hidden_select"), multiple = "multiple", size = 14, style = "width:100%;",
-              lapply(hidden, function(x) tags$option(value = x, x))
+              lapply(hidden, make_option)
             )
           ),
           tags$div(
@@ -207,7 +212,7 @@ viz_posterior_server <- function(id, im, results) {
             tags$label("Visible"),
             tags$select(
               id = session$ns("visible_select"), multiple = "multiple", size = 14, style = "width:100%;",
-              lapply(vis, function(x) tags$option(value = x, x))
+              lapply(vis, make_option)
             )
           ),
           # UI for hidden/selected selection lists
