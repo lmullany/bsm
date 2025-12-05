@@ -205,7 +205,8 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL,county_filter, med_g
   return(list(data = merged, url_all = url_all, url_single = url_single))
 }
 
-map_table_names_to_display <- function(names, title_case = FALSE) {
+map_table_names_to_display <- function(names, title_case = FALSE, quantile_suffix = NULL, keep_names = FALSE) {
+  orig_names <- names
   map = list(
     "Date" = c("date"),
     "Region" = c("region"),
@@ -213,7 +214,10 @@ map_table_names_to_display <- function(names, title_case = FALSE) {
     "ED Visits (Target)" = c("target", "cases"),
     "ED Visits (Overall)" = c("overall"),
     "ED Visits (Expected)" = c("expected"), 
-    "Denominator Source" = c("denominator_source")
+    "Denominator Source" = c("denominator_source"),
+    "Predicted Quantile 0.025" = c("predicted_lower"),
+    "Predicted Quantile 0.5" = c("predicted_median"),
+    "Predicted Quantile 0.975" = c("predicted_upper")
   )
   # convert map to datatable for fast lookup via join
   map = rbindlist(lapply(map, data.table), id="display_name")
@@ -225,9 +229,23 @@ map_table_names_to_display <- function(names, title_case = FALSE) {
   # any names that have underscores should be converte
   result = sapply(result, \(r) gsub("_", " ", r) |> tools::toTitleCase(),USE.NAMES = FALSE)
   
-  # convert to title case if requested (this is mainly useful for other columns)
-  if(title_case) result = tools::toTitleCase(result)
+  # Map plain quantile columns to "Posterior quantile q=x (Count)" or "Posterior quantile q=x (Count)"
+  if (!is.null(quantile_suffix)) {
+    is_quantile_num <- grepl("^(0(\\.\\d+)?|1)$", orig_names)
+    result[is_quantile_num] <- sprintf(
+      "Posterior Quantile q=%s (%s)",
+      orig_names[is_quantile_num],
+      quantile_suffix
+    )
+  }
   
+  # convert to title case if requested (this is mainly useful for other columns)
+  if (title_case) result <- tools::toTitleCase(result)
+  if (keep_names) {
+    names(result) <- orig_names
+  } else {
+    result <- unname(result)
+  }
   result
 }
 

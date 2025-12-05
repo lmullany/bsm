@@ -186,8 +186,10 @@ viz_posterior_server <- function(id, im, results) {
       output$post_col_picker <- renderUI({
         df <- posterior_tbl(); req(df)
         cols_now <- names(df)
-        
-        display_names <- map_table_names_to_display(cols_now)
+        scale_label <- if (identical(input$post_scale, "Count")) "Count" else "Proportion"
+        display_names <- map_table_names_to_display(
+          cols_now, 
+          quantile_suffix = scale_label)
         if (is.null(names(display_names))) names(display_names) <- cols_now
         vis <- visible_cols_rv()
         if (is.null(vis)) vis <- intersect(default_visible, cols_now)
@@ -271,7 +273,13 @@ viz_posterior_server <- function(id, im, results) {
         if (length(keep)) df <- df[, ..keep]
         
         # clean up table names
-        display_names <- map_table_names_to_display(names(df))
+        scale_label <- if (identical(input$post_scale, "Count")) "Count" else "Proportion"
+        display_names <- map_table_names_to_display(
+          names(df),
+          quantile_suffix = scale_label,
+          keep_names = TRUE
+        )
+        
         if (is.null(names(display_names))) {
           names(display_names) <- names(df)
         }
@@ -336,8 +344,18 @@ viz_posterior_server <- function(id, im, results) {
           striped         = TRUE,
           bordered        = TRUE,
           resizable       = TRUE,
-          wrap            = FALSE,
-          defaultColDef   = reactable::colDef(minWidth = 100),
+          wrap            = TRUE,
+          defaultColDef     = reactable::colDef(
+            minWidth    = 120,
+            headerStyle = list(
+              whiteSpace = "normal",
+              wordBreak  = "break-word",
+              lineHeight = "1.1"
+            ),
+            style = list(
+              whiteSpace = "nowrap"
+            )
+          ),
           fullWidth       = TRUE,
           theme = BS_REACTABLE_THEME
         )
