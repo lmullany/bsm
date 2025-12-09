@@ -29,7 +29,7 @@ library(igraph)
 library(leaflet)
 library(leaflet.extras)
 library(reactable)
-
+library(viridisLite)
 library(epistemic)
 
 ##################################
