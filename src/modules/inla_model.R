@@ -753,7 +753,7 @@ build_spatial_component <- function(input, use_default = FALSE) {
   sc = paste0(
     sc,
     "hyper=list(", prec_prior_name, " = list(prior = 'pc.prec', param =c(",
-    input[["rre_prec_pc_param"]], ", ", input[["rre_prec_pc_alpha"]], ")))",
+    input[["sco_prec_pc_param"]], ", ", input[["sco_prec_pc_alpha"]], ")))",
     ")"
   )
   
