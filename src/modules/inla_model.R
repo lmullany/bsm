@@ -48,6 +48,9 @@ inla_model_ui <- function(id) {
   
   # Number of forecasts
   forecasts = uiOutput(ns("nforecasts_ui"))
+  
+  # small ui to render with warnings/invalid messages for model run button
+  model_run_validator <- uiOutput(ns("model_run_validator"))
 
   family = selectInput(
     ns("dist_family"),
@@ -260,6 +263,8 @@ inla_model_ui <- function(id) {
                            input_task_button(ns("load_model_btn"), "Load Saved Model")),
           widths = c(6,6)
         ),
+        # small ui to render with warnings/invalid messages
+        model_run_validator,
         uiOutput(ns("zipfile_model_ui"))
       ),
       navset_bar(
@@ -332,21 +337,21 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       # 3. get adjacency matrice(s)
       # 4. Create the formula (custom or default)
       # 5. Run the model
+      
+      # Render the validation on the selected counties
+      
+      output$model_run_validator <- renderUI(
+        model_ready_to_run(results$data, input)[["msg"]]
+      ) |> bindEvent(input$estimate_model_btn)
+      
   
       inla_model_new <- reactive({
         
-        # We must have data, or we can't estimate model
-        validate(need(results$data, "Please load data first"))
+        # is model ready to run?
+        model_ready <- model_ready_to_run(results$data, input)
         
-        # If customize components, we should at least have one
-        # of spatial or temporal checked
-        if(input$formula_type == "custom_components") {
-          validate(need(
-            input$spatial_component_chkbx || input$temporal_component_chkbx,
-            "Include either spatial or temporal, or both"
-          ))
-        } 
-  
+        req(model_ready[["valid"]])
+
         
         #1. TODO: VALIDATE INPUTS
         
@@ -781,4 +786,31 @@ check_names <- function(x, n) {
       "Names [", paste(n, collapse=","), " ] not found in object"
     ))
   }
+}
+
+model_ready_to_run <- function(data, input) {
+  
+  # defaults - no message, primary class for text
+  msg = character(0); cl = "p-2 text-primary"; valid=TRUE
+  
+  if(is.null(data)) msg <- "Please load data first"
+  else {
+    # If customize components, we should at least have one of spatial or temporal checked
+    if(input$formula_type == "custom_components") {
+      if(!any(input$spatial_component_chkbx, input$temporal_component_chkbx)) {
+        msg = "Include either spatial or temporal, or both"
+      }
+    }   
+  }
+  
+  if(length(msg)>0) {
+    cl = "shiny-output-error-validation"
+    valid=FALSE
+  }
+  
+  list(
+    msg = div(class = cl, htmltools::HTML(paste(msg, collapse = "<br>"))),
+    valid = valid
+  )
+      
 }
