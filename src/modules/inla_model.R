@@ -607,7 +607,6 @@ update_n_forecast_widget <- function(res) {
   lu[[res]]
 }
 pre_process_data <- function(data, nforecasts ) {
-  data <- add_fips(data)
   
   data$date <- as.IDate(as.Date(data$date))
   data_cls <- epistemic::data_class(

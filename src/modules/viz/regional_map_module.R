@@ -112,6 +112,44 @@ viz_regional_map_ui <- function(id) {
           uiOutput(outputId = ns("metric_exceedance_thresh_ui")),
           ns = ns
         ),
+        tags$hr(),
+        tags$details(
+          tags$summary("Advanced map settings"),
+          
+          checkboxInput(
+            inputId = ns("map_use_global_range"),
+            label   = "Use shared colorbar range across all dates",
+            value   = TRUE
+          ),
+          
+          selectInput(
+            ns("map_legend_position"),
+            label = "Legend location",
+            choices = c(
+              "Bottom right" = "bottomright",
+              "Bottom left"  = "bottomleft",
+              "Top right"    = "topright",
+              "Top left"     = "topleft"
+            ),
+            selected = "bottomright"
+          ),
+          selectInput(
+            inputId = ns("map_palette"),
+            label   = "Color palette",
+            choices = c(
+              "Viridis" = "viridis",
+              "Plasma" = "plasma",
+              "Magma" = "magma",
+              "Inferno" = "inferno",
+              "Cividis" = "cividis",
+              "Greys" = "Greys",
+              "YlOrRd" = "YlOrRd",
+              "RdBu" = "RdBu"
+            ),
+            selected = "viridis"
+          ),
+          tags$br()
+        ),
         position = "left"
       )
     )
@@ -169,6 +207,34 @@ viz_regional_map_server <- function(id, dc, im, results) {
         } else {
           if (!is.null(im$data_cls$prop_col)) im$data_cls$prop_col else "proportion"
         }
+      })
+      
+      map_value_range <- reactive({
+        md_info <- map_data()
+        if (isTRUE(input$map_use_global_range)) {
+          if (is.finite(md_info$max) && md_info$max > 0) {
+            return(c(0, md_info$max))
+          }
+          return(c(0, 1))
+        }
+        pi <- polygon_info(
+          map_base_locations(),
+          map_data(),
+          target_date()
+        )
+        
+        if (!is.null(pi$minv) && !is.null(pi$maxv) &&
+            is.finite(pi$maxv) && pi$maxv > 0) {
+          return(c(max(0, pi$minv), pi$maxv))
+        }
+        if (!is.null(pi$d) && "outcome" %in% names(pi$d) &&
+            length(pi$d$outcome) > 0 && any(is.finite(pi$d$outcome))) {
+          rng <- range(pi$d$outcome, na.rm = TRUE)
+          if (all(is.finite(rng)) && rng[2] > 0) {
+            return(c(max(0, rng[1]), rng[2]))
+          }
+        }
+        c(0, 1)
       })
       
       all_dates <- reactive({
@@ -283,40 +349,57 @@ viz_regional_map_server <- function(id, dc, im, results) {
         
       })
       
-      
       region_map <- reactive({
-        
-        req(map_base_locations(), map_data(), target_date())
-        
-        
+        req(map_base_locations(), map_data(), target_date(), map_value_range())
         pi = polygon_info(map_base_locations(),map_data(),target_date())
-        
         m <- leaflet::leaflet()
         if(dc$includes_alaska_hawaii == FALSE) {
           m <- leaflet::addProviderTiles(m, "CartoDB.Positron")
         }
         
-        m |> update_polygons(pi) |>
+        update_polygons(
+          p       = m,
+          pi      = pi,
+          domain  = map_value_range(),
+          palette = input$map_palette %||% "viridis"
+        ) |>
           leaflet.extras::addFullscreenControl() |>
           leaflet.extras::addResetMapButton()
+      })
+      
+      
+      observe({
+        req(map_base_locations(), map_data(), target_date(), map_value_range())
         
+        pi <- polygon_info(
+          map_base_locations(),
+          map_data(),
+          target_date()
+        )
+        
+        proxy <- leafletProxy("region_map")
+        proxy <- clearControls(proxy)
+        proxy <- clearShapes(proxy)
+        
+        pal_name <- if (is.null(input$map_palette) || input$map_palette == "") {
+          "viridis"
+        } else {
+          input$map_palette
+        }
+        
+        proxy <- update_polygons(
+          p       = proxy,
+          pi      = pi,
+          domain  = map_value_range(),
+          palette = pal_name,
+          legend_position = input$map_legend_position %||% "bottomright"
+        )
       })
       
       output$region_map <- renderLeaflet({
         validate(need(im$posterior, "Load data and run model first"))
         region_map()
       })
-      
-      observe({
-        req(region_map())
-        leafletProxy("region_map") |>
-          clearControls() |>
-          clearShapes() |>
-          update_polygons(
-            polygon_info(map_base_locations(), map_data(), target_date())
-          )
-      })
-      
       
     }
   )
