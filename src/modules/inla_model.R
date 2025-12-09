@@ -787,20 +787,22 @@ check_names <- function(x, n) {
   }
 }
 
-model_ready_to_run <- function(data, input) {
+model_ready_to_run <- function(data, formula, input) {
   
   # defaults - no message, primary class for text
   msg = character(0); cl = "p-2 text-primary"; valid=TRUE
-  
+
+  # currently, this is the only requirement  
   if(is.null(data)) msg <- "Please load data first"
-  else {
-    # If customize components, we should at least have one of spatial or temporal checked
-    if(input$formula_type == "custom_components") {
-      if(!any(input$spatial_component_chkbx, input$temporal_component_chkbx)) {
-        msg = "Include either spatial or temporal, or both"
-      }
-    }   
-  }
+  
+  # TODO: check if formula is valid
+  # We need to write a formula_valid function that returns
+  # a message and valid flag in a list
+  # formula_valid <- formula_valid(formula, input)
+  # if(!formula_valid$valid) {
+  #   msg = formula_valid["msg"]
+  #   valid = FALSE
+  # }
   
   if(length(msg)>0) {
     cl = "shiny-output-error-validation"
