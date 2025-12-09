@@ -203,8 +203,6 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
         categ_info = list(cat_class = synd_bits[[input$synd_cat]]["cat"],
                           cat_value = xml2::url_escape(tolower(input$synd_drop_menu)))
         
-        dput(categ_info)
-        
         data<- get_data(
           sd=input$drange[1],
           ed=input$drange[2],
@@ -218,7 +216,6 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
         )
         
         if (input$time_res=="weekly"){
-          #data$data$date<-sapply(data$data$date,week_to_end_date)
           data$data <- wk_to_date(data$data, "date")
         } else if (input$time_res=="daily"){
           data$data$date<-as.Date(data$data$date)
@@ -301,12 +298,15 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
       
       output$ingested_data <- renderDT({
         req(data()$data)
-        # identify columns to round
-        cols_to_round <- non_integer_cols_to_round(data()$data)
         
+        d <- data()$data[, .SD, .SDcols = patterns("^(?!countyfips).*$", perl=T)]
+        
+        # identify columns to round
+        cols_to_round <- non_integer_cols_to_round(d)
+
         DT::datatable(
-          data()$data,
-          colnames = map_table_names_to_display(colnames(data()$data)),
+          d,
+          colnames = map_table_names_to_display(colnames(d)),
           rownames = F
         ) |> formatRound(cols_to_round, digits=4)
           
