@@ -661,7 +661,7 @@ get_formula <- function(formula_type, input) {
   requested = c("intercept")
   if(input$rre_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "region_re")
   if(input$spatial_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "spatial")
-  if(input$temporal_component_chkbx == TRUE) requested = c(requested, "temporal")
+  if(input$temporal_component_chkbx == TRUE && formula_type !="default") requested = c(requested, "temporal")
   
   formula <- purrr::reduce(components[requested], ~call2('+', .x, .y))
   
