@@ -61,14 +61,14 @@ inla_model_ui <- function(id) {
     selected = "binomial"
   )
   
-  hidden(region_re_options <- tagList(
+  region_re_options <- tagList(
     div(
       class = "well",
       HTML("Precision Hyper-parameters:"),
       numericInput(ns("rre_prec_pc_param"), "PC Prior Sigma Threshold", value=.2, step = .001),
       sliderInput(ns("rre_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=1e-5, max = 1)
     )
-  ))
+  )
   
   spatial_component_options <- tagList(
     radioButtons(
@@ -104,7 +104,8 @@ inla_model_ui <- function(id) {
       class = "well",
       HTML("Precision Hyper-parameters:"),
       numericInput(ns("sco_prec_pc_param"), "PC Prior Sigma Threshold", value=.2, step = .001),
-      numericInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=0, max = 1, step=0.01)
+      sliderInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=1e-5, max = 1)
+      #numericInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=0, max = 1, step=0.01)
     )
   )
   
@@ -132,7 +133,7 @@ inla_model_ui <- function(id) {
       class="well", 
       layout_columns(
         checkboxInput(ns("rre_component_chkbx"), "Region Random Effect",value = TRUE),
-        hidden(input_switch(ns("customize_rre"),label ="Advanced Customization",value = FALSE)),
+        input_switch(ns("customize_rre"),label ="Advanced Customization",value = FALSE),
         col_widths = c(6,6)
       ),
       conditionalPanel(
