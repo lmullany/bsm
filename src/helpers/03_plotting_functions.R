@@ -106,6 +106,12 @@ get_map_data <-function(model,
   if (!("metric" %in% names(params))){
     cli::cli_abort("Key metric must be provided.")
   }
+  
+  display_col <- NULL
+  display_col_name <- NULL
+  minv <- 0
+  maxv <- NA_real_
+  
   if (params$metric  == "mean"){
     if ("use_count" %in% names(params)){
       use_count <- params$use_count
@@ -124,8 +130,8 @@ get_map_data <-function(model,
                                          use_count_scale = use_count)
     display_col <- "predicted_mean"
     
-    minv <- 0
-    maxv <- round_up_max(max(dt[,predicted_mean], na.rm = TRUE))
+    maxv <- round_up_max(max(dt[[display_col]], na.rm = TRUE))
+    
   } else if (params$metric  == "median"){
     if ("use_count" %in% names(params)){
       use_count = params$use_count
@@ -143,8 +149,9 @@ get_map_data <-function(model,
                                            use_suffix=FALSE,
                                            use_count_scale = use_count)
     display_col <- "0.5quant"
-    minv <- 0
-    maxv <- round_up_max(max(dt[,get(display_col)],na.rm = T))
+    
+    maxv <- round_up_max(max(dt[[display_col]], na.rm = TRUE))
+    
   } else if (params$metric  == "quantile"){
     if ("quantile" %in% names(params)){
       q <- params$quantile 
@@ -179,9 +186,12 @@ get_map_data <-function(model,
                                              probs=q,
                                              use_count = use_count
     )
-    setnames(dt, new=c(data_cls$region_col, data_cls$date_col, display_col))
-    minv <- 0
-    maxv <- round_up_max(max(dt[[display_col]],na.rm = T))
+    data.table::setnames(
+      dt,
+      new = c(data_cls$region_col, data_cls$date_col, display_col)
+    )
+    
+    maxv<- round_up_max(max(dt[[display_col]], na.rm = TRUE))
     
   } else if (params$metric  == "exceedance"){
     if (!("threshold" %in% names(params))){
@@ -246,9 +256,9 @@ get_map_data <-function(model,
     column = display_col, 
     name = display_col_name, 
     min = minv, 
-    max = maxv, 
-    date_col = data_cls$date_column, 
-    region_col = data_cls$region_column
+    max = maxv,
+    date_col = data_cls$date_col,
+    region_col = data_cls$region_col
   ))
 
 }
@@ -425,51 +435,132 @@ get_hover_label_county <- function(county, fips, values=NULL, value_title="") {
   })
 }
 
+get_palette_vector <- function(name, n = 256) {
+  if (is.null(name) || identical(name, "")) {
+    return(viridisLite::viridis(n))
+  }
+  
+  viridis_funs <- list(
+    viridis = viridisLite::viridis,
+    magma = viridisLite::magma,
+    plasma = viridisLite::plasma,
+    inferno = viridisLite::inferno,
+    cividis = viridisLite::cividis
+  )
+  
+  if (name %in% names(viridis_funs)) {
+    return(viridis_funs[[name]](n))
+  }
+  
+  if (name %in% rownames(RColorBrewer::brewer.pal.info)) {
+    maxcols  <- RColorBrewer::brewer.pal.info[name, "maxcolors", drop = TRUE]
+    base_pal <- RColorBrewer::brewer.pal(min(maxcols, 9), name)
+    return(grDevices::colorRampPalette(base_pal)(n))
+  }
+  
+  viridisLite::viridis(n) # Fallback: viridis
+}
 
 polygon_info <- function(locs, map_data, target_date) {
   # bind the location data with the map_data
   # TODO: consider merge here instead of cbind
-  d = cbind(locs, map_data$data[date==target_date, .(outcome=get(map_data$column))])
+  d <- cbind(
+    locs,
+    map_data$data[date == target_date, .(outcome = get(map_data$column))]
+  )
+  
+  minv <- maxv <- NA_real_
   
   # If d[["outcome]] is completely missing, then 
   # we should return NA
-  minv <- maxv <- NA
+  has_values <- !is.null(d[["outcome"]]) &&
+    length(d[["outcome"]]) > 0 &&
+    any(is.finite(d[["outcome"]]))
   
-  if(any(!is.na(d[["outcome"]]))) {
+  if (has_values) {
     # get min and (rounded) max
-    minv = min(d[["outcome"]], na.rm=T)
-    maxv = round_up_max(max(d[["outcome"]], na.rm=T))
+    minv <- min(d[["outcome"]], na.rm = TRUE)
+    maxv <- round_up_max(max(d[["outcome"]], na.rm = TRUE))
   }
   
-  if(!is.na(minv) & !is.na(maxv)) {
-    # get palette functions
-    pal = leaflet::colorNumeric("plasma", domain = c(min(d$outcome),max(d$outcome)), na.color = "transparent")
-    pal_rev <- leaflet::colorNumeric("plasma", domain = c(maxv,minv), reverse = TRUE, na.color = "transparent")
-  } else {
-    pal <- pal_rev <- NULL
-  }  
-  # generate hover values for county
   hover_vals <- get_hover_label_county(
-    county = d$NAME, 
-    fips = d$GEOID,
-    values = d$outcome,
+    county      = d$NAME,
+    fips        = d$GEOID,
+    values      = d$outcome,
     value_title = map_data$name
   )
   
-  # return list of information used for rendering polygons
-  list(d = d, pal=pal, pal_rev = pal_rev, minv=minv, maxv=maxv, hover_vals=hover_vals, value_title = map_data$name)
-  
+  list(
+    d          = d,
+    pal        = NULL,
+    pal_rev    = NULL,
+    minv       = minv,
+    maxv       = maxv,
+    hover_vals = hover_vals,
+    value_title = map_data$name
+  )
 }
 
-update_polygons <- function(p, pi) {
-  
-  default_fill_color = "white"
+
+
+update_polygons <- function(
+    p,
+    pi,
+    domain = NULL,
+    palette = "viridis",
+    legend_position = "bottomright"
+) {
+  if (!is.null(domain)) {
+    
+    pal_vec <- get_palette_vector(palette, n = 256)
+    
+    pal_fill <- leaflet::colorNumeric(
+      palette = pal_vec,
+      domain  = domain
+    )
+    pal_legend <- leaflet::colorNumeric(
+      # reverse for orientation bug that comes with using domain instead of data directly
+      palette = rev(pal_vec),
+      domain  = domain
+    )
+    
+    ticks <- seq(domain[1], domain[2], length.out = 6)
+    
+    p <- p |>
+      ## add the polygons
+      leaflet::addPolygons(
+        data        = pi$d,
+        fillColor   = ~pal_fill(outcome),
+        weight      = 1,
+        opacity     = 1,
+        color       = "white",
+        dashArray   = "3",
+        fillOpacity = 0.7,
+        highlightOptions = highlightOptions(
+          weight      = 2,
+          color       = "#666",
+          fillOpacity = 0.9,
+          bringToFront = TRUE
+        ),
+        label = lapply(pi$hover_vals, htmltools::HTML)
+      ) |>
+      leaflet::addLegend(
+        pal       = pal_legend,
+        values    = ticks,
+        labFormat = leaflet::labelFormat(
+          transform = function(x) sort(x, decreasing = TRUE)
+        ),
+        title     = pi$value_title,
+        position  = legend_position
+      )
+    
+    return(p)
+  }
   
   p <- p |> 
-    ## add the polygons
     leaflet::addPolygons(
       data = pi$d,
-      fillColor = {if(is.null(pi$pal)) "grey" else pi$pal(pi$d$outcome)},
+      fillColor = {if (is.null(pi$pal)) "grey" else pi$pal(pi$d$outcome)},
       weight = 1,
       opacity = 1,
       color = "white",
@@ -492,12 +583,10 @@ update_polygons <- function(p, pi) {
         values = c(pi$minv, pi$maxv),
         labFormat = leaflet::labelFormat(transform = function(x) sort(x, decreasing = TRUE)),
         title = pi$value_title,
-        position = "bottomright"
+        position  = legend_position
       )
   }
-  
   return(p)
-  
 }
 
 ################################################
