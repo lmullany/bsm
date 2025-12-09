@@ -19,12 +19,17 @@ counties_from_fips <- function(fips) {
 }
 
 add_fips<-function(data){
-  county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
-  county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")
-  county_to_fips<-county_to_fips|> rename(region="Region")
-  data<-inner_join(data,county_to_fips,by="region")
+  county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv", colClasses = "character")
+  county_to_fips[, countyfips:=stringr::str_pad(countyfips, width = 5, pad = "0", side = "left")]
+  setnames(county_to_fips, old="Region", new="region")
+  data <- merge(data, county_to_fips, by="region")
+  
+  # edge case: fips may be duplicated; 17031 is both IL_Chicago and IL_Cook
+  # make all such Cook; sum over numerics; maintain col order
+  data[countyfips == "17031", region:="IL_Cook"]
+  data <- data[, lapply(.SD, sum),.(region, date, countyfips)][, .SD, .SDcols = names(data)]
+  
   return(data)
-
 }
 
 
@@ -34,14 +39,22 @@ add_fips<-function(data){
 # the date. Speed up, (relative to using sapply on
 # the above function) grows with bigger datasets.
 wk_to_date <- function(df, date_col) {
-  d = df$date |> unique()
+  d = df[[date_col]] |> unique()
   ndf = names(df)
   dlu = data.table(
     sapply(str_split(d,"-",), \(f) MMWRweek2Date(as.numeric(f[1]), as.numeric(f[2]),1)) |> as.IDate(),
     d
   ) |> setnames(new=c("_x", date_col))
   df = df[dlu, on=c(date_col)]
-  df[, .SD, .SDcols = c("_x", ndf[-1])] |> setnames(new=ndf)
+  
+  # drop the original data column
+  df[, x:=NULL, env=list(x=date_col)]
+  
+  # rename _x to datecol
+  setnames(df, old="_x", new=date_col)
+  
+  # select cols in original order
+  df[, .SD, .SDcols = ndf]
 }
 
 ## LOAD ADJACENCY MATRICES
@@ -129,14 +142,13 @@ make_table_builder_url<-function(
       } else {
         county_filter <- counties_from_fips(county_filter)
       }
-      print(paste0("Filtering to ", paste0(county_filter,collapse=", ")))
+      
       url <- paste0(url,paste0("&geography=", gsub(" ","%20",tolower(county_filter)), collapse = ""))
     } 
   } else if (geo_resolution =="state"){
     url<-paste0(url,"&geographySystem=state")
     url<-paste0(url,"&columnField=geographystate")
     if (!is.null(state_filter)){
-      #print(paste0("Filtering to ", paste0(state_filter,collapse=", ")))
       url <- paste0(url,paste0("&geography=", tolower(state_filter), collapse = ""))
     }
   } else {
@@ -197,10 +209,14 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL,county_filter, med_g
   # Data Pull from ESSENCE
   data_all <- get_api_data(url_all, fromCSV = TRUE, profile=profile)
   data_single <- get_api_data(url_single, fromCSV = TRUE, profile=profile)
-  #merged<-reshape_and_join(df_single=data_single,df_all=data_all)
+  
+  
   setDT(data_all)
   setDT(data_single)
   merged <- reshape_and_join_dt(data_single, data_all)
+  
+  #if this is county level, add fips
+  if(geo_res == "county") merged <- add_fips(merged)
   
   return(list(data = merged, url_all = url_all, url_single = url_single))
 }

@@ -147,6 +147,7 @@ viz_time_series_server <- function(id, im, results) {
       
       output$ts_plots <- renderPlotly({
         validate(need(im$posterior, "Load data and run model first"))
+        validate(need(input$viz_regions, "Must have a least one region selected"))
         ts_plots()
       })
       
