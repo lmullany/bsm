@@ -13,7 +13,6 @@ library(bslib)
 library(bsicons)
 library(DT)
 library(ggplot2)
-library(Rnssp)
 library(dplyr)
 library(tidyr)
 library(stringr)
@@ -30,6 +29,11 @@ library(leaflet)
 library(leaflet.extras)
 library(reactable)
 library(viridisLite)
+
+# Rnssp is required, but too heavy to load
+# lets check for existence instead
+
+# epistemic required
 library(epistemic)
 
 ##################################
@@ -48,10 +52,13 @@ if(packageVersion("epistemic")<min_version) {
 ## profile
 ########################
 source("src/01_credentials.R")
-ALLOW_SHINY_CREDENTIALS <- FALSE
+ALLOW_SHINY_CREDENTIALS <- TRUE
 if (ALLOW_SHINY_CREDENTIALS) {
   CREDENTIALS <- check_environ_profile("myProfile")
 } else {
+  if(rstudioapi::isAvailable() == FALSE) {
+    cli::cli_abort("Is this app being run outside of RStudio? If so, the app must be configured to ALLOW SHINY CREDENTIALS")
+  }
   CREDENTIALS = get_profile(title = "Bayesian Spatiotemporal Modeling")
 }
 

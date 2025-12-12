@@ -21,7 +21,7 @@ credServer <- function(id, profile, valid_profile) {
       observe({
         # Process Credentials Dialog Submission
         if (!is.null(input$cred_user) && input$cred_user != "") {
-          prof <- create_profile(username = input$cred_user, password = input$cred_pwd)
+          prof <- Rnssp::create_profile(username = input$cred_user, password = input$cred_pwd)
         }
         # Now, check for validity
         if (!is.null(prof) && check_profile(prof)) {
@@ -47,7 +47,7 @@ check_profile <- function(profile, url = "https://essence.syndromicsurveillance.
   # this would return FALSE
   tryCatch(
     {
-      resp <- get_api_response(url = url, profile = profile)
+      resp <- Rnssp::get_api_response(url = url, profile = profile)
       return(resp$status == 200)
     },
     error = function(e) FALSE,

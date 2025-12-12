@@ -207,8 +207,8 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL,county_filter, med_g
     categ_info = categ_info
   )
   # Data Pull from ESSENCE
-  data_all <- get_api_data(url_all, fromCSV = TRUE, profile=profile)
-  data_single <- get_api_data(url_single, fromCSV = TRUE, profile=profile)
+  data_all <- Rnssp::get_api_data(url_all, fromCSV = TRUE, profile=profile)
+  data_single <- Rnssp::get_api_data(url_single, fromCSV = TRUE, profile=profile)
   
   
   setDT(data_all)
