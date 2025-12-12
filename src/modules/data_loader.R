@@ -2,8 +2,6 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 
-cat_values = get_categorical_values(profile = CREDENTIALS$profile)
-
 label_list_dl <- list(
   geo_res = list( 
     l = "Geographic Resolution",
@@ -46,7 +44,7 @@ data_loader_ui <- function(id) {
   ########################
   
   # syndrome selection accordion panel
-  synd_panel <- create_syndrome_inputs(ns=ns, cats = cat_values$ccdd_cats)
+  synd_panel <- create_syndrome_inputs(ns=ns, cats = NULL)
   
   # geographic resolution: zip or county
   geo = selectInput(
@@ -130,7 +128,7 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
     function(input, output, session) {
       ns <- session$ns
       data <- reactiveVal(NULL)
-
+      
       # observe for transition changes
       observe(update_cache_data_loader(session, cache_transitions)) |>
         bindEvent(reactiveValuesToList(cache_transitions))
@@ -157,9 +155,14 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
       observe(dc$synd_cat <- input$synd_cat)
       observe(dc$synd_drop_menu <- input$synd_drop_menu)
       
+      cat_values <- reactive(get_categorical_values(profile()))
+      
       # Update the choices for syndromic categories
       observe({
+        
+        req(cat_values())
         req(input$synd_cat)
+        cat_values <- cat_values()
         # get the set of choices
         sc = list(ccdd=cat_values$ccdd_cats,
                   synd=cat_values$syndromes,

@@ -46,9 +46,15 @@ if(packageVersion("epistemic")<min_version) {
 
 #########################
 ## profile
-#####################
+########################
 source("src/01_credentials.R")
-CREDENTIALS = get_profile(title = "Bayesian Spatiotemporal Modeling")
+ALLOW_SHINY_CREDENTIALS <- FALSE
+if (ALLOW_SHINY_CREDENTIALS) {
+  CREDENTIALS <- check_environ_profile("myProfile")
+} else {
+  CREDENTIALS = get_profile(title = "Bayesian Spatiotemporal Modeling")
+}
+
 
 ########################################################
 ## other key scripts, custom filters and the
