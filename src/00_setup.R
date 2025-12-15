@@ -52,7 +52,7 @@ if(packageVersion("epistemic")<min_version) {
 ## profile
 ########################
 source("src/01_credentials.R")
-ALLOW_SHINY_CREDENTIALS <- TRUE
+ALLOW_SHINY_CREDENTIALS <- FALSE
 if (ALLOW_SHINY_CREDENTIALS) {
   CREDENTIALS <- check_environ_profile("myProfile")
 } else {
