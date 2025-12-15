@@ -122,7 +122,7 @@ data_loader_ui <- function(id) {
 
 
 
-data_loader_server <- function(id, dc, results, profile, cache_transitions) {
+data_loader_server <- function(id, dc, results, profile, valid_profile, cache_transitions) {
   moduleServer(
     id,
     function(input, output, session) {
@@ -185,7 +185,13 @@ data_loader_server <- function(id, dc, results, profile, cache_transitions) {
       
       
       query_data <- reactive({
-      
+        
+        # stop if no profile, but if allowing shiny credentials, re try
+        if(is.null(profile()) && ALLOW_SHINY_CREDENTIALS) {
+            credServer(ns("creds"), profile, valid_profile)
+        }
+        req(profile())
+        
         # stop if no counties have been selected
         req(!is.null(dc$selected_counties), length(dc$selected_counties) > 0)
         
