@@ -11,22 +11,22 @@ get_categorical_values <- function(profile=NULL) {
   url <- "https://essence.syndromicsurveillance.org/nssp_essence/servlet/SyndromeDefinitionsServlet_CCDD?action=getCCDDTerms"
   ##################################################   Note CCDD name change!
   
-  combinedCategories <- comb_url |> get_api_data(profile = profile)
-  ccddterms <- get_api_data(url, profile = profile)
+  combinedCategories <- comb_url |> Rnssp::get_api_data(profile = profile)
+  ccddterms <- Rnssp::get_api_data(url, profile = profile)
   
   if(!is.null(combinedCategories) && !is.null(ccddterms)) {
     
     combinedCategories <- combinedCategories |>       
-      pluck("values") |> 
-      rename(combined_category = display) |> 
-      left_join(
+      purrr::pluck("values") |> 
+      dplyr::rename(combined_category = display) |> 
+      dplyr::left_join(
         ccddterms |> 
-          pluck("categories") |> 
-          select(combined_category = category, query_logic = definition) |> 
-          mutate(combined_category = paste("CCDD", combined_category)), 
+          purrr::pluck("categories") |> 
+          dplyr::select(combined_category = category, query_logic = definition) |> 
+          dplyr::mutate(combined_category = paste("CCDD", combined_category)), 
         by = "combined_category"
       ) |> 
-      mutate(across(where(is.character), ~replace_na(., "")))
+      dplyr::mutate(dplyr::across(where(is.character), ~tidyr::replace_na(., "")))
     
     
     setDT(combinedCategories)
