@@ -108,24 +108,51 @@ inla_model_ui <- function(id) {
       HTML("Precision Hyper-parameters:"),
       numericInput(ns("sco_prec_pc_param"), "PC Prior Sigma Threshold", value=.2, step = .001),
       sliderInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=1e-5, max = 1)
-      #numericInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=0, max = 1, step=0.01)
     )
   )
   
-  temporal_component_options <- tagList(
-    selectInput(
-      ns("tco_model"), "Model",
-      choices = c(
+  weekly_temporal_component_options <- tagList(
+    hidden(checkboxInput(ns("weekly_tco_chkbx"), "Weekly Component",value = TRUE)),
+    conditionalPanel(
+      condition = "input.weekly_tco_chkbx", 
+      selectInput(
+        ns("tco_model"), "Model (Weekly)",
+        choices = c(
         "Random Walk (Order 2)-Cyclical" = "rw2",
         "Random Walk (Order 1)-Cyclical" = "rw1",
         "Autoregressive-Cyclical" = "ar1",
         "Autoregressive - Temporal" = "ar"
+        ),
+        selected = "rw2"
       ),
-      selected = "rw2"
-    ),
+      conditionalPanel(
+        condition = "input.tco_model == 'ar'",
+        numericInput(ns("tco_model_ar_order"), "Order", value = 1, min=1, max=5), 
+        ns=ns
+      ),
+      ns=ns
+    )
+  )
+  
+  daily_temporal_component_options <- tagList(
+    checkboxInput(ns("daily_tco_chkbx"), "Daily Component",value = TRUE),
     conditionalPanel(
-      condition = "input.tco_model == 'ar'",
-      numericInput(ns("tco_model_ar_order"), "Order", value = 1, min=1, max=5), 
+      condition = "input.daily_tco_chkbx", 
+      selectInput(
+        ns("tco_model_d"), "Model (Daily)",
+        choices = c(
+          "Random Walk (Order 2)-Cyclical" = "rw2",
+          "Random Walk (Order 1)-Cyclical" = "rw1",
+          "Autoregressive-Cyclical" = "ar1",
+          "Autoregressive - Temporal" = "ar"
+        ),
+        selected = "rw2"
+      ),
+      conditionalPanel(
+        condition = "input.tco_model_d == 'ar'",
+        numericInput(ns("tco_model_ar_order_d"), "Order", value = 1, min=1, max=5), 
+        ns=ns
+      ),
       ns=ns
     )
   )
@@ -136,11 +163,15 @@ inla_model_ui <- function(id) {
       class="well", 
       layout_columns(
         checkboxInput(ns("rre_component_chkbx"), "Region Random Effect",value = TRUE),
-        input_switch(ns("customize_rre"),label ="Advanced Customization",value = FALSE),
+        conditionalPanel(
+          condition = "input.rre_component_chkbx",
+          input_switch(ns("customize_rre"),label ="Advanced Customization",value = FALSE),  
+          ns = ns
+        ),
         col_widths = c(6,6)
       ),
       conditionalPanel(
-        condition = "input.customize_rre",
+        condition = "input.customize_rre & input.rre_component_chkbx",
         region_re_options,
         ns=ns
       )
@@ -149,11 +180,15 @@ inla_model_ui <- function(id) {
       class = "well",
       layout_columns(
         checkboxInput(ns("spatial_component_chkbx"), "Spatio-Temporal Component",value = FALSE),
-        input_switch(ns("customize_spatial_component"),label ="Advanced Customization",value = FALSE),
+        conditionalPanel(
+          condition = "input.spatial_component_chkbx",
+          input_switch(ns("customize_spatial_component"),label ="Advanced Customization",value = FALSE),
+          ns = ns
+        ),
         col_widths = c(6,6)
       ),
       conditionalPanel(
-        condition = "input.customize_spatial_component",
+        condition = "input.customize_spatial_component & input.spatial_component_chkbx",
         spatial_component_options, 
         ns=ns
       )
@@ -162,21 +197,21 @@ inla_model_ui <- function(id) {
       class="well",
       layout_columns(
         checkboxInput(ns("temporal_component_chkbx"), "Seasonal/Temporal Component",value = FALSE),
-        input_switch(ns("customize_temporal_component"),label ="Advanced Customization",value = FALSE),
+        conditionalPanel(
+          condition = "input.temporal_component_chkbx",
+          input_switch(ns("customize_temporal_component"),label ="Advanced Customization",value = FALSE),
+          ns = ns
+        ),
         col_widths = c(6,6)
       ), 
       conditionalPanel(
-        condition = "input.customize_temporal_component",
-        temporal_component_options,
+        condition = "input.customize_temporal_component & input.temporal_component_chkbx",
+        hidden(div(id = ns("daily_tco_div"), daily_temporal_component_options)),
+        weekly_temporal_component_options,
         ns=ns
       )
     )
   )
-  
-  #hyper_params = tagList(
-  #  numericInput(ns("param"), "INLA Hyperparam: param", value=0.2),
-  #  numericInput(ns("alpha"), "INLA Hyperparam: alpha", value=0.01),
-  #)
   
   formula_panel = tagList(
     radioButtons(
@@ -315,7 +350,19 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
             )
         })
       })
-
+      
+      # hide/show the daily temporal div
+      observe({
+        # the daily temporal component should be visible only if daily
+        toggle(id = "daily_tco_div", condition = dc$time_res == "daily")
+        # the weekly temporal component checkbox should be visible only if daily
+        toggle(id = "weekly_tco_chkbx", condition = dc$time_res == "daily")
+        
+        # the weekly temporal component checkbox should be FALSE (by default) if daily
+        updateCheckboxInput(inputId = "weekly_tco_chkbx", value = dc$time_res == "weekly")
+        # the daily temporal component checkbox should be FALSE (by default) if weekly
+        updateCheckboxInput(inputId = "daily_tco_chkbx", value = dc$time_res != "weekly")
+      }) |> bindEvent(dc$time_res)
     
       formula_r <- reactive(
         get_formula(
@@ -323,7 +370,8 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           input = setNames(
             lapply(names(input), \(n) input[[n]]),
             names(input)
-          )
+          ), 
+          time_res = dc$time_res
         )
       )
       
@@ -379,7 +427,8 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           input = setNames(
             lapply(names(input), \(n) input[[n]]),
             names(input)
-          )
+          ),
+          time_res = dc$time_res
         )
         formula = eval(formula)
         
@@ -627,17 +676,17 @@ pre_process_data <- function(data, nforecasts ) {
   )
 
   data_cls <- epistemic::add_mmwr_week(data_cls)
+  data_cls <- epistemic::add_day_of_week(data_cls)
   return(data_cls)
 }
 
-get_formula <- function(formula_type, input) {
+get_formula <- function(formula_type, input, time_res) {
   
   # if this is custom, return the custom input
   if(formula_type == "custom_formula") {
     return(as.formula(input[["custom_formula"]]))
   }
   
-  # Required
   region_random_effect=build_region_random_effect(
     input, 
     # use default if formula type is default, or if advance customization toggle is off
@@ -646,8 +695,10 @@ get_formula <- function(formula_type, input) {
   
   temporal_component=build_temporal_component(
     input,
+    time_res = time_res,
     # use default if formula type is default, or if advance customization toggle is off
-    use_default = formula_type == "default" || input[["customize_temporal_component"]] == FALSE  )
+    use_default = formula_type == "default" || input[["customize_temporal_component"]] == FALSE
+  )
   
   spatial_component=build_spatial_component(
     input,
@@ -659,16 +710,33 @@ get_formula <- function(formula_type, input) {
     "intercept" = parse_expr("1"),
     "region_re" = region_random_effect,
     "spatial" = spatial_component,
-    "temporal" = temporal_component
+    "temporal" = unlist(temporal_component)
   )
 
   # reduce the components to those that are requested:
   requested = c("intercept")
-  if(input$rre_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "region_re")
-  if(input$spatial_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "spatial")
-  if(input$temporal_component_chkbx == TRUE && formula_type !="default") requested = c(requested, "temporal")
   
-  formula <- purrr::reduce(components[requested], ~call2('+', .x, .y))
+  # if default, or if random regional effect custom selected, add region_re
+  if(input$rre_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "region_re")
+  
+  # if default, or if spatial component custom selected, add spatial
+  if(input$spatial_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "spatial")
+  
+  # when do we add temporal:
+  # 1) if temporal component checked & not (default & weekly) OR
+  # 2) if default & daily
+  add_temporal <- any(
+   (input$temporal_component_chkbx && !(formula_type=="default" & time_res=="weekly")),
+   (formula_type == "default" & time_res == "daily")
+  )
+  # if the temporal component condition has been met, add this to the growing
+  # list of components
+  if(add_temporal) requested = c(requested, "temporal")
+  
+  # now, make sure this is an unnested set of expressions, using `unlist()`
+  formula <- purrr::reduce(
+    components[requested] |> unlist(), ~call2('+', .x, .y)
+  )
   
   expr(target~!!formula)
   
@@ -696,7 +764,7 @@ build_region_random_effect <- function(input, use_default=FALSE) {
   )
 }
 
-build_temporal_component <- function(input, use_default = FALSE) {
+build_temporal_component <- function(input, time_res, use_default = FALSE) {
   
   if(use_default == TRUE) {
     for(n in names(MODEL_COMPONENT_DEFAULTS)) {
@@ -705,23 +773,34 @@ build_temporal_component <- function(input, use_default = FALSE) {
   }
   
   check_names(input, c("tco_model", "tco_model_ar_order"))
+  if(time_res == "daily") check_names(input, c("tco_model_d", "tco_model_ar_order_d"))
   
-  tc = paste0(
-    "f(",
-    "week_id, ",
-    "model = '", input[["tco_model"]], "' "
-  )
-  if(input[["tco_model"]] == "ar") {
-    tc = paste0(tc, ", order=", input[["tco_model_ar_order"]], ")")
-  } else {
-    tc <-paste0(
-      tc,
-      ",cyclic=TRUE",
-      ")"
-    )
+  # set some placeholders for the daily (dc) and weekly (wc) components
+  # Note, when we pass empty string to parse_exprs, we get empty 
+  # list (which is what we would want!)
+  dc = "";wc = ""
+  
+  # if daily component checkbox is clicked we need to replace dc with actual expr
+  if(input[["daily_tco_chkbx"]]) {
+    dc = paste0("f(dow_id, model = '", input[["tco_model_d"]], "' ")
+    if(input[["tco_model_d"]] == "ar") {
+      dc = paste0(dc, ", order=", input[["tco_model_ar_order_d"]], ")")
+    } else {
+      dc <-paste0(dc,",cyclic=TRUE",")")
+    }
   }
   
-  rlang::parse_expr(tc)
+  # if weekly component checkbox and not default! we need to add this
+  if(input[["weekly_tco_chkbx"]] & use_default==FALSE) {
+    wc = paste0("f(week_id, model = '", input[["tco_model"]], "' ")
+    if(input[["tco_model"]] == "ar") {
+      wc = paste0(wc, ", order=", input[["tco_model_ar_order"]], ")")
+    } else {
+      wc <-paste0(wc,",cyclic=TRUE",")")
+    }
+  }
+  
+  parse_exprs(c(dc,wc))
   
 }
 
@@ -767,15 +846,24 @@ build_spatial_component <- function(input, use_default = FALSE) {
 }
 
 MODEL_COMPONENT_DEFAULTS = list(
-  sco_model_type = "besagproper", 
-  sco_control_group_model = "ar",
-  tco_model = "rw2", 
+  # regional random effect defaults
   rre_prec_pc_param = 0.2,
   rre_prec_pc_alpha = 0.01,
+  
+  # spatial component defaults
+  sco_model_type = "besagproper", 
+  sco_control_group_model = "ar",
   sco_control_group_ar_order = 1L,
   sco_prec_pc_param = 0.2,
   sco_prec_pc_alpha = 0.01,
+  
+  # weekly temporal component defaults
+  tco_model = "rw2", 
   tco_model_ar_order = 1L,
+  # daily temporal component defaults
+  tco_model_d = "rw2", 
+  tco_model_ar_order_d = 1L,
+  
   custom_formula = ""
 )
 

@@ -73,7 +73,7 @@ data_loader_ui <- function(id) {
   time_res <- selectInput(
     ns("time_res"),
     label=labeltt(label_list_dl[["temporal_res"]]),
-    choices = c("Weekly" = "weekly"), #, "Daily" = "daily"), #"Monthly" = "monthly"),
+    choices = c("Weekly" = "weekly", "Daily" = "daily"), #"Monthly" = "monthly"),
     selected = "weekly"
   )
   
