@@ -100,7 +100,7 @@ check_profile <- function(
       # Specifically, One cannot call The below function unless the Rnssp package
       # and/or one or more of its dependencies have been loaded. The current
       # unsatisfactory Workaround is to load magrittr.
-      library(magrittr)
+      suppressWarnings(library(magrittr))
       resp <- Rnssp::get_api_response(url=url, profile=profile)
       return(resp$status == 200)
     },

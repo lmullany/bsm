@@ -296,7 +296,7 @@
 #     stop("weather data is not available for states.")
 #   }
 #   
-#   weather_df<-get_api_data(url)$timeSeriesData[,c("date","stationID_id","count")]
+#   weather_df<-Rnssp::get_api_data(url)$timeSeriesData[,c("date","stationID_id","count")]
 #   weather_df <- weather_df |> 
 #     rename(stationid=stationID_id,temp=count)
 #   df_res<-inner_join(df[,c("county_fips","stationid","weight")],weather_df,by="stationid")
@@ -363,7 +363,7 @@
 #   } else if (geo_resolution =="state"){
 #     stop("Air quality data is not available for states.")
 #   }
-#   aq_df<-get_api_data(url)$timeSeriesData[,c("date","County_id","count")]
+#   aq_df<-Rnssp::get_api_data(url)$timeSeriesData[,c("date","County_id","count")]
 #   aq_df <- aq_df |> 
 #     rename(station_county_name=County_id,air_quality=count)
 #   

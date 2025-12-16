@@ -39,6 +39,11 @@ server <- function(input, output, session) {
   profile <- reactiveVal(CREDENTIALS$profile)
   valid_profile <- reactiveVal(CREDENTIALS$valid)
   
+  observe({
+    if(!valid_profile() && ALLOW_SHINY_CREDENTIALS == TRUE)
+      credServer("creds", profile, valid_profile)
+  })
+  
   # ----------------------------------------------------------------------
   # Global Reactives for configuration and results
   # ----------------------------------------------------------------------
@@ -50,7 +55,7 @@ server <- function(input, output, session) {
     states = NULL, selected_counties = NULL, includes_alaska_hawaii = NULL
   )
   
-  # use this to transfer cachee widget values from load query or load model
+  # use this to transfer cache widget values from load query or load model
   # through modules
   cache_transitions <- reactiveValues(
     states=NULL, selected_counties=NULL, geo_res=NULL, time_res=NULL, drange=NULL,
@@ -70,7 +75,7 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------
   # Module Server calls
   # ----------------------------------------------------------------------
-  data_loader_server(id = "data_load", dc, results, profile, cache_transitions)
+  data_loader_server(id = "data_load", dc, results, profile, valid_profile, cache_transitions)
   inla_model_server(id = "inla_model", dc, im, results, cache_transitions)
   viz_server("viz", dc, im, results)
   tooltip_server("tooltip")
