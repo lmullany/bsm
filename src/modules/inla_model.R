@@ -108,7 +108,6 @@ inla_model_ui <- function(id) {
       HTML("Precision Hyper-parameters:"),
       numericInput(ns("sco_prec_pc_param"), "PC Prior Sigma Threshold", value=.2, step = .001),
       sliderInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=1e-5, max = 1)
-      #numericInput(ns("sco_prec_pc_alpha"), "PC Prior Probability", value=0.01, min=0, max = 1, step=0.01)
     )
   )
   
@@ -172,11 +171,6 @@ inla_model_ui <- function(id) {
       )
     )
   )
-  
-  #hyper_params = tagList(
-  #  numericInput(ns("param"), "INLA Hyperparam: param", value=0.2),
-  #  numericInput(ns("alpha"), "INLA Hyperparam: alpha", value=0.01),
-  #)
   
   formula_panel = tagList(
     radioButtons(
@@ -323,7 +317,8 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           input = setNames(
             lapply(names(input), \(n) input[[n]]),
             names(input)
-          )
+          ), 
+          time_res = dc$time_res
         )
       )
       
@@ -379,7 +374,8 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           input = setNames(
             lapply(names(input), \(n) input[[n]]),
             names(input)
-          )
+          ),
+          time_res = dc$time_res
         )
         formula = eval(formula)
         
@@ -627,10 +623,11 @@ pre_process_data <- function(data, nforecasts ) {
   )
 
   data_cls <- epistemic::add_mmwr_week(data_cls)
+  data_cls <- epistemic::add_day_of_week(data_cls)
   return(data_cls)
 }
 
-get_formula <- function(formula_type, input) {
+get_formula <- function(formula_type, input, time_res) {
   
   # if this is custom, return the custom input
   if(formula_type == "custom_formula") {
@@ -646,8 +643,10 @@ get_formula <- function(formula_type, input) {
   
   temporal_component=build_temporal_component(
     input,
+    time_res = time_res,
     # use default if formula type is default, or if advance customization toggle is off
-    use_default = formula_type == "default" || input[["customize_temporal_component"]] == FALSE  )
+    use_default = formula_type == "default" || input[["customize_temporal_component"]] == FALSE
+  )
   
   spatial_component=build_spatial_component(
     input,
@@ -664,9 +663,19 @@ get_formula <- function(formula_type, input) {
 
   # reduce the components to those that are requested:
   requested = c("intercept")
+  # if default, or if random regional effect custom selected, add region_re
   if(input$rre_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "region_re")
+  # if default, or if spatial component custom selected, add spatial
   if(input$spatial_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "spatial")
-  if(input$temporal_component_chkbx == TRUE && formula_type !="default") requested = c(requested, "temporal")
+  # when do we add temporal:
+  # 1) if temporal component checked & not (default & weekly)
+  # 2) if default & daily
+  add_temporal <- any(
+   (input$temporal_component_chkbx && !(formula_type=="default" & time_res=="weekly")),
+   (formula_type == "default" & time_res == "daily")
+  )
+  
+  if(add_temporal) requested = c(requested, "temporal")
   
   formula <- purrr::reduce(components[requested], ~call2('+', .x, .y))
   
@@ -696,7 +705,7 @@ build_region_random_effect <- function(input, use_default=FALSE) {
   )
 }
 
-build_temporal_component <- function(input, use_default = FALSE) {
+build_temporal_component <- function(input, time_res, use_default = FALSE) {
   
   if(use_default == TRUE) {
     for(n in names(MODEL_COMPONENT_DEFAULTS)) {
@@ -708,7 +717,7 @@ build_temporal_component <- function(input, use_default = FALSE) {
   
   tc = paste0(
     "f(",
-    "week_id, ",
+    ifelse(time_res == "daily", "dow_id, ", "week_id, "),
     "model = '", input[["tco_model"]], "' "
   )
   if(input[["tco_model"]] == "ar") {
