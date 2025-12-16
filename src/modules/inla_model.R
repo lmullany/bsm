@@ -111,24 +111,33 @@ inla_model_ui <- function(id) {
     )
   )
   
-  temporal_component_options <- tagList(
-    selectInput(
-      ns("tco_model"), "Model (Weekly)",
-      choices = c(
+  weekly_temporal_component_options <- tagList(
+    hidden(checkboxInput(ns("weekly_tco_chkbx"), "Weekly Component",value = TRUE)),
+    conditionalPanel(
+      condition = "input.weekly_tco_chkbx", 
+      selectInput(
+        ns("tco_model"), "Model (Weekly)",
+        choices = c(
         "Random Walk (Order 2)-Cyclical" = "rw2",
         "Random Walk (Order 1)-Cyclical" = "rw1",
         "Autoregressive-Cyclical" = "ar1",
         "Autoregressive - Temporal" = "ar"
+        ),
+        selected = "rw2"
       ),
-      selected = "rw2"
-    ),
-    conditionalPanel(
-      condition = "input.tco_model == 'ar'",
-      numericInput(ns("tco_model_ar_order"), "Order", value = 1, min=1, max=5), 
+      conditionalPanel(
+        condition = "input.tco_model == 'ar'",
+        numericInput(ns("tco_model_ar_order"), "Order", value = 1, min=1, max=5), 
+        ns=ns
+      ),
       ns=ns
-    ), 
-    hidden(div(
-      id = ns("daily_tco_div"),
+    )
+  )
+  
+  daily_temporal_component_options <- tagList(
+    checkboxInput(ns("daily_tco_chkbx"), "Daily Component",value = TRUE),
+    conditionalPanel(
+      condition = "input.daily_tco_chkbx", 
       selectInput(
         ns("tco_model_d"), "Model (Daily)",
         choices = c(
@@ -143,8 +152,9 @@ inla_model_ui <- function(id) {
         condition = "input.tco_model_d == 'ar'",
         numericInput(ns("tco_model_ar_order_d"), "Order", value = 1, min=1, max=5), 
         ns=ns
-      ) 
-    ))
+      ),
+      ns=ns
+    )
   )
   
   # Custom model panel
@@ -196,7 +206,8 @@ inla_model_ui <- function(id) {
       ), 
       conditionalPanel(
         condition = "input.customize_temporal_component & input.temporal_component_chkbx",
-        temporal_component_options,
+        hidden(div(id = ns("daily_tco_div"), daily_temporal_component_options)),
+        weekly_temporal_component_options,
         ns=ns
       )
     )
@@ -341,7 +352,14 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       })
       
       # hide/show the daily temporal div
-      observe(toggle(id = "daily_tco_div", condition = dc$time_res == "daily"))
+      observe({
+        # the daily temporal component should be visible only if daily
+        toggle(id = "daily_tco_div", condition = dc$time_res == "daily")
+        # the weekly temporal component checkbox should be visible only if daily
+        toggle(id = "weekly_tco_chkbx", condition = dc$time_res == "daily")
+        # the weekly temporal component checkbox should be FALSE if daily
+        updateCheckboxInput(inputId = "weekly_tco_chkbx", value = dc$time_res == "weekly")
+      }) |> bindEvent(dc$time_res)
     
       formula_r <- reactive(
         get_formula(
