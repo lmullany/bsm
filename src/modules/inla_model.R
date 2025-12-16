@@ -113,7 +113,7 @@ inla_model_ui <- function(id) {
   
   temporal_component_options <- tagList(
     selectInput(
-      ns("tco_model"), "Model",
+      ns("tco_model"), "Model (Weekly)",
       choices = c(
         "Random Walk (Order 2)-Cyclical" = "rw2",
         "Random Walk (Order 1)-Cyclical" = "rw1",
@@ -126,7 +126,25 @@ inla_model_ui <- function(id) {
       condition = "input.tco_model == 'ar'",
       numericInput(ns("tco_model_ar_order"), "Order", value = 1, min=1, max=5), 
       ns=ns
-    )
+    ), 
+    hidden(div(
+      id = ns("daily_tco_div"),
+      selectInput(
+        ns("tco_model_d"), "Model (Daily)",
+        choices = c(
+          "Random Walk (Order 2)-Cyclical" = "rw2",
+          "Random Walk (Order 1)-Cyclical" = "rw1",
+          "Autoregressive-Cyclical" = "ar1",
+          "Autoregressive - Temporal" = "ar"
+        ),
+        selected = "rw2"
+      ),
+      conditionalPanel(
+        condition = "input.tco_model_d == 'ar'",
+        numericInput(ns("tco_model_ar_order_d"), "Order", value = 1, min=1, max=5), 
+        ns=ns
+      ) 
+    ))
   )
   
   # Custom model panel
@@ -135,11 +153,15 @@ inla_model_ui <- function(id) {
       class="well", 
       layout_columns(
         checkboxInput(ns("rre_component_chkbx"), "Region Random Effect",value = TRUE),
-        input_switch(ns("customize_rre"),label ="Advanced Customization",value = FALSE),
+        conditionalPanel(
+          condition = "input.rre_component_chkbx",
+          input_switch(ns("customize_rre"),label ="Advanced Customization",value = FALSE),  
+          ns = ns
+        ),
         col_widths = c(6,6)
       ),
       conditionalPanel(
-        condition = "input.customize_rre",
+        condition = "input.customize_rre & input.rre_component_chkbx",
         region_re_options,
         ns=ns
       )
@@ -148,11 +170,15 @@ inla_model_ui <- function(id) {
       class = "well",
       layout_columns(
         checkboxInput(ns("spatial_component_chkbx"), "Spatio-Temporal Component",value = FALSE),
-        input_switch(ns("customize_spatial_component"),label ="Advanced Customization",value = FALSE),
+        conditionalPanel(
+          condition = "input.spatial_component_chkbx",
+          input_switch(ns("customize_spatial_component"),label ="Advanced Customization",value = FALSE),
+          ns = ns
+        ),
         col_widths = c(6,6)
       ),
       conditionalPanel(
-        condition = "input.customize_spatial_component",
+        condition = "input.customize_spatial_component & input.spatial_component_chkbx",
         spatial_component_options, 
         ns=ns
       )
@@ -161,11 +187,15 @@ inla_model_ui <- function(id) {
       class="well",
       layout_columns(
         checkboxInput(ns("temporal_component_chkbx"), "Seasonal/Temporal Component",value = FALSE),
-        input_switch(ns("customize_temporal_component"),label ="Advanced Customization",value = FALSE),
+        conditionalPanel(
+          condition = "input.temporal_component_chkbx",
+          input_switch(ns("customize_temporal_component"),label ="Advanced Customization",value = FALSE),
+          ns = ns
+        ),
         col_widths = c(6,6)
       ), 
       conditionalPanel(
-        condition = "input.customize_temporal_component",
+        condition = "input.customize_temporal_component & input.temporal_component_chkbx",
         temporal_component_options,
         ns=ns
       )
@@ -309,7 +339,9 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
             )
         })
       })
-
+      
+      # hide/show the daily temporal div
+      observe(toggle(id = "daily_tco_div", condition = dc$time_res == "daily"))
     
       formula_r <- reactive(
         get_formula(
