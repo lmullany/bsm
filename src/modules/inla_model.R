@@ -357,8 +357,11 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         toggle(id = "daily_tco_div", condition = dc$time_res == "daily")
         # the weekly temporal component checkbox should be visible only if daily
         toggle(id = "weekly_tco_chkbx", condition = dc$time_res == "daily")
-        # the weekly temporal component checkbox should be FALSE if daily
+        
+        # the weekly temporal component checkbox should be FALSE (by default) if daily
         updateCheckboxInput(inputId = "weekly_tco_chkbx", value = dc$time_res == "weekly")
+        # the daily temporal component checkbox should be FALSE (by default) if weekly
+        updateCheckboxInput(inputId = "daily_tco_chkbx", value = dc$time_res != "weekly")
       }) |> bindEvent(dc$time_res)
     
       formula_r <- reactive(
@@ -684,7 +687,6 @@ get_formula <- function(formula_type, input, time_res) {
     return(as.formula(input[["custom_formula"]]))
   }
   
-  # Required
   region_random_effect=build_region_random_effect(
     input, 
     # use default if formula type is default, or if advance customization toggle is off
@@ -708,15 +710,18 @@ get_formula <- function(formula_type, input, time_res) {
     "intercept" = parse_expr("1"),
     "region_re" = region_random_effect,
     "spatial" = spatial_component,
-    "temporal" = temporal_component
+    "temporal" = unlist(temporal_component)
   )
 
   # reduce the components to those that are requested:
   requested = c("intercept")
+  
   # if default, or if random regional effect custom selected, add region_re
   if(input$rre_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "region_re")
+  
   # if default, or if spatial component custom selected, add spatial
   if(input$spatial_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "spatial")
+  
   # when do we add temporal:
   # 1) if temporal component checked & not (default & weekly)
   # 2) if default & daily
@@ -727,7 +732,7 @@ get_formula <- function(formula_type, input, time_res) {
   
   if(add_temporal) requested = c(requested, "temporal")
   
-  formula <- purrr::reduce(components[requested], ~call2('+', .x, .y))
+  formula <- purrr::reduce(components[requested] |> unlist(), ~call2('+', .x, .y))
   
   expr(target~!!formula)
   
@@ -764,23 +769,32 @@ build_temporal_component <- function(input, time_res, use_default = FALSE) {
   }
   
   check_names(input, c("tco_model", "tco_model_ar_order"))
+  if(time_res == "daily") check_names(input, c("tco_model_d", "tco_model_ar_order_d"))
   
-  tc = paste0(
-    "f(",
-    ifelse(time_res == "daily", "dow_id, ", "week_id, "),
-    "model = '", input[["tco_model"]], "' "
-  )
-  if(input[["tco_model"]] == "ar") {
-    tc = paste0(tc, ", order=", input[["tco_model_ar_order"]], ")")
-  } else {
-    tc <-paste0(
-      tc,
-      ",cyclic=TRUE",
-      ")"
-    )
+  dc = ""
+  wc = ""
+  
+  # if daily component checkbox is clicked we need to add this
+  if(input[["daily_tco_chkbx"]]) {
+    dc = paste0("f(dow_id, model = '", input[["tco_model_d"]], "' ")
+    if(input[["tco_model_d"]] == "ar") {
+      dc = paste0(dc, ", order=", input[["tco_model_ar_order_d"]], ")")
+    } else {
+      dc <-paste0(dc,",cyclic=TRUE",")")
+    }
   }
   
-  rlang::parse_expr(tc)
+  # if weekly component checkbox and not default! we need to add this
+  if(input[["weekly_tco_chkbx"]] & use_default==FALSE) {
+    wc = paste0("f(week_id, model = '", input[["tco_model"]], "' ")
+    if(input[["tco_model"]] == "ar") {
+      wc = paste0(wc, ", order=", input[["tco_model_ar_order"]], ")")
+    } else {
+      wc <-paste0(wc,",cyclic=TRUE",")")
+    }
+  }
+  
+  parse_exprs(c(dc,wc))
   
 }
 
@@ -826,15 +840,20 @@ build_spatial_component <- function(input, use_default = FALSE) {
 }
 
 MODEL_COMPONENT_DEFAULTS = list(
-  sco_model_type = "besagproper", 
-  sco_control_group_model = "ar",
-  tco_model = "rw2", 
   rre_prec_pc_param = 0.2,
   rre_prec_pc_alpha = 0.01,
+  
+  sco_model_type = "besagproper", 
+  sco_control_group_model = "ar",
   sco_control_group_ar_order = 1L,
   sco_prec_pc_param = 0.2,
   sco_prec_pc_alpha = 0.01,
+  
+  tco_model = "rw2", 
   tco_model_ar_order = 1L,
+  tco_model_d = "rw2", 
+  tco_model_ar_order_d = 1L,
+  
   custom_formula = ""
 )
 
