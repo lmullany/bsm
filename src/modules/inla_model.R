@@ -723,16 +723,20 @@ get_formula <- function(formula_type, input, time_res) {
   if(input$spatial_component_chkbx == TRUE || formula_type == "default") requested = c(requested, "spatial")
   
   # when do we add temporal:
-  # 1) if temporal component checked & not (default & weekly)
+  # 1) if temporal component checked & not (default & weekly) OR
   # 2) if default & daily
   add_temporal <- any(
    (input$temporal_component_chkbx && !(formula_type=="default" & time_res=="weekly")),
    (formula_type == "default" & time_res == "daily")
   )
-  
+  # if the temporal component condition has been met, add this to the growing
+  # list of components
   if(add_temporal) requested = c(requested, "temporal")
   
-  formula <- purrr::reduce(components[requested] |> unlist(), ~call2('+', .x, .y))
+  # now, make sure this is an unnested set of expressions, using `unlist()`
+  formula <- purrr::reduce(
+    components[requested] |> unlist(), ~call2('+', .x, .y)
+  )
   
   expr(target~!!formula)
   
@@ -771,10 +775,12 @@ build_temporal_component <- function(input, time_res, use_default = FALSE) {
   check_names(input, c("tco_model", "tco_model_ar_order"))
   if(time_res == "daily") check_names(input, c("tco_model_d", "tco_model_ar_order_d"))
   
-  dc = ""
-  wc = ""
+  # set some placeholders for the daily (dc) and weekly (wc) components
+  # Note, when we pass empty string to parse_exprs, we get empty 
+  # list (which is what we would want!)
+  dc = "";wc = ""
   
-  # if daily component checkbox is clicked we need to add this
+  # if daily component checkbox is clicked we need to replace dc with actual expr
   if(input[["daily_tco_chkbx"]]) {
     dc = paste0("f(dow_id, model = '", input[["tco_model_d"]], "' ")
     if(input[["tco_model_d"]] == "ar") {
@@ -840,17 +846,21 @@ build_spatial_component <- function(input, use_default = FALSE) {
 }
 
 MODEL_COMPONENT_DEFAULTS = list(
+  # regional random effect defaults
   rre_prec_pc_param = 0.2,
   rre_prec_pc_alpha = 0.01,
   
+  # spatial component defaults
   sco_model_type = "besagproper", 
   sco_control_group_model = "ar",
   sco_control_group_ar_order = 1L,
   sco_prec_pc_param = 0.2,
   sco_prec_pc_alpha = 0.01,
   
+  # weekly temporal component defaults
   tco_model = "rw2", 
   tco_model_ar_order = 1L,
+  # daily temporal component defaults
   tco_model_d = "rw2", 
   tco_model_ar_order_d = 1L,
   
