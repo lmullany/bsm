@@ -675,8 +675,8 @@ pre_process_data <- function(data, nforecasts ) {
     den = 1
   )
 
-  data_cls <- epistemic::add_mmwr_week(data_cls)
-  data_cls <- epistemic::add_day_of_week(data_cls)
+  epistemic::add_mmwr_week(data_cls)
+  epistemic::add_day_of_week(data_cls)
   return(data_cls)
 }
 
