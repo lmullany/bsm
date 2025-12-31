@@ -32,7 +32,8 @@ button_list_dl <-list(
     "Saved queries are zip files containing json and rds objects with the ",
     "file suffix .bsm_query."),
   download_csv = "Download retrieved data and save as a csv file on your local machine.",
-  save_query = "Save the query to a bsm_query file so that it can be reloaded later."
+  save_query = "Save the query to a bsm_query file so that it can be reloaded later.",
+  add_covariates = "Add covariates by loading another data file. These covariates can be included in the model later."
 )
 
 data_loader_ui <- function(id) {
@@ -98,6 +99,8 @@ data_loader_ui <- function(id) {
             input_task_button(ns("load_data_btn"), "Query ESSENCE")),
           add_button_hover(title = button_list_dl[["load_query"]],
             input_task_button(ns("load_saved_query"), "Load Saved Query")),
+          add_button_hover(title = button_list_dl[["add_covariates"]],
+                           input_task_button(ns("cov_button_ui"), "Add Covariates")),
           width = c(6,6)
         ),
         uiOutput(ns("zipfile_ui"))
@@ -262,6 +265,21 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
       observe(data(query_data())) |> bindEvent(query_data())
       observe(data(loaded_data())) |> bindEvent(loaded_data())  
       
+      cov <- add_covariate_loader(input, 
+                                  output, 
+                                  session, 
+                                  get_base_dt = function() data()$data,
+                                  set_base_dt = function(dt) {
+                                    x <- data()
+                                    x$data <- dt
+                                    data(x)
+                                  },
+                                  button_id = "cov_button_ui",
+                                  button_label = "Add Covariates"
+                                  )
+      
+      #print(names(shiny::reactiveValuesToList(input)))
+
       output$download_ui <- renderUI({
         req(!is.null(data()))
         tagList(
@@ -307,7 +325,6 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
       
       output$ingested_data <- renderDT({
         req(data()$data)
-        
         d <- data()$data[, .SD, .SDcols = patterns("^(?!countyfips).*$", perl=T)]
         
         # identify columns to round
