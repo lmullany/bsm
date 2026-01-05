@@ -25,6 +25,10 @@ label_list_im <- list(
   model_spec = list(
     l = "Model Specification",
     m = "Select whether to use the default model or to customize model components (advanced users only)."
+  ),
+  formula_spec = list(
+    l = "Enter Model Formula",
+    m = "Enter the formula for the model you would like to fit. The formula should start with 'target ~' and should can referene features already present in the dataset along with r_id (Region), d_id (Date) and adjacency_matrix."
   )
 )
 button_list_im <-list(
@@ -219,16 +223,11 @@ inla_model_ui <- function(id) {
       label=labeltt(label_list_im[["model_spec"]]),
       choices = c(
         "Default Model"="default",
-        "Customize Components" = "custom_components"
-        #"Custom Model Formula" = "custom_formula"
+        "Customize Components" = "custom_components",
+        "Custom Model Formula" = "custom_formula"
       ), 
       selected = "default",
       inline = TRUE
-    ),
-    tags$details(
-      tags$summary("Show Generic Formula"), 
-      verbatimTextOutput(ns("inla_model_formula_r")) |> 
-        tagAppendAttributes(style = css("white-space" = "pre-wrap"))
     ),
     conditionalPanel(
       condition = "input.formula_type == 'custom_components'",
@@ -237,9 +236,15 @@ inla_model_ui <- function(id) {
     ),
     conditionalPanel(
       condition = "input.formula_type == 'custom_formula'",
-      textAreaInput(ns("custom_formula"), "Enter model formula"),
+      textAreaInput(ns("custom_formula"), labeltt(label_list_im[["formula_spec"]])),
+      uiOutput(ns("formula_error_box")), # box to enter custom formula
       ns = ns
-    )
+    ),
+    tags$details(
+      tags$summary("Show Generic Formula"), 
+      verbatimTextOutput(ns("inla_model_formula_r")) |>  
+        tagAppendAttributes(style = css("white-space" = "pre-wrap"))
+    ) # the above displays the formula currently selected.
   )
 
   
@@ -325,7 +330,6 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
   moduleServer(
     id,
     function(input, output, session) {
-      
       # update global reactive model object
       observe(im$model <- inla_model()$model)
       # update global reactive data_class object for current model result
@@ -363,28 +367,81 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         # the daily temporal component checkbox should be FALSE (by default) if weekly
         updateCheckboxInput(inputId = "daily_tco_chkbx", value = dc$time_res != "weekly")
       }) |> bindEvent(dc$time_res)
-    
-      formula_r <- reactive(
-        get_formula(
+      
+      # Track formula state      
+      state <- reactiveValues(valid = TRUE, errors = character())
+      
+      # Get formula from input
+      formula_r <- reactive({
+        req(results$data, input$nforecasts, input$formula_type)
+        
+        data_cls <- pre_process_data(results$data, input$nforecasts)
+        
+        tmp <- get_formula(
           formula_type = input$formula_type,
           input = setNames(
             lapply(names(input), \(n) input[[n]]),
             names(input)
           ), 
+          dc =  data_cls,
           time_res = dc$time_res
         )
-      )
+        
+        state$valid  <- isTRUE(tmp$valid)
+        state$errors <- if (!is.null(tmp$errors)) tmp$errors else character()
+        
+        tmp$formula
+      })
+      # Observe changes to formula to update state
+      observe({ formula_r() })
       
-      output$inla_model_formula_r <- renderPrint({
-        deparse1(formula_r()) |> cat()
+      # Disable button if formula is invalid
+      observe({
+        shinyjs::toggleState("estimate_model_btn", condition = isTRUE(state$valid))
       })
       
+      # Parse formula for display
+      output$inla_model_formula_r <- renderText({
+        f <- formula_r()
+        req(f)
+        
+        # If formula_r() returns an actual formula/expression, just deparse it
+        if (!is.character(f)) {
+          return(paste(deparse(f, width.cutoff = 500), collapse = "\n"))
+        }
+        
+        # If it's an R-printed string like: " ... \"iid\" ... "
+        # evaluate it as a string literal to remove the backslashes + outer quotes
+        f2 <- tryCatch({
+          if (grepl('^".*"$', f) && grepl('\\\\\"', f)) eval(parse(text = f)) else f
+        }, error = function(e) f)
+        
+        # Now try to parse as an expression and re-render nicely
+        expr <- tryCatch(rlang::parse_expr(f2), error = function(e) NULL)
+        if (!is.null(expr)) return(rlang::expr_text(expr))
+        
+        # If it still can't parse, show raw
+        f2
+      })
+      
+      # Display any errors from validating formula
+      output$formula_error_box <- renderUI({
+        # Only show if invalid AND there are messages
+        if (isTRUE(state$valid) || length(state$errors) == 0) return(NULL)
+        
+        div(
+          class = "alert alert-danger",
+          tags$strong("Formula issues:"),
+          tags$ul(lapply(state$errors, tags$li))
+        )
+      })
+      
+      
       # On click of "Estimate Model", we will want to
-      # 1. Validate the inputs
-      # 2. Pre-process transform the data
-      # 3. get adjacency matrice(s)
-      # 4. Create the formula (custom or default)
-      # 5. Run the model
+      # 1. Pre-process transform the data
+      # 2. get adjacency matrice(s)
+      # 3. Create the formula 
+      # 4. Run the model
       
       # Render the validation on the selected counties
       
@@ -401,14 +458,10 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         req(model_ready[["valid"]])
 
         
-        #1. TODO: VALIDATE INPUTS
-        
-        #2. Preprocess Data:
+        # Preprocess Data:
         data_cls <- pre_process_data(results$data, input$nforecasts)
         
-        #3 Set adjacency matrix
-        # Note that we set it here, but we really should set to NULL
-        # and pass that NULL to the fit_model function if not needed
+        # Set adjacency matrix
         if(input$formula_type == "default") {
           adj_mat_raw <- dc$physical_adj
         } else if (input$spatial_component_chkbx == TRUE) {
@@ -421,32 +474,41 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           adj_mat_raw <- NULL
         }        
         
-        #4 Create the formula, with generic region and date ids
-        formula <- get_formula(
+        # Create the formula
+        tmp <- get_formula(
           formula_type = input$formula_type,
           input = setNames(
             lapply(names(input), \(n) input[[n]]),
             names(input)
           ),
+          dc =  data_cls,
           time_res = dc$time_res
         )
-        formula = eval(formula)
+        valid <- tmp$valid
+        formula <- tmp$formula
         
-        #5. fit the model
-        model <- epistemic::fit_model(
-          data_cls=data_cls,
-          formula=formula,
-          family = input$dist_family,
-          reformulate = TRUE,
-          adjacency_matrix = adj_mat_raw
-        )
-                
-        return(list(
-          model = model$inla_model,
-          data_class = model$data,          
-          formula = deparse1(model$formula)
-        ))
+        # fit if valid.
+        if (valid){
+          formula = eval(formula)
         
+          # fit the model
+          model <- epistemic::fit_model(
+            data_cls=data_cls,
+            formula=formula,
+            family = input$dist_family,
+            reformulate = TRUE,
+            adjacency_matrix = adj_mat_raw
+          )
+                  
+          return(list(
+            model = model$inla_model,
+            data_class = model$data,          
+            formula = deparse1(model$formula)
+          ))
+        } else {
+          #This case should be prevented since the run button is disabled when invalid.
+          print("Invalid formula!")
+        }
 
       }) |> bindEvent(input$estimate_model_btn)
     
@@ -680,11 +742,17 @@ pre_process_data <- function(data, nforecasts ) {
   return(data_cls)
 }
 
-get_formula <- function(formula_type, input, time_res) {
-  
+get_formula <- function(formula_type, input, dc, time_res) {
   # if this is custom, return the custom input
   if(formula_type == "custom_formula") {
-    return(as.formula(input[["custom_formula"]]))
+    f<-input[["custom_formula"]]
+    if (!is.null(dc)){
+      res = epistemic:::validate_inla_formula(f,dc)
+      if (!res$ok){
+        return(list(valid = FALSE,formula = pretty_formula(f), errors = res$errors))
+      }
+    }
+    return(list(valid = TRUE,formula = as.formula(f)))
   }
   
   region_random_effect=build_region_random_effect(
@@ -738,7 +806,7 @@ get_formula <- function(formula_type, input, time_res) {
     components[requested] |> unlist(), ~call2('+', .x, .y)
   )
   
-  expr(target~!!formula)
+  list(valid = TRUE, formula = expr(target~!!formula))
   
 }
 
@@ -902,4 +970,27 @@ model_ready_to_run <- function(data, formula, input) {
     valid = valid
   )
       
+}
+
+pretty_formula <- function(x) {
+  # If it's already a formula/call/expression, deparse it
+  if (!is.character(x)) {
+    return(paste(deparse(x, width.cutoff = 500), collapse = "\n"))
+  }
+  
+  # Raw text from textAreaInput
+  if (length(x) == 0 || is.na(x)) return("")
+  x <- paste(x, collapse = "\n")
+  
+  parsed <- tryCatch(rlang::parse_expr(x), error = function(e) NULL)
+  
+  # If it doesn't parse, show exactly what the user typed (no extra quoting)
+  if (is.null(parsed)) return(x)
+  
+  if (rlang::is_scalar_atomic(parsed)) {
+    return(as.character(parsed))
+  }
+  
+  # Otherwise, show as code
+  rlang::expr_text(parsed)
 }
