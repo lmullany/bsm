@@ -89,8 +89,6 @@ server <- function(input, output, session) {
   observe(toggleState(
     condition = !is.null(im$model), selector = 'a[data-value="viz-viz_main"]'
   ))
-  
-  
 }
 
 
