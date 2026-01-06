@@ -160,6 +160,14 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
       
       cat_values <- reactive(get_categorical_values(profile()))
       
+      observe({
+        if (is.null(data()$data)) {
+          shinyjs::disable("cov_button_ui")
+        } else {
+          shinyjs::enable("cov_button_ui")
+        }
+      })
+      
       # Update the choices for syndromic categories
       observe({
         
