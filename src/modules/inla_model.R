@@ -28,7 +28,7 @@ label_list_im <- list(
   ),
   formula_spec = list(
     l = "Enter Model Formula",
-    m = "Enter the formula for the model you would like to fit. The formula should start with 'target ~' and should can referene features already present in the dataset along with r_id (Region), d_id (Date) and adjacency_matrix."
+    m = "Enter the formula for the model you would like to fit. The formula should start with 'target ~' and should can reference the available features listed in the box above."
   )
 )
 button_list_im <-list(
@@ -82,7 +82,7 @@ inla_model_ui <- function(id) {
       ns("sco_adjacency_type"), "Neighborhood Basis", 
       choices=c(
         "Mobility" = "mobility_adj_mat",
-        "Distance" = "distance_adj_mat"
+        "Proximity" = "physical_adj_mat"
       ),
       inline=TRUE
     ),
@@ -236,9 +236,22 @@ inla_model_ui <- function(id) {
     ),
     conditionalPanel(
       condition = "input.formula_type == 'custom_formula'",
+      uiOutput(ns("available_features_box")),
       textAreaInput(ns("custom_formula"), labeltt(label_list_im[["formula_spec"]])),
       uiOutput(ns("formula_error_box")), # box to enter custom formula
       ns = ns
+    ),
+    conditionalPanel(
+      condition = "input.custom_formula && /graph/i.test(input.custom_formula)",
+      radioButtons(
+        ns("sco_adjacency_type_custom"), "Adjacency Matrix", 
+        choices=c(
+          "Mobility" = "mobility_adj_mat",
+          "Proximity" = "physical_adj_mat"
+        ),
+        inline=TRUE
+      ), 
+      ns=ns
     ),
     tags$details(
       tags$summary("Show Generic Formula"), 
@@ -336,10 +349,14 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       observe(im$data_cls <- inla_model()$data_class)
       
       # update global reactive posteriors for current model
-      observe(im$posterior <- add_posteriors(
-        data_cls = inla_model()$data_class,
-        model = inla_model()$model
-        )) |> bindEvent(inla_model())
+      observe({
+        res <- inla_model()
+        req(isTRUE(res$ok))
+        print(res)
+        im$posterior <- add_posteriors(
+        data_cls = res$data_class,
+        model = res$model
+        )}) |> bindEvent(inla_model())
       observe(im$nforecasts <- input$nforecasts)
       
       # observe the time_res and update the forecasts label and 
@@ -369,13 +386,17 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       }) |> bindEvent(dc$time_res)
       
       # Track formula state      
-      state <- reactiveValues(valid = TRUE, errors = character())
+      state <- reactiveValues(valid = TRUE, errors = character(), features = c("r_id","d_id"))
       
       # Get formula from input
       formula_r <- reactive({
         req(results$data, input$nforecasts, input$formula_type)
         
         data_cls <- pre_process_data(results$data, input$nforecasts)
+        num_cols <- names(data_cls$data)[vapply(data_cls$data, is.numeric, logical(1L))]
+        features <- setdiff(num_cols, c("target","denominator_source"))
+        
+        state$features <-  unique(c("r_id","d_id",features))
         
         tmp <- get_formula(
           formula_type = input$formula_type,
@@ -394,6 +415,24 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       })
       # Observe changes to formula to update state
       observe({ formula_r() })
+      
+      
+      output$available_features_box <- renderUI({
+        feats <- state$features
+        req(length(feats) > 0)
+        
+        tags$div(
+          style = "margin-bottom: 0.5rem;",
+          tags$strong("Available features:"),
+          tags$div(
+            style="max-height: 140px; overflow-y: auto; border: 1px solid #ddd; padding: 0.5rem; border-radius: 4px;",
+            tags$ul(
+              style = "margin: 0; padding-left: 1.2rem;",
+              lapply(feats, tags$li)
+            )
+          )
+        )
+      })
       
       # Disable button if formula is invalid
       observe({
@@ -464,7 +503,18 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         # Set adjacency matrix
         if(input$formula_type == "default") {
           adj_mat_raw <- dc$physical_adj
-        } else if (input$spatial_component_chkbx == TRUE) {
+        } else if (input$formula_type == "custom_formula"){ 
+          print("loading adjacency")
+          if(input$sco_adjacency_type_custom == "mobility_adj_mat") {
+            print("selected mobility")
+            adj_mat_raw <- dc$mobility_adj
+          } else if (input$sco_adjacency_type_custom == "physical_adj_mat"){
+            print("selected physical")
+            adj_mat_raw <- dc$physical_adj
+          } else {
+            adj_mat_raw <- NULL
+          }
+        }else if (input$spatial_component_chkbx == TRUE) {
           if(input$sco_adjacency_type == "mobility_adj_mat") {
             adj_mat_raw <- dc$mobility_adj
           } else {
@@ -491,20 +541,42 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         if (valid){
           formula = eval(formula)
         
-          # fit the model
-          model <- epistemic::fit_model(
-            data_cls=data_cls,
-            formula=formula,
-            family = input$dist_family,
-            reformulate = TRUE,
-            adjacency_matrix = adj_mat_raw
+          fit_res <- tryCatch(
+            {
+            # fit the model
+            model <- epistemic::fit_model(
+              data_cls=data_cls,
+              formula=formula,
+              family = input$dist_family,
+              reformulate = TRUE,
+              adjacency_matrix = adj_mat_raw
+            )
+            
+            # detect failure mode: model$inla_model is a character error message
+            err_msg <- NULL
+            ok <- TRUE
+            
+            if (is.null(model$inla_model)) {
+              ok <- FALSE
+              err_msg <- "INLA model did not converge (inla_model is NULL)."
+            } else if (is.character(model$inla_model)) {
+              ok <- FALSE
+              err_msg <- model$inla_model  # <-- preserve the exact error string
+            }
+            
+            list(
+              model = if (ok) model$inla_model else NULL,
+              data_class = model$data,          
+              formula = deparse1(model$formula),
+              ok = ok,
+              msg = err_msg
+            )
+            },
+            error = function(e) {
+              list(model = NULL, data_class = data_cls, formula = NULL, ok = FALSE, msg = conditionMessage(e))
+            }
           )
-                  
-          return(list(
-            model = model$inla_model,
-            data_class = model$data,          
-            formula = deparse1(model$formula)
-          ))
+          return(fit_res)
         } else {
           #This case should be prevented since the run button is disabled when invalid.
           print("Invalid formula!")
@@ -519,6 +591,35 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         add_button_hover(title = button_list_im[["select_saved"]],
                          fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model"))
       })
+      
+      observe({
+        res <- inla_model_new()
+        
+        if (!isTRUE(res$ok)) {
+          
+          msg <- res$msg
+          if (!is.null(msg) && nzchar(msg)) {
+            # collapse multi-line messages
+            msg <- paste(strsplit(msg, "\n")[[1]], collapse = " ")
+          } else {
+            msg <- "Unknown error"
+          }
+          
+          showNotification(
+            paste0(
+              "Error! INLA model fitting failed with message: \n",
+              msg,
+              "\nTry modifying the formula and rerunning."
+            ),
+            type = "error",
+            duration = 10
+          )
+          
+          return(invisible(NULL))
+        }
+      }) |> bindEvent(inla_model_new())
+      
+      
       
       # reactive to store a loaded model
       loaded_model <- reactiveVal(NULL)

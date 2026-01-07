@@ -5,59 +5,82 @@ tooltip_ui <- function(id) {
   )
 }
 
-
 tooltip_server <- function(id) {
   moduleServer(
     id,
     function(input, output, session) {
       
       tooltips_enabled <- reactiveVal(TRUE)
-    
-      observe({
+      
+      apply_tooltip_state <- function(enabled) {
+        shinyjs::runjs(sprintf(
+          "window.__tooltipsEnabled = %s;",
+          if (enabled) "true" else "false"
+        ))
         
-        if (tooltips_enabled()) {
-          # Turn OFF tooltips
+        if (enabled) {
           shinyjs::runjs("
-        var triggers = document.querySelectorAll('[data-bs-toggle=\"tooltip\"]');
-
-        triggers.forEach(function (el) {
-          var tooltip = bootstrap.Tooltip.getOrCreateInstance(el);
-          tooltip.hide();
-          tooltip.disable();
-          el.style.display = 'none';   // hide the info icon
-        });
-
-        document.querySelectorAll('.tooltip.show').forEach(function (tip) {
-          tip.classList.remove('show');
-        });
-      ");
-          
-          tooltips_enabled(FALSE)
-          
+            document.querySelectorAll('[data-bs-toggle=\"tooltip\"]').forEach(function(el) {
+              var t = bootstrap.Tooltip.getOrCreateInstance(el);
+              t.enable();
+              el.style.display = '';
+            });
+          ")
         } else {
-          # Turn ON tooltips
           shinyjs::runjs("
-        var triggers = document.querySelectorAll('[data-bs-toggle=\"tooltip\"]');
-
-        triggers.forEach(function (el) {
-          var tooltip = bootstrap.Tooltip.getOrCreateInstance(el);
-          tooltip.enable();
-          el.style.display = '';  // unhide the icon (restore default display)
-        });
-      ");
-          
-          tooltips_enabled(TRUE)
+            document.querySelectorAll('[data-bs-toggle=\"tooltip\"]').forEach(function(el) {
+              var t = bootstrap.Tooltip.getOrCreateInstance(el);
+              t.hide();
+              t.disable();
+              el.style.display = 'none';
+            });
+            document.querySelectorAll('.tooltip.show').forEach(function(t) {
+              t.classList.remove('show');
+            });
+          ")
         }
+      }
+      
+      # INITIAL APPLY 
+      observe({
+        apply_tooltip_state(tooltips_enabled())
+      })
+      
+      # Toggle button
+      observe({
+        tooltips_enabled(!tooltips_enabled())
+        apply_tooltip_state(tooltips_enabled())
         
-        b_label <- if (tooltips_enabled()) "Hide Tooltips" else "Show Tooltips"
         updateActionButton(
-          inputId = "toggle_tooltips",
-          label = b_label
+          session,
+          "toggle_tooltips",
+          label = if (tooltips_enabled()) "Hide Tooltips" else "Show Tooltips"
         )
-        
       }) |> bindEvent(input$toggle_tooltips)
+      
+      # Install modal hook ONCE
+      observe({
+        shinyjs::runjs("
+          if (!window.__tooltipModalHookInstalled) {
+            window.__tooltipModalHookInstalled = true;
+            document.addEventListener('shown.bs.modal', function() {
+              var enabled = window.__tooltipsEnabled === true;
+              document.querySelectorAll('[data-bs-toggle=\"tooltip\"]').forEach(function(el) {
+                var t = bootstrap.Tooltip.getOrCreateInstance(el);
+                if (enabled) {
+                  t.enable();
+                  el.style.display = '';
+                } else {
+                  t.hide();
+                  t.disable();
+                  el.style.display = 'none';
+                }
+              });
+            });
+          }
+        ")
+      })
       
     }
   )
 }
-
