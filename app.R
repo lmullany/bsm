@@ -6,7 +6,7 @@
 source("src/00_setup.R")
 
 
-options(shiny.maxRequestSize = 100*1024^2) 
+options(shiny.maxRequestSize = 1000*1024^2) 
 ui <- page(
   # get theme from the setup file
   theme = THEME,
