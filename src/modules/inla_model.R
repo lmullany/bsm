@@ -654,14 +654,8 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       
       inla_model <- reactiveVal(NULL)
       
-      observeEvent(loaded_model(), {
-        inla_model(loaded_model())
-      })
-      
-      observeEvent(inla_model_new(), {
-        inla_model(inla_model_new())
-      })
-      
+      observe(inla_model(loaded_model()))
+      observe(inla_model(inla_model_new()))
       
       output$download_model_ui <- renderUI({
         req(!is.null(inla_model()))
