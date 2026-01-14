@@ -536,6 +536,7 @@ update_polygons <- function(
         color       = "white",
         dashArray   = "3",
         fillOpacity = 0.7,
+        layerId = ~GEOID,
         highlightOptions = highlightOptions(
           weight      = 2,
           color       = "#666",
