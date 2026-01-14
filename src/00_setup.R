@@ -27,6 +27,7 @@ library(geojsonsf)
 library(igraph)
 library(leaflet)
 library(leaflet.extras)
+library(leafpop)
 library(reactable)
 library(viridisLite)
 
