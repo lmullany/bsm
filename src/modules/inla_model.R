@@ -352,7 +352,6 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       observe({
         res <- inla_model()
         req(isTRUE(res$ok))
-        print(res)
         im$posterior <- add_posteriors(
         data_cls = res$data_class,
         model = res$model
@@ -504,12 +503,9 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         if(input$formula_type == "default") {
           adj_mat_raw <- dc$physical_adj
         } else if (input$formula_type == "custom_formula"){ 
-          print("loading adjacency")
           if(input$sco_adjacency_type_custom == "mobility_adj_mat") {
-            print("selected mobility")
             adj_mat_raw <- dc$mobility_adj
           } else if (input$sco_adjacency_type_custom == "physical_adj_mat"){
-            print("selected physical")
             adj_mat_raw <- dc$physical_adj
           } else {
             adj_mat_raw <- NULL
