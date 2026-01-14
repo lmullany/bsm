@@ -1,4 +1,5 @@
 global_ui_tags <- tags$head(
+  tags$script(src = "legend_drag.js"),
   tags$style(HTML("
         .shiny-output-error-validation {
           color: red;
