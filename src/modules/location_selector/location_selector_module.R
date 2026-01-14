@@ -223,6 +223,13 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
             group       = "selected"
           ) |>
           add_draw_toolbar() |>
+          addLegend(
+            position = "bottomright",
+            colors = c("orange", "lightblue"),
+            labels = c("Selected", "Unselected"),
+            opacity = 1
+          ) |> 
+          enable_draggable_legend() |> 
           flyToBounds(
             lng1 = geoms_bbox()[1],
             lat1 = geoms_bbox()[2],
