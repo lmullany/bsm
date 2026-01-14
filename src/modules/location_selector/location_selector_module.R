@@ -155,7 +155,7 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
             showArea     = TRUE,
             shapeOptions = drawShapeOptions(weight = 2, fillOpacity = 0.2)
           ),
-          editOptions     = editToolbarOptions(edit = TRUE, remove = TRUE),
+          editOptions     = editToolbarOptions(edit = FALSE, remove = FALSE),
           rectangleOptions= FALSE,
           polylineOptions = FALSE,
           markerOptions   = FALSE,
