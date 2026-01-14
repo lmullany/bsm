@@ -173,11 +173,6 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
       # use persisted selection if available; otherwise select all
       sel <- grv$selected_counties
       
-      # if (!length(sel)) {
-      #   sel <- cn
-      #   grv$selected_counties <- sel
-      # }
-      
       # update selectize
       updateSelectizeInput(
         session,
@@ -214,6 +209,7 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
               fillOpacity = 0.7,
               bringToFront = TRUE
             ),
+            label = ~NAME,
             layerId = ~GEOID,
             options = pathOptions(pane = "base")
           ) |>
@@ -227,7 +223,6 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
             group       = "selected"
           ) |>
           add_draw_toolbar() |>
-          #setView(lng = geoms_ctr()[1], lat = geoms_ctr()[2], zoom = 7) |>
           flyToBounds(
             lng1 = geoms_bbox()[1],
             lat1 = geoms_bbox()[2],
