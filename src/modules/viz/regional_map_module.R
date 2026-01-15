@@ -373,6 +373,64 @@ viz_regional_map_server <- function(id, dc, im, results) {
         region_map() |> enable_draggable_legend()
       })
       
+      # Helper function to get time series
+      
+      time_series_raw <- function(dcl,id, type=c("Counts", "Proportion")) {
+        type = match.arg(type)
+        reg_col = dcl[["region_column"]]
+        d = dcl[["date_column"]]
+        y = dcl[["numerator_column"]]
+        den = dcl[["denominator_column"]]
+        
+        if(type == "Counts") {
+          ts <- dcl$data[x == id,.(region, d,v), env=list(x=reg_col, d=d,v=y)]
+        } else {
+          ts <- dcl$data[x==id, .(region,d,v/den), env=list(x=reg_col, d=d, v=y, den=den)]
+        }
+        setnames(ts, new=c("region", "x", "y"))
+        list(ts = ts[!is.na(y)], label = ts[1,region])
+      }
+
+      
+      # observe for clicks on the counties
+      
+      observe({
+        click <- input$region_map_shape_click
+        
+        # if there is no id, return
+        if (is.null(click$id)) return()
+        
+        # get the plot data using the helper function
+        plot_data <- time_series_raw(im$data_cls, id = click$id, type=input$metric_counts)
+        
+        # create a lightweight scatter
+        p <- ggplot(plot_data[["ts"]], aes(x = x, y = y)) +
+          geom_point(color="blue") + 
+          geom_line(color="black") + 
+          geom_vline(mapping = aes(xintercept = target_date()), linetype = "dashed", color="red") + 
+          labs(
+            title = paste("Timeseries for", plot_data[["label"]]),
+            #y = input$metric_counts,
+            x="",
+            caption = paste0("Selected Date: ", target_date())
+          ) + 
+          theme_minimal() + 
+          theme(plot.caption = element_text(color="red", size=8))
+
+        # use popupGraph from leafpop to wrap in a list, and constrain size
+        popup_html <- leafpop::popupGraph(list(p), type = "png", width = 300, height = 200)
+        
+        # use leaflet proxy to add the html frame to the rgion map
+        leafletProxy("region_map") |> 
+          clearPopups() |> 
+          addPopups(
+            lng = click$lng,
+            lat = click$lat,
+            popup = popup_html,
+            layerId = "timeseries_popup"
+          )
+      }) |> bindEvent(input$region_map_shape_click)
+
     }
   )
 }
