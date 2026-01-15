@@ -396,8 +396,6 @@ viz_regional_map_server <- function(id, dc, im, results) {
       
       observe({
         click <- input$region_map_shape_click
-        print(names(click))
-        print(click)
         
         # if there is no id, return
         if (is.null(click$id)) return()
@@ -409,13 +407,18 @@ viz_regional_map_server <- function(id, dc, im, results) {
         p <- ggplot(plot_data[["ts"]], aes(x = x, y = y)) +
           geom_point(color="blue") + 
           geom_line(color="black") + 
+          geom_vline(mapping = aes(xintercept = target_date()), linetype = "dashed", color="red") + 
           labs(
             title = paste("Timeseries for", plot_data[["label"]]),
-            y = input$metric_counts, x = "Date") +
-          theme_minimal()
+            #y = input$metric_counts,
+            x="",
+            caption = paste0("Selected Date: ", target_date())
+          ) + 
+          theme_minimal() + 
+          theme(plot.caption = element_text(color="red", size=8))
 
         # use popupGraph from leafpop to wrap in a list, and constrain size
-        popup_html <- leafpop::popupGraph(list(p), width = 300, height = 200)
+        popup_html <- leafpop::popupGraph(list(p), type = "png", width = 300, height = 200)
         
         # use leaflet proxy to add the html frame to the rgion map
         leafletProxy("region_map") |> 
