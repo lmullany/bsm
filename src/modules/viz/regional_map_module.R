@@ -361,44 +361,16 @@ viz_regional_map_server <- function(id, dc, im, results) {
           p       = m,
           pi      = pi,
           domain  = map_value_range(),
-          palette = input$map_palette %||% "viridis"
+          palette = input$map_palette %||% "viridis",
+          legend_position = input$map_legend_position %||% "bottom_right"
         ) |>
           leaflet.extras::addFullscreenControl() |>
           leaflet.extras::addResetMapButton()
       })
       
-      
-      observe({
-        req(map_base_locations(), map_data(), target_date(), map_value_range())
-        
-        pi <- polygon_info(
-          map_base_locations(),
-          map_data(),
-          target_date()
-        )
-        
-        proxy <- leafletProxy("region_map")
-        proxy <- clearControls(proxy)
-        proxy <- clearShapes(proxy)
-        
-        pal_name <- if (is.null(input$map_palette) || input$map_palette == "") {
-          "viridis"
-        } else {
-          input$map_palette
-        }
-        
-        proxy <- update_polygons(
-          p       = proxy,
-          pi      = pi,
-          domain  = map_value_range(),
-          palette = pal_name,
-          legend_position = input$map_legend_position %||% "bottomright"
-        )
-      })
-      
       output$region_map <- renderLeaflet({
         validate(need(im$posterior, "Load data and run model first"))
-        region_map()
+        region_map() |> enable_draggable_legend()
       })
       
     }

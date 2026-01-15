@@ -285,8 +285,6 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
                                   button_id = "cov_button_ui",
                                   button_label = "Add Covariates"
                                   )
-      
-      #print(names(shiny::reactiveValuesToList(input)))
 
       output$download_ui <- renderUI({
         req(!is.null(data()))

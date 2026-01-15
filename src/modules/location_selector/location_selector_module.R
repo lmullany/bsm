@@ -155,7 +155,7 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
             showArea     = TRUE,
             shapeOptions = drawShapeOptions(weight = 2, fillOpacity = 0.2)
           ),
-          editOptions     = editToolbarOptions(edit = TRUE, remove = TRUE),
+          editOptions     = editToolbarOptions(edit = FALSE, remove = FALSE),
           rectangleOptions= FALSE,
           polylineOptions = FALSE,
           markerOptions   = FALSE,
@@ -172,11 +172,6 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
       
       # use persisted selection if available; otherwise select all
       sel <- grv$selected_counties
-      
-      # if (!length(sel)) {
-      #   sel <- cn
-      #   grv$selected_counties <- sel
-      # }
       
       # update selectize
       updateSelectizeInput(
@@ -214,6 +209,7 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
               fillOpacity = 0.7,
               bringToFront = TRUE
             ),
+            label = ~NAME,
             layerId = ~GEOID,
             options = pathOptions(pane = "base")
           ) |>
@@ -227,7 +223,13 @@ county_selector_server <- function(id, geoms, grv, open_trigger, adj_mat) {
             group       = "selected"
           ) |>
           add_draw_toolbar() |>
-          #setView(lng = geoms_ctr()[1], lat = geoms_ctr()[2], zoom = 7) |>
+          addLegend(
+            position = "bottomright",
+            colors = c("orange", "lightblue"),
+            labels = c("Selected", "Unselected"),
+            opacity = 1
+          ) |> 
+          enable_draggable_legend() |> 
           flyToBounds(
             lng1 = geoms_bbox()[1],
             lat1 = geoms_bbox()[2],
