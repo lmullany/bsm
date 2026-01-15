@@ -383,12 +383,12 @@ viz_regional_map_server <- function(id, dc, im, results) {
         den = dcl[["denominator_column"]]
         
         if(type == "Counts") {
-          ts <- dcl$data[x == id,.(d,v), env=list(x=reg_col, d=d,v=y)]
+          ts <- dcl$data[x == id,.(region, d,v), env=list(x=reg_col, d=d,v=y)]
         } else {
-          ts <- dcl$data[x==id, .(d,v/den), env=list(x=reg_col, d=d, v=y, den=den)]
+          ts <- dcl$data[x==id, .(region,d,v/den), env=list(x=reg_col, d=d, v=y, den=den)]
         }
-        setnames(ts, new=c("x", "y"))
-        ts[!is.na(y)]
+        setnames(ts, new=c("region", "x", "y"))
+        list(ts = ts[!is.na(y)], label = ts[1,region])
       }
 
       
@@ -396,6 +396,8 @@ viz_regional_map_server <- function(id, dc, im, results) {
       
       observe({
         click <- input$region_map_shape_click
+        print(names(click))
+        print(click)
         
         # if there is no id, return
         if (is.null(click$id)) return()
@@ -404,11 +406,11 @@ viz_regional_map_server <- function(id, dc, im, results) {
         plot_data <- time_series_raw(im$data_cls, id = click$id, type=input$metric_counts)
         
         # create a lightweight scatter
-        p <- ggplot(plot_data, aes(x = x, y = y)) +
+        p <- ggplot(plot_data[["ts"]], aes(x = x, y = y)) +
           geom_point(color="blue") + 
           geom_line(color="black") + 
           labs(
-            title = paste("Timeseries for", click$id),
+            title = paste("Timeseries for", plot_data[["label"]]),
             y = input$metric_counts, x = "Date") +
           theme_minimal()
 
