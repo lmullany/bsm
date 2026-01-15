@@ -30,6 +30,7 @@ library(leaflet.extras)
 library(leafpop)
 library(reactable)
 library(viridisLite)
+library(sf)
 
 # Rnssp is required, but too heavy to load
 # lets check for existence instead

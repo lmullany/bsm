@@ -586,6 +586,7 @@ update_polygons <- function(
         title = pi$value_title,
         position  = legend_position
       )
+      
   }
   return(p)
 }
@@ -849,5 +850,12 @@ get_map_locations <- function(dc, county_display="region", county_code="countyfi
     by=county_code
   ) |> 
     sf::st_transform(crs = 4326)
+}
+
+## helper to make draggable legend
+enable_draggable_legend <- function(map) {
+  map |>  htmlwidgets::onRender(
+    "function(el, x) { if (window.makeLeafletLegendDraggable) window.makeLeafletLegendDraggable(el); }"
+  )
 }
 
