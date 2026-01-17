@@ -20,9 +20,9 @@ label_list_rm <- list(
       ", sep="")
   ),
   date_sparkline =  list(
-    l = "Date Selection",
+    l = "Date Selected:",
     m = paste("
-    The slider can be used to select the date to display on the map. The 
+    The red vertical line can be used to select the date to display on the map. The 
     sparkline indicates the overall level across all selected regions at each 
     date.",sep="")
   ),
@@ -80,24 +80,11 @@ viz_regional_map_ui <- function(id) {
         id=ns("region_map_sidebar"),
         width = SIDEBAR_WIDTH*2,
         div(
-          labeltt(label_list_rm[["date_sparkline"]]),
-          style = "font-weight: 600; font-size: 0.95rem; margin-bottom: 6px;"
+          style = "font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; display:flex; gap:8px; align-items:baseline;",
+          div(labeltt(label_list_rm[["date_sparkline"]])),
+          htmlOutput(ns("target_date_lbl"))
         ),
         spark_card, 
-        sliderInput(
-          inputId = ns("map_date_slider"),
-          label = NULL,
-          min   = as.Date("1970-01-01"),
-          max   = as.Date("1970-01-02"),
-          value = as.Date("1970-01-02"),
-          step  = 1,
-          timeFormat = "%Y-%m-%d",
-          ticks = FALSE
-        ),
-        tags$style(HTML(sprintf(
-          "#%s .irs-min, #%s .irs-max { display: none !important; }",
-          ns("map_date_slider"), ns("map_date_slider")))),
-        
         metric_count_type,
         metric_buttons,
         conditionalPanel(
@@ -236,86 +223,143 @@ viz_regional_map_server <- function(id, dc, im, results) {
         }
         c(0, 1)
       })
+      last_observed_date <- reactive({
+        d <- all_dates()
+        req(length(d) > 0)
+        k <- im$nforecasts %||% 0
+        idx <- max(1, length(d) - k)
+        as.Date(d[idx])
+      })
       
       all_dates <- reactive({
         req(im$data_cls)
         as.Date(sort(unique(im$data_cls$data[[im$data_cls$date_col]])))
       })
       
-      observe({
+
+      # hold the date of the red sliding  line!      
+      cursor_date <- reactiveVal(NULL)
+                                 
+      target_date <- reactive({
         d <- all_dates()
-        validate(need(length(d) > 0, "No dates found"))
-        updateSliderInput(
-          session,
-          inputId = "map_date_slider",
-          min   = min(d, na.rm = TRUE),
-          max   = max(d, na.rm = TRUE),
-          value = max(d, na.rm = TRUE),
-          step  = 1
+        req(length(d) > 0)
+        
+        cd <- cursor_date()
+        if (is.null(cd)) return(last_observed_date())
+        
+        # constrain the target date to snap to the nearest
+        d[which.min(abs(d - cd))]
+      })
+      
+      # when the target date change, the label for the Selected Date (above)
+      # the plot should also update
+      output$target_date_lbl <- renderUI({
+        req(target_date())
+        tags$span(
+          sprintf("(%s)", format(target_date(), "%Y-%m-%d"))
         )
       })
+        
       
-      target_date <- reactive({
-        req(input$map_date_slider)
+      # observe the red date selector
+      observe({
+        
+        # get the slide event
+        r <- plotly::event_data("plotly_relayout", source = "date_spark_src", priority = "event")
+        
+        x0 <- r[["shapes[0].x0"]]; x1 <- r[["shapes[0].x1"]]
+        
+        # if this is null, just return
+        if (is.null(x0) && is.null(x1)) return()
+        
+        # plotly returns as character so lets convert to a number
+        # and datek the average of these
+        t0 <- as.POSIXct(x0, tz = "UTC")
+        t1 <- as.POSIXct(x1, tz = "UTC")
+        x_new <- as.Date(as.POSIXct(mean(as.numeric(c(t0, t1)), na.rm = TRUE), origin = "1970-01-01", tz = "UTC"))
+        
+        # check all dates, and make sure that the new date is constrained to that range and snapped to an 
+        # existing date
         d <- all_dates()
-        t <- as.Date(input$map_date_slider)
+        x_new <- min(max(x_new, min(d)), max(d))
+        x_snap <- d[which.min(abs(d - x_new))]
         
-        # if selection is not in the model dates, snap to nearest
-        if (!(t %in% d) && length(d)) {
-          d[which.min(abs(d - t))]
-        } else {
-          t
-        }
-      })
+        # store the date of the red line
+        if (identical(cursor_date(), x_snap)) return()
+        cursor_date(x_snap)
+        
+        # relayout the plot so that it moves the red line to the new location
+        plotly::plotlyProxy("date_spark", session) |>
+          plotly::plotlyProxyInvoke(
+            "relayout",
+            list(shapes = list(vertical_date_line(x_snap)))
+          )
+      }) |> bindEvent(input$date_spark_relayout,ignoreInit = TRUE)
       
-      
-      output$date_spark <- renderPlotly({
-        req(im$data_cls)
-        date_col <- im$data_cls$date_col
-        num_col <- im$data_cls$numerator_col
-        den_col <- im$data_cls$denominator_col
+      get_region_wide_series <- function(dcl, type, carry_forward=0) {
+
+        date_col <- dcl$date_col
+        num_col <- dcl$numerator_col
+        den_col <- dcl$denominator_col
         
-        default_color <- "#636EFA"
-        
-        dt <- data.table::as.data.table(im$data_cls$data)
+        dt <- data.table::as.data.table(dcl$data)
         if (!(date_col %in% names(dt))) return(NULL)
         
         # get the spark series, depending on counts/proportion        
-        
-        if(input$metric_counts == "Counts") {
+        if(type == "Counts") {
           series <- dt[, .(total = sum(x, na.rm = TRUE)), by = c(date_col), env=list(x=num_col)]
-          yaxis_title = "Total Cases"
         } else {
           series <- dt[, .(total = sum(x, na.rm = TRUE)/sum(y, na.rm=TRUE)), by = c(date_col), env=list(x=num_col, y=den_col)]
-          yaxis_title = "Percent of ED Visits"
         }
         data.table::setnames(series, date_col, "date")
-        data.table::setorder(series, date)
         
-        p <- plotly::plot_ly(
-          series,
-          x = ~date, y = ~total,
-          type = "scatter", mode = "lines",
-          line = list(color = default_color),
-          hoverinfo = "none"
-        ) |>
-          plotly::layout(
-            margin = list(l = 28, r = 6, t = 4, b = 22),
-            #margin = list(l = 0, r = 0, t = 0, b = 0),
-            paper_bgcolor = "rgba(0,0,0,0)",
-            plot_bgcolor  = "rgba(0,0,0,0)",
-            xaxis = list(
-              title = list(text = "", font = list(color=default_color, size=10)),
-              showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE
-            ),
-            yaxis = list(
-              title = list(text = yaxis_title, font=list(color=default_color, size=10)),
-              showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE
-            ),
-            showlegend = FALSE
-          ) |> 
-          plotly::config(displayModeBar = FALSE)
-        return(p)
+        # make sure we are ordered by date!
+        setorderv(series, "date")
+        
+        # Now, we need to set the n_forecast last dates to the last known data point
+        if(carry_forward>0) {
+          series[(.N-carry_forward+1):.N, total:=series[.N-carry_forward, total]]
+        }
+        
+        series
+        
+      }
+      
+      spark_series <- reactive({
+        req(im$data_cls)
+        get_region_wide_series(
+          dcl = im$data_cls, 
+          type = input$metric_counts,
+          carry_forward = im$nforecasts
+        )
+      }) |> bindEvent(input$metric_counts)
+      
+      output$date_spark <- renderPlotly({
+        
+        # require the region wide series
+        req(spark_series())
+        
+        # generate the plot
+        p <- region_wide_time_series_plot(
+          spark_series(),
+          init_date = isolate(cursor_date() %||% last_observed_date()),
+          type = im$metric_counts, 
+          forecasts = im$nforecasts
+        )
+           
+        # register the even
+        p <- htmlwidgets::onRender(
+          p, 
+          sprintf(
+            "function(el, x) {
+              el.on('plotly_relayout', function(e) {
+                if (window.Shiny) Shiny.setInputValue('%s', e, {priority: 'event'});
+              });
+            }",
+            ns("date_spark_relayout")
+          ))
+
+        p
       })
       
       
@@ -404,18 +448,12 @@ viz_regional_map_server <- function(id, dc, im, results) {
         plot_data <- time_series_raw(im$data_cls, id = click$id, type=input$metric_counts)
         
         # create a lightweight scatter
-        p <- ggplot(plot_data[["ts"]], aes(x = x, y = y)) +
-          geom_point(color="blue") + 
-          geom_line(color="black") + 
-          geom_vline(mapping = aes(xintercept = target_date()), linetype = "dashed", color="red") + 
-          labs(
-            title = paste("Timeseries for", plot_data[["label"]]),
-            #y = input$metric_counts,
-            x="",
-            caption = paste0("Selected Date: ", target_date())
-          ) + 
-          theme_minimal() + 
-          theme(plot.caption = element_text(color="red", size=8))
+        p <- time_series_popup(
+          ts = plot_data[["ts"]],
+          ts_label = plot_data[["label"]],
+          ts_type = input$metric_counts,
+          v_date = target_date()
+        )
 
         # use popupGraph from leafpop to wrap in a list, and constrain size
         popup_html <- leafpop::popupGraph(list(p), type = "png", width = 300, height = 200)
@@ -434,3 +472,127 @@ viz_regional_map_server <- function(id, dc, im, results) {
     }
   )
 }
+
+
+#----------PLOTS--------------------#
+# LATER, WE MOVE THIS TO A SEPARATE FILE
+#----------------------------------------#
+
+time_series_popup <- function(
+    ts,
+    ts_label,
+    ts_type,
+    v_date,
+    colors=list(
+      point="blue",
+      line="black",
+      vline="red"
+    )
+) {
+  p <- ggplot(ts, aes(x = x, y = y)) +
+    geom_point(color=colors[["point"]]) + 
+    geom_line(color=colors[["line"]]) +
+    geom_vline(
+      mapping = aes(xintercept = v_date),
+      linetype = "dashed",
+      color=colors[["vline"]]) + 
+    labs(
+      title = paste("Timeseries for", ts_label),
+      y = ts_type,
+      x="",
+      caption = paste0("Selected Date: ", v_date)
+    ) + 
+    theme_minimal() + 
+    theme(plot.caption = element_text(color=colors[["vline"]], size=8))
+  
+  p
+  
+}
+
+
+region_wide_time_series_plot <- function(
+    series,
+    init_date,
+    type,
+    forecasts=0,
+    colors = list(
+      line = "#636EFA",
+      draggable_line = "red"
+    )
+) {
+
+  # get the yaxis title, based on the type
+  yaxis_title = fifelse(type=="Counts", "Total Cases", "Percent of ED Visits") 
+  
+  # generate the plot
+  p <- plotly::plot_ly(
+    source = "date_spark_src"
+  )
+  
+  if(forecasts>0) {
+    # add the forecast dates
+    p <- p |> add_trace(
+      data = series[(.N-forecasts):.N],
+      x = ~date, y = ~total,
+      type = "scatter", mode = "lines+markers",
+      line = list(color = colors[["line"]], dash='dash'),
+      marker = list(color=colors[["line"]])
+    )
+  }
+  # add the non-forecast dates
+  p <- p |>  add_trace(
+    data = series[1:(.N-forecasts)],
+    x = ~date, y = ~total,
+    type = "scatter", mode = "lines+markers",
+    line = list(color = colors[["line"]]),
+    marker = list(color=colors[["line"]])
+  )
+  
+  # add the layout and main configuration
+  p <- p |> plotly::layout(
+      margin = list(l = 28, r = 6, t = 4, b = 22),
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor  = "rgba(0,0,0,0)",
+      xaxis = list(
+        title = list(text = "", font = list(color=colors[["line"]], size=10)),
+        showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE, 
+        # fix the x range
+        fixedrange=TRUE
+      ),
+      yaxis = list(
+        title = list(text = yaxis_title, font=list(color=colors[["line"]], size=10)),
+        showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE,
+        # fix the y range
+        fixedrange = TRUE
+      ),
+      showlegend = FALSE,
+      
+      shapes = list(
+        vertical_date_line(
+          init_date,
+          color=colors[["draggable_line"]]
+        )
+      )
+    ) |> 
+    plotly::config(
+      displayModeBar = FALSE,
+      edits = list(shapePosition = TRUE),
+      scrollZoom = FALSE,
+      doubleClick = FALSE
+    )
+
+  p
+}
+
+# Helper to make the spark shape
+vertical_date_line <- function(cursor_date, color="red") {
+  
+  vertical_line <- list(
+    type = "line", xref = "x", yref = "paper",
+    x0 = cursor_date, x1 = cursor_date, y0 = 0, y1 = 1,
+    line = list(color = color, width = 3, dash = "dash")
+  )
+
+}
+
+
