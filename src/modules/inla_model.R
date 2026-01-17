@@ -268,7 +268,18 @@ inla_model_ui <- function(id) {
       verbatimTextOutput(ns("inla_model_object")),
       caption = "Estimating Model ... please wait",
       color = bs_get_variables(theme=THEME,"primary")
-    ))
+    )),
+    card_footer(
+      layout_columns(
+        downloadButton(
+          ns("model_output"),
+          label = "Download Model Outputs (.rds)",
+          class="btn-primary btn-sm"
+        ),
+        actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm"),
+        widths=c(6,6)
+      )
+    )
   )
   
   model_data_card <- card(
@@ -322,17 +333,7 @@ inla_model_ui <- function(id) {
       ),
       navset_bar(
         nav_panel("Processed Data",  model_data_card),
-        nav_panel("Model/Formula",
-                  model_card,
-                  wellPanel(
-                    downloadButton(
-                      ns("model_output"),
-                      label = "Download Model Outputs (.rds)",
-                      class="btn-primary btn-sm"
-                    ),
-                    actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm")
-                  )
-        ),
+        nav_panel("Model/Formula", model_card),
         navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
       )
     )
@@ -660,16 +661,19 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       output$download_model_ui <- renderUI({
         req(!is.null(inla_model()))
         tagList(
-          add_button_hover(
-            title = button_list_im[["download_csv"]],
-            downloadButton(ns("download_data"),
-                         "Download to CSV",
-                         class = "btn-primary")),
-          add_button_hover(
-            title = button_list_im[["save_model"]],
-            downloadButton(ns("save_model"),
-                         "Save Model",
-                         class = "btn-primary"))
+          layout_columns(
+            add_button_hover(
+              title = button_list_im[["download_csv"]],
+              downloadButton(ns("download_data"),
+                             "Download to CSV",
+                             class = "btn-primary")),
+            add_button_hover(
+              title = button_list_im[["save_model"]],
+              downloadButton(ns("save_model"),
+                             "Save Model",
+                             class = "btn-primary")),
+            widths=c(6,6)
+          ) 
         )
       })
       
