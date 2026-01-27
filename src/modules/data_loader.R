@@ -88,24 +88,35 @@ data_loader_ui <- function(id) {
     layout_sidebar(
       sidebar = sidebar(
         navset_tab(
-          nav_panel(title = tooltip("Query ESSENCE",button_list_dl["query_essence"],placement="top"),
-                    br(),
-                  id = ns("config_sidebar"),
-                  width = SIDEBAR_WIDTH*2,
-                  geo, 
-                  states,
-                  county_validation,
-                  drange,
-                  time_res,
-                  synd_panel,
-                  add_button_hover(title = button_list_dl[["run_query"]],
-                                   input_task_button(ns("load_data_btn"), "Query ESSENCE"))
+          nav_panel(
+            title = tagList(
+              "Query ESSENCE",
+              labeltt(list("", button_list_dl["query_essence"]))
+            ),
+            br(),
+            id = ns("config_sidebar"),
+            width = SIDEBAR_WIDTH*2,
+            geo, 
+            states,
+            county_validation,
+            drange,
+            time_res,
+            synd_panel,
+            add_button_hover(
+              title = button_list_dl[["run_query"]],
+              input_task_button(ns("load_data_btn"), "Query ESSENCE"))
           ),
-          nav_panel(title = tooltip("Load Saved Query", button_list_dl["load_query"],placement="top"),
-                    br(),
-                  add_button_hover(title = button_list_dl[["select_saved"]], 
-                                     fileInput(ns("zipfile"), "Select Saved Query", 
-                                               accept = ".bsm_query"))
+          nav_panel(
+            title = tagList(
+              "Load Saved Query",
+              labeltt(list("", button_list_dl["load_query"]))
+            ),
+            
+            br(),
+            add_button_hover(
+              title = button_list_dl[["select_saved"]], 
+              fileInput(ns("zipfile"), "Select Saved Query", accept = ".bsm_query")
+            )
           )
       ),
       width = 450

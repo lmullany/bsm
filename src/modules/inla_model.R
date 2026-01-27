@@ -306,7 +306,10 @@ inla_model_ui <- function(id) {
       sidebar = sidebar(
         navset_tab(
           nav_panel(
-            title = tooltip("Fit New Model",button_list_im["fit_new_model"],placement="top"),
+            title = tagList(
+              "Fit New Model",
+              labeltt(list("", button_list_im["fit_new_model"]))
+            ),
             br(),
             id = ns("model_sidebar"),
             width = SIDEBAR_WIDTH*2,
@@ -318,11 +321,17 @@ inla_model_ui <- function(id) {
             # small ui to render with warnings/invalid messages
             model_run_validator,
             ),
-          nav_panel(title = tooltip("Load Saved Model",button_list_im[["load_saved_model"]],placement= "top"),
-                    br(),
-                    add_button_hover(title = button_list_im[["select_saved"]],
-                                     fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model"))
-          )
+          nav_panel(
+            title = tagList(
+              "Load Saved Model",
+              labeltt(list("", button_list_im["load_saved_model"]))
+            ),
+            br(),
+            add_button_hover(
+              title = button_list_im[["select_saved"]],
+              fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model")
+            )
+        )
         ),
         width = 450
       ),
