@@ -27,6 +27,7 @@ label_list_dl <- list(
 button_list_dl <-list(
   run_query = "Submit ESSENCE query to load data.",
   load_query = "Load a saved query from file.",
+  query_essence = "Generate a query to download data from ESSENCE.",
   select_saved = paste0(
     "Open file browser to select a saved query on your local machine. ",
     "Saved queries are zip files containing json and rds objects with the ",
@@ -86,33 +87,33 @@ data_loader_ui <- function(id) {
     title = "Data Loader",
     layout_sidebar(
       sidebar = sidebar(
-        id = ns("config_sidebar"),
-        width = SIDEBAR_WIDTH*2,
-        geo, 
-        states,
-        county_validation,
-        drange,
-        time_res,
-        synd_panel,
-        layout_columns(
-          add_button_hover(title = button_list_dl[["run_query"]],
-            input_task_button(ns("load_data_btn"), "Query ESSENCE")),
-          add_button_hover(title = button_list_dl[["load_query"]],
-            input_task_button(ns("load_saved_query"), "Load Saved Query")),
-          add_button_hover(title = button_list_dl[["add_covariates"]],
-                           input_task_button(ns("cov_button_ui"), "Add Covariates")),
-          width = c(6,6)
-        ),
-        uiOutput(ns("zipfile_ui"))
+        navset_tab(
+          nav_panel(title = tooltip("Query ESSENCE",button_list_dl["query_essence"],placement="top"),
+                    br(),
+                  id = ns("config_sidebar"),
+                  width = SIDEBAR_WIDTH*2,
+                  geo, 
+                  states,
+                  county_validation,
+                  drange,
+                  time_res,
+                  synd_panel,
+                  add_button_hover(title = button_list_dl[["run_query"]],
+                                   input_task_button(ns("load_data_btn"), "Query ESSENCE"))
+          ),
+          nav_panel(title = tooltip("Load Saved Query", button_list_dl["load_query"],placement="top"),
+                    br(),
+                  add_button_hover(title = button_list_dl[["select_saved"]], 
+                                     fileInput(ns("zipfile"), "Select Saved Query", 
+                                               accept = ".bsm_query"))
+          )
+      ),
+      width = 450
       ),
       card(
         card_header("Data", class="bg-primary"),
         card_body(
-          withSpinner(
-            DTOutput(ns("ingested_data")),
-            caption = "Pulling data via API / Please wait",
-            color = bs_get_variables(theme=THEME,"primary")
-          )
+          uiOutput(ns("data_card_body"))
         ),
         card_footer(
           uiOutput(ns("download_ui"))
@@ -131,7 +132,7 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
     function(input, output, session) {
       ns <- session$ns
       data <- reactiveVal(NULL)
-      
+      data_state <- reactiveVal("idle") 
       # observe for transition changes
       observe(update_cache_data_loader(session, cache_transitions)) |>
         bindEvent(reactiveValuesToList(cache_transitions))
@@ -165,6 +166,7 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
           shinyjs::disable("cov_button_ui")
         } else {
           shinyjs::enable("cov_button_ui")
+          data_state("ready")
         }
       })
       
@@ -194,21 +196,21 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
         )
       })
       
-      
       query_data <- reactive({
-        
         # stop if no profile, but if allowing shiny credentials, re try
         if(is.null(profile()) && ALLOW_SHINY_CREDENTIALS) {
             credServer(ns("creds"), profile, valid_profile)
         }
         req(profile())
-        
         # stop if no counties have been selected
         req(!is.null(dc$selected_counties), length(dc$selected_counties) > 0)
         
         # stop if no states have been selected
         req(!is.null(dc$states), length(dc$states) > 0)
+        data_state("loading")
         
+        
+        session$flushOutput()
         
         # --------------------------
         # Syndromic categories
@@ -244,18 +246,14 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
         
       }) |> bindEvent(input$load_data_btn)
       
-      output$zipfile_ui <- renderUI({
-        req(input$load_saved_query)   # only after button is clicked
-        add_button_hover(title = button_list_dl[["select_saved"]], 
-            fileInput(ns("zipfile"), "Select Saved Query", 
-                      accept = ".bsm_query"))
-      })
       
       # set up a reactive to hold user-recalled data (previously saved)
       loaded_data <- reactiveVal(NULL)
       
       observe({
         req(input$zipfile)
+        data_state("loading")
+        session$flushOutput()
         validate(need(file.exists(input$zipfile$datapath), "Upload did not complete yet"))
         
         saved_query_info <- load_saved_query_file(input$zipfile$datapath)
@@ -290,6 +288,8 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
         req(!is.null(data()))
         tagList(
           layout_column_wrap(
+            add_button_hover(title = button_list_dl[["add_covariates"]],
+                input_task_button(ns("cov_button_ui"), "Add Covariates")),
             add_button_hover(title = button_list_dl[["download_csv"]],
                 downloadButton(ns("download_data"),
                            "Download to CSV",
@@ -342,6 +342,31 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
           rownames = F
         ) |> formatRound(cols_to_round, digits=4)
           
+      })
+      output$data_card_body <- renderUI({
+        s <- data_state()
+        
+        if (s == "idle") {
+          tagList(
+            h4("How to load data"),
+            tags$ol(
+              tags$li("Either create a new query or load a save query from file."),
+              tags$li("When loading completes, the table will appear here.")
+            ),
+            tags$p(class = "text-muted", "Nothing has been loaded yet.")
+          )
+          
+        } else if (s == "loading") {
+          # simplest spinner: use shinycssloaders::withSpinner on a placeholder
+          shinycssloaders::withSpinner(
+            tags$div(style = "min-height: 250px;"),  # reserve space so card doesn't jump
+            caption = "Pulling data via API / Please wait",
+            color = bslib::bs_get_variables(theme = THEME, "primary")
+          )
+          
+        } else { # "ready"
+          DT::DTOutput(ns("ingested_data"))
+        }
       })
       
       output$download_data <- downloadHandler(
