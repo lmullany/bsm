@@ -32,6 +32,7 @@ label_list_im <- list(
   )
 )
 button_list_im <-list(
+    fit_new_model = "Define a new model to fit to the data.",
     run_model = "Fit selected INLA model to data.",
     load_saved_model = "Load a saved model from file.",
     select_saved = paste0(
@@ -39,7 +40,8 @@ button_list_im <-list(
       "Saved models are zip files containing json and rds objects with the ",
       "file suffix .bsm_model."),
     download_csv = "Download processed data and save as a csv file on your local machine.",
-    save_model = "Save the query to a bsm_model file so that it can be reloaded later."
+    save_model = "Save the query to a bsm_model file so that it can be reloaded later.",
+    actual_formula = "Show formula as parsed during model fitting."
   )
 
 inla_model_ui <- function(id) {
@@ -264,35 +266,22 @@ inla_model_ui <- function(id) {
   ## Output cards:
   model_card <- card(
     #card_header("INLA Estimation Summary", class="bg-primary"),
-    card_body(withSpinner(
-      verbatimTextOutput(ns("inla_model_object")),
-      caption = "Estimating Model ... please wait",
-      color = bs_get_variables(theme=THEME,"primary")
-    )),
+    # card_body(withSpinner(
+    #   verbatimTextOutput(ns("inla_model_object")),
+    #   caption = "Estimating Model ... please wait",
+    #   color = bs_get_variables(theme=THEME,"primary")
+    # )),
+    card_body(
+      uiOutput(ns("model_card_body"))
+    ),
     card_footer(
       layout_columns(
-        downloadButton(
-          ns("model_output"),
-          label = "Download Model Outputs (.rds)",
-          class="btn-primary btn-sm"
-        ),
-        actionButton(ns("actual_formula"), "Show Actual Formula", class = "btn-primary btn-sm"),
+        uiOutput(ns("download_model_ui")),
         widths=c(6,6)
       )
     )
   )
   
-  model_data_card <- card(
-    #card_header("Processed Data", class="bg-primary"),
-    card_body(withSpinner(
-      DTOutput(ns("inla_model_data")),
-      caption = "Estimating Model ... please wait",
-      color = bs_get_variables(theme=THEME,"primary")
-    )),
-    card_footer(
-      uiOutput(ns("download_model_ui"))
-    )
-  )
   
   model_formula_card <- card(
     #card_header("Model/Formula", class="bg-primary"),
@@ -315,35 +304,51 @@ inla_model_ui <- function(id) {
     title = "INLA Model",
     layout_sidebar(
       sidebar = sidebar(
-        id = ns("model_sidebar"),
-        width = SIDEBAR_WIDTH*2,
-        forecasts, 
-        family,
-        formula_panel,
-        layout_columns(
-          add_button_hover(title = button_list_im[["run_model"]],
-                           input_task_button(ns("estimate_model_btn"), "Run Model")),
-          add_button_hover(title = button_list_im[["load_saved_model"]],
-                           input_task_button(ns("load_model_btn"), "Load Saved Model")),
-          widths = c(6,6)
+        navset_tab(
+          nav_panel(
+            title = tagList(
+              "Fit New Model",
+              labeltt(list("", button_list_im["fit_new_model"]))
+            ),
+            br(),
+            id = ns("model_sidebar"),
+            width = SIDEBAR_WIDTH*2,
+            forecasts, 
+            family,
+            formula_panel,
+            add_button_hover(title = button_list_im[["run_model"]],
+                             input_task_button(ns("estimate_model_btn"), "Run Model")),
+            # small ui to render with warnings/invalid messages
+            model_run_validator,
+            ),
+          nav_panel(
+            title = tagList(
+              "Load Saved Model",
+              labeltt(list("", button_list_im["load_saved_model"]))
+            ),
+            br(),
+            add_button_hover(
+              title = button_list_im[["select_saved"]],
+              fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model")
+            )
+        )
         ),
-        # small ui to render with warnings/invalid messages
-        model_run_validator,
-        uiOutput(ns("zipfile_model_ui"))
+        width = 450
       ),
       navset_bar(
-        nav_panel("Processed Data",  model_data_card),
         nav_panel("Model/Formula", model_card),
         navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
       )
     )
-  )  
+  )
 }
 
 inla_model_server <- function(id, dc, im, results, cache_transitions) {
   moduleServer(
     id,
     function(input, output, session) {
+      
+      model_state     <- reactiveVal("idle")
       # update global reactive model object
       observe(im$model <- inla_model()$model)
       # update global reactive data_class object for current model result
@@ -493,7 +498,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         
         # is model ready to run?
         model_ready <- model_ready_to_run(results$data, input)
-        
+        model_state("fitting")
         req(model_ready[["valid"]])
 
         
@@ -556,9 +561,14 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
             if (is.null(model$inla_model)) {
               ok <- FALSE
               err_msg <- "INLA model did not converge (inla_model is NULL)."
+              model_state("error")
             } else if (is.character(model$inla_model)) {
               ok <- FALSE
               err_msg <- model$inla_model  # <-- preserve the exact error string
+              model_state("error")
+            } 
+            if (ok){
+              model_state("ready")
             }
             
             list(
@@ -577,18 +587,14 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         } else {
           #This case should be prevented since the run button is disabled when invalid.
           print("Invalid formula!")
+          model_state("error")
         }
 
       }) |> bindEvent(input$estimate_model_btn)
     
     
       ns <- session$ns
-      output$zipfile_model_ui <- renderUI({
-        req(input$load_model_btn)   # only after button is clicked
-        add_button_hover(title = button_list_im[["select_saved"]],
-                         fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model"))
-      })
-      
+
       observe({
         res <- inla_model_new()
         
@@ -625,6 +631,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       observe({
         # model file required
         req(input$zipfile_model)
+        model_state("loading")
         validate(need(file.exists(input$zipfile_model$datapath), "Upload did not complete yet"))
         
         # get the model object and the model values from the zip file path
@@ -650,6 +657,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
 
         # update the reactive
         loaded_model(saved_model_info[["model_object"]])
+        model_state("ready")
         
       }) |> bindEvent(input$zipfile_model)
       
@@ -672,6 +680,12 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
               downloadButton(ns("save_model"),
                              "Save Model",
                              class = "btn-primary")),
+            add_button_hover(
+              title = button_list_im[["actual_formula"]],
+            actionButton(ns("actual_formula"), 
+                         "Show Actual Formula", 
+                         class = "btn-primary btn-sm")),
+            
             widths=c(6,6)
           ) 
         )
@@ -762,6 +776,41 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           ) 
         ) 
       }) |> bindEvent(input$actual_formula)  
+      
+      
+      
+      output$model_card_body <- renderUI({
+        s <- model_state()
+        
+        if (s == "idle") {
+          tagList(
+            h4("Run the model"),
+            tags$ol(
+              tags$li("Set parameters in the sidebar or select a saved model to load."),
+              tags$li("Click “Estimate Model”."),
+              tags$li("When complete, the model summary will appear here.")
+            ),
+            tags$p(class = "text-muted", "No model has been estimated yet.")
+          )
+          
+        } else if ((s == "loading") | (s=="fitting")) {
+          div(
+            style = "min-height: 220px; display:flex; align-items:center; gap:.75rem;",
+            tags$div(
+              class = "spinner-border",
+              role = "status",
+              tags$span(class = "visually-hidden", "Loading...")
+            ),
+            div("Estimating Model ... please wait")
+          )
+        } else if (s == "error") {
+            tagList(
+              tags$div(class = "text-danger fw-semibold", "Model estimation failed. Please update the model and rerun."),
+            )
+        } else { # "ready"
+          verbatimTextOutput(ns("inla_model_object"))
+        }
+      })
       
       
       
