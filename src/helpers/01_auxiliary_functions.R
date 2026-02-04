@@ -347,7 +347,7 @@ labeltt <- function(l, ...) {
   tt <- bslib::tooltip(
     trigger = list(
       l[[1]],
-      bsicons::bs_icon(name = "info-circle-fill", class = "text-primary")
+      bsicons::bs_icon(name = "info-circle-fill", class = "tooltip-icon")
     ),
     p(l[[2]], style = "text-align:left;"),
     ...

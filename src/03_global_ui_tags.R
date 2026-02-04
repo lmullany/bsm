@@ -15,6 +15,7 @@ global_ui_tags <- tags$head(
           margin-top: 0.5rem;
         }
     ")),
+  tags$script(HTML("document.documentElement.setAttribute('data-bs-theme','dark');")),
   tags$script(HTML("
     Shiny.addCustomMessageHandler('clear-reactable-filters', function(message) {
       var id = message.id;

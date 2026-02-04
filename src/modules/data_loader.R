@@ -122,7 +122,7 @@ data_loader_ui <- function(id) {
       width = 450
       ),
       card(
-        card_header("Data", class="bg-primary"),
+        card_header("Data", class="card-header-accent"),
         card_body(
           uiOutput(ns("data_card_body"))
         ),
@@ -429,7 +429,7 @@ validate_county_selection <- function(states, ctys, mat) {
   if(length(msg)>0) cl = "shiny-output-error-validation"
   else {
     msg = paste0(length(ctys), " connected counties selected")
-    cl = "p-2 text-primary"
+    cl = "p-2"
   }
   
   return(

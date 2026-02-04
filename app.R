@@ -25,9 +25,33 @@ ui <- page(
     # Documentation UI
     documentation_ui("documentation"),
     # Dark Mode and Tooltip Toggles
-    nav_item(input_dark_mode(mode="dark")), nav_item(tooltip_ui("tooltip")),
+    nav_item(
+      div(
+        class = "mode-pill-wrap",
+        span(class = "mode-side left",
+             span(class = "mode-text", "Light"),
+             span(class = "mode-icon", bsicons::bs_icon("sun-fill"))
+        ),
+        tags$button(
+          type = "button",
+          class = "mode-switch",
+          onclick = "
+        const html = document.documentElement;
+        const cur = html.getAttribute('data-bs-theme') || 'dark';
+        const next = (cur === 'dark') ? 'light' : 'dark';
+        html.setAttribute('data-bs-theme', next);
+        return false;
+      "
+        ),
+        span(class = "mode-side right",
+             span(class = 'mode-icon', bsicons::bs_icon('moon-stars-fill')),
+             span(class = 'mode-text', 'Dark')
+        )
+      )
+    ), 
+    nav_item(tooltip_ui("tooltip")),
     # Options
-    navbar_options = list(class = "b-primary", theme = "dark", underline=FALSE)
+    navbar_options = list(class = "card-header-accent top-dark-nav", theme = "dark", underline=FALSE)
   )
 )
 

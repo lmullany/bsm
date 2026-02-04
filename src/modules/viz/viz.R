@@ -13,7 +13,7 @@ viz_ui <- function(id) {
       viz_regional_map_ui(ns("viz_region")),
       viz_time_series_ui(ns("viz_time_series")),
       viz_posterior_ui(ns("viz_posterior")),
-      navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
+      navbar_options = list(class = "card-header-accent", theme = "dark", underline=FALSE)
     )
   )
   

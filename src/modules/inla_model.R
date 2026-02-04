@@ -335,9 +335,9 @@ inla_model_ui <- function(id) {
         ),
         width = 450
       ),
-      navset_bar(
-        nav_panel("Model/Formula", model_card),
-        navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
+      card(
+        card_header("Model Summary", class = "card-header-accent"),
+        model_card
       )
     )
   )
