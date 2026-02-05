@@ -21,8 +21,10 @@ extras_ui <- function(id) {
         # lead to opening the documentation modal
         actionButton(
           ns("open_docs"),
-          "Documentation",
-          icon = bsicons::bs_icon("book"),
+          label = tagList(
+            bsicons::bs_icon("book", title = "Documentation"),
+            " Documentation"
+          ),
           class = "btn-primary btn-sm"
         ),
         
