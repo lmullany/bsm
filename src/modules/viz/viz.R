@@ -14,7 +14,7 @@ viz_ui <- function(id) {
       viz_time_series_ui(ns("viz_time_series")),
       viz_posterior_ui(ns("viz_posterior")),
       add_feature_ui(ns("add_feature")),
-      navbar_options = list(class = "bg-primary", theme = "dark", underline=FALSE)
+      navbar_options = list(class = "card-header-accent", theme = "dark", underline=FALSE)
     )
   )
   

@@ -13,21 +13,20 @@ ui <- page(
   global_ui_tags,
   useShinyjs(),
   page_navbar(
+    id = "main_nav",
     title = "Bayesian Spatiotemporal Modeling",
-    # Data Loading UI
+    # Data Loader
     data_loader_ui("data_load"),
-    # INLA Estimation UI
+    # INLA Modeling
     inla_model_ui("inla_model"),
-    # VIZ UI
+    # VIZ Ui
     viz_ui("viz"),
-    # SPACER
+    # Spacer
     nav_spacer(),
-    # Documentation UI
-    documentation_ui("documentation"),
-    # Dark Mode and Tooltip Toggles
-    nav_item(input_dark_mode(mode="dark")), nav_item(tooltip_ui("tooltip")),
-    # Options
-    navbar_options = list(class = "b-primary", theme = "dark", underline=FALSE)
+    # Extras
+    extras_ui("extras"),
+    # Nav options
+    navbar_options = list(class = "card-header-accent top-dark-nav", theme = "dark", underline = FALSE)
   )
 )
 
@@ -79,7 +78,7 @@ server <- function(input, output, session) {
   inla_model_server(id = "inla_model", dc, im, results, cache_transitions)
   viz_server("viz", dc, im, results)
   tooltip_server("tooltip")
-  documentation_server(id="documentation")
+  extras_server("extras")
   
   # ----------------------------------------------------------------------
   # Other functionality
@@ -89,6 +88,7 @@ server <- function(input, output, session) {
   observe(toggleState(
     condition = !is.null(im$model), selector = 'a[data-value="viz-viz_main"]'
   ))
+
 }
 
 
