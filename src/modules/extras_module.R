@@ -6,6 +6,7 @@ extras_ui <- function(id) {
   ns <- NS(id)
   
   nav_item(
+    # Create a popover, with gear icon
     bslib::popover(
       tags$button(
         type = "button",
@@ -16,6 +17,8 @@ extras_ui <- function(id) {
       div(
         class = "d-grid gap-2",
         
+        # First item in the pop over is a button that when clicked will
+        # lead to opening the documentation modal
         actionButton(
           ns("open_docs"),
           "Documentation",
@@ -23,10 +26,11 @@ extras_ui <- function(id) {
           class = "btn-primary btn-sm"
         ),
         
-        # Nested tooltip module UI
+        # Next, we add the tooltip ui, which is just a button that
+        # toggles tool tips on and off
         tooltip_ui(ns("tooltip")),
         
-        # Light/dark toggle row styled like a Bootstrap button
+        # Add the light/dark toggle that MP designed
         div(
           class = "btn btn-primary btn-sm settings-toggle-row",
           role = "button",
@@ -55,7 +59,7 @@ extras_ui <- function(id) {
         )
       ),
       
-      # Namespaced popover id handled entirely inside this module
+      # add an id for this popover (we need it to be able to programmatically close)
       id = ns("settings_pop"),
       placement = "bottom",
       options = list(close_button = TRUE)
@@ -66,13 +70,13 @@ extras_ui <- function(id) {
 extras_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     
-    # Own nested modules
+    # Call the tooltip server
     tooltip_server("tooltip")
     
-    # Own documentation module as well (docs body returned from server)
+    # Return the body from the documentation server
     docs_body <- documentation_server("documentation")
     
-    # Open docs modal + close popover
+    # Open the modal when the documentation book button is clicked
     observe({
       shiny::showModal(
         shiny::modalDialog(
@@ -86,7 +90,7 @@ extras_server <- function(id) {
           footer = shiny::modalButton("Close")
         )
       )
-      
+      # turn the popover off/close it when documentation is requested
       bslib::toggle_popover("settings_pop", show = FALSE)
     }) |>
       bindEvent(input$open_docs, ignoreInit = TRUE)
