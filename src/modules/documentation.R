@@ -3,7 +3,7 @@
 # contract no. 75D30124C19958
 
 documentation_ui <- function(id) {
-  nav_panel("Documentation", uiOutput(outputId = NS(id)("app_documentation")))
+  uiOutput(outputId = NS(id)("app_documentation"))
 }
 
 documentation_server <- function(id) {

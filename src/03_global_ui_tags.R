@@ -14,6 +14,30 @@ global_ui_tags <- tags$head(
           overflow: visible !important;
           margin-top: 0.5rem;
         }
+              
+      .settings-toggle-row {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: default;              /* it's a container, not the click target */
+        padding-top: .25rem;          /* fine-tune to match btn-sm height */
+        padding-bottom: .25rem;
+      }
+      
+      /* Layout for your inner toggle UI */
+      .settings-toggle-row .mode-pill-wrap {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;      /* or space-between if you prefer */
+        gap: .5rem;
+      }
+      
+      /* Optional: prevent the inner switch button from inheriting link/btn spacing */
+      .settings-toggle-row .mode-switch {
+        margin: 0;
+      }
     ")),
   tags$script(HTML("document.documentElement.setAttribute('data-bs-theme','dark');")),
   tags$script(HTML("
