@@ -3,7 +3,7 @@
 # contract no. 75D30124C19958
 
 viz_ui <- function(id) {
-
+  
   ns <- NS(id)
   
   nav_panel(
@@ -13,6 +13,7 @@ viz_ui <- function(id) {
       viz_regional_map_ui(ns("viz_region")),
       viz_time_series_ui(ns("viz_time_series")),
       viz_posterior_ui(ns("viz_posterior")),
+      add_feature_ui(ns("add_feature")),
       navbar_options = list(class = "card-header-accent", theme = "dark", underline=FALSE)
     )
   )
@@ -29,8 +30,7 @@ viz_server <- function(id, dc, im, results) {
       viz_regional_map_server(id = "viz_region", dc, im, results)
       viz_time_series_server(id = "viz_time_series", im, results)
       viz_posterior_server(id = "viz_posterior", im, results)
-      
-    
+      add_feature_server("add_feature", dc = dc, im = im, results = results)
     }
   )
 }
