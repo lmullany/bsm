@@ -818,38 +818,105 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
   )
 }
 
-add_posteriors <- function(data_cls, model){
-  medians <- epistemic::get_posterior_medians(
-    inla_model = model,
-    data_cls = data_cls,
-    use_count_scale = TRUE
-  )
-  cis = epistemic::get_credible_intervals(
-    inla_model = model,
-    data_cls = data_cls,
-    ci_width = 0.95,
-    use_count_scale = TRUE
-  )
-  merged <- merge(
-    medians,
-    cis,
-    by=c(data_cls$region_column,data_cls$date_column),
-    all=TRUE
-  )
+add_posteriors <- function(data_cls, 
+                           model,
+                           ci_widths = c(0.5, 0.9, 0.95, 0.99)
+                           ) {
   
-  rename_map <- c("0.5quant_median_counts" = "predicted_median", "counts_0.025" = "predicted_lower", "counts_0.975"="predicted_upper") 
-  existing <- intersect(names(rename_map), names(merged))
-  setnames(merged, old = existing, new = rename_map[existing])
+  
+  # helper to format quantiles nicely for column names
+  fmt_q <- function(q) {
+    x <- formatC(q, format = "f", digits = 5)     # enough precision for 0.005 etc.
+    x <- sub("0+$", "", x)
+    x <- sub("\\.$", "", x)
+    x
+  }
+  
+  # helper: rename CI columns based on the numeric quantile embedded in the name
+  rename_ci_cols <- function(dt, prefix, scale_tag, lower_q, upper_q) {
+    # expected pattern: "<prefix>_<number>", e.g. "counts_0.025" or "props_0.975"
+    nms <- names(dt)
+    idx <- grep(paste0("^", prefix, "_"), nms)
+    if (length(idx) == 0) return(dt)
+    
+    q_str <- sub(paste0("^", prefix, "_"), "", nms[idx])
+    q_num <- suppressWarnings(as.numeric(q_str))
+    
+    # pick the closest match to requested lower/upper quantiles
+    pick_name <- function(target) {
+      ok <- which(!is.na(q_num))
+      if (length(ok) == 0) return(NA_character_)
+      nms[idx][ok][which.min(abs(q_num[ok] - target))]
+    }
+    
+    old_lower <- pick_name(lower_q)
+    old_upper <- pick_name(upper_q)
+    
+    new_lower <- paste0("predicted_", scale_tag, "_q_", fmt_q(lower_q))
+    new_upper <- paste0("predicted_", scale_tag, "_q_", fmt_q(upper_q))
+    
+    to_rename_old <- c(old_lower, old_upper)
+    to_rename_new <- c(new_lower, new_upper)
+    
+    keep <- !is.na(to_rename_old) & to_rename_old %in% names(dt)
+    if (any(keep)) {
+      data.table::setnames(dt, old = to_rename_old[keep], new = to_rename_new[keep])
+    }
+    dt
+  }
+  
+  compute_for_scale <- function(use_count_scale) {
+    scale_tag <- if (use_count_scale) "counts" else "props"
+    prefix    <- if (use_count_scale) "counts" else "props"
+    
+    # median
+    med <- epistemic::get_posterior_medians(
+      inla_model = model,
+      data_cls = data_cls,
+      use_count_scale = use_count_scale
+    )
+    
+    # robustly find the median column (don’t assume exact naming)
+    med_col <- grep("quant_median", names(med), value = TRUE)
+    if (length(med_col) != 1) {
+      stop("Could not uniquely identify the median column in get_posterior_medians() output.")
+    }
+    data.table::setnames(med, old = med_col, new = paste0("predicted_", scale_tag, "_q_0.5_median"))
+    
+    # CIs at multiple widths
+    ci_list <- lapply(ci_widths, function(w) {
+      ci <- epistemic::get_credible_intervals(
+        inla_model = model,
+        data_cls = data_cls,
+        ci_width = w,
+        use_count_scale = use_count_scale
+      )
+      lower_q <- (1 - w) / 2
+      upper_q <- 1 - lower_q
+      rename_ci_cols(ci, prefix, scale_tag, lower_q, upper_q)
+    })
+    
+    # merge median + all CI frames
+    out <- Reduce(function(x, y) merge(x, y, by = c(data_cls$region_column, data_cls$date_column), all = TRUE),
+                  c(list(med), ci_list))
+    out
+  }
+  
+  merged <- Reduce(
+    function(x, y) merge(x, y, by = c(data_cls$region_column, data_cls$date_column), all = TRUE),
+    list(compute_for_scale(TRUE), compute_for_scale(FALSE))
+  )
   
   data_cls <- epistemic::add_covariates(
     covariates = merged,
     dc = data_cls,
-    region=data_cls$region_column,
-    date=data_cls$date_column
+    region = data_cls$region_column,
+    date = data_cls$date_column
   )
-
-  return (data_cls$data)
+  
+  data_cls$data
 }
+
 # Helper function for forecast label and default
 update_n_forecast_widget <- function(res) {
   lu = list(
