@@ -177,7 +177,6 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
           shinyjs::disable("cov_button_ui")
         } else {
           shinyjs::enable("cov_button_ui")
-          data_state("ready")
         }
       })
       
@@ -208,20 +207,17 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
       })
       
       query_data <- reactive({
-        # stop if no profile, but if allowing shiny credentials, re try
-        if(is.null(profile()) && ALLOW_SHINY_CREDENTIALS) {
-            credServer(ns("creds"), profile, valid_profile)
-        }
+        # stop if not profile
         req(profile())
+      
         # stop if no counties have been selected
         req(!is.null(dc$selected_counties), length(dc$selected_counties) > 0)
         
         # stop if no states have been selected
         req(!is.null(dc$states), length(dc$states) > 0)
+        
         data_state("loading")
-        
-        
-        session$flushOutput()
+        on.exit(data_state("idle"),add=TRUE)
         
         # --------------------------
         # Syndromic categories
@@ -236,24 +232,47 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
         categ_info = list(cat_class = synd_bits[[input$synd_cat]]["cat"],
                           cat_value = xml2::url_escape(tolower(input$synd_drop_menu)))
         
-        data<- get_data(
-          sd=input$drange[1],
-          ed=input$drange[2],
-          time_res=input$time_res,
-          geo_res=input$geo_res,
+        # if url hasn't changed, no need to repull
+        url_single <- make_table_builder_url(
+          start_date=input$drange[1],
+          end_date=input$drange[2],
+          time_resolution=input$time_res,
+          geo_resolution=input$geo_res,
           state_filter=dc$states,
           county_filter=dc$selected_counties,
           med_group_sys = med_group_sys,
-          categ_info = categ_info, 
-          profile = profile()
+          categ_info = categ_info
         )
+        
+        # Only pull data if the proposed url differs from an existing one
+        if(is.null(data()$url_single) || url_single != data()$url_single) {
+          data<- withProgress(
+            message = "Pulling data via API",
+            detail = "Please wait ...", 
+            value = 0.2,
+            get_data(
+              sd=input$drange[1],
+              ed=input$drange[2],
+              time_res=input$time_res,
+              geo_res=input$geo_res,
+              state_filter=dc$states,
+              county_filter=dc$selected_counties,
+              med_group_sys = med_group_sys,
+              categ_info = categ_info, 
+              profile = profile()
+            )
+          )
+        } else {
+          data <- data()
+        }
         
         if (input$time_res=="weekly"){
           data$data <- wk_to_date(data$data, "date")
         } else if (input$time_res=="daily"){
           data$data$date<-as.Date(data$data$date)
         }
-        return(data)
+        
+        data
         
       }) |> bindEvent(input$load_data_btn)
       
@@ -263,11 +282,18 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
       
       observe({
         req(input$zipfile)
-        data_state("loading")
-        session$flushOutput()
         validate(need(file.exists(input$zipfile$datapath), "Upload did not complete yet"))
         
-        saved_query_info <- load_saved_query_file(input$zipfile$datapath)
+        data_state("loading")
+        on.exit(data_state("idle"), add=TRUE)
+        
+        saved_query_info <- withProgress(
+          message =  "Loading saved query", 
+          detail = "Please wait ...",
+          value = 0.2,
+          load_saved_query_file(input$zipfile$datapath)
+        )
+        
         vals <- saved_query_info[["query_values"]]
         for (nm in names(vals)) {
           if (nm %in% names(cache_transitions)) {
@@ -354,10 +380,14 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
         ) |> formatRound(cols_to_round, digits=4)
           
       })
+      
+      
       output$data_card_body <- renderUI({
-        s <- data_state()
-        
-        if (s == "idle") {
+        if (identical(data_state(), "loading") && (is.null(data()) || is.null(data()$data))) {
+          tags$div(
+            style = "min-height: 250px;"
+          )
+        } else if (is.null(data()) || is.null(data()$data)) {
           tagList(
             h4("How to load data"),
             tags$ol(
@@ -366,16 +396,7 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
             ),
             tags$p(class = "text-muted", "Nothing has been loaded yet.")
           )
-          
-        } else if (s == "loading") {
-          # simplest spinner: use shinycssloaders::withSpinner on a placeholder
-          shinycssloaders::withSpinner(
-            tags$div(style = "min-height: 250px;"),  # reserve space so card doesn't jump
-            caption = "Pulling data via API / Please wait",
-            color = bslib::bs_get_variables(theme = THEME, "primary")
-          )
-          
-        } else { # "ready"
+        } else {
           DT::DTOutput(ns("ingested_data"))
         }
       })
