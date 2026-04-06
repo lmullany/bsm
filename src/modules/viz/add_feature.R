@@ -289,6 +289,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       r <- rvr()
       ft <- input$feature
       sc <- input$feature_scale
+      materialize_ids <- character(0)
       
       spec <- default_feature_spec()
       nm <- trimws(input$feature_name %||% "")
@@ -349,6 +350,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         feature_kind = if (ft == "confidence_interval") "composite" else "atomic"
       )
       if (!fid %in% r$order) r$order <- c(r$order, fid)
+      materialize_ids <- fid
       
       if (ft == "confidence_interval") {
         ci <- params$ci %||% 0.90
@@ -391,12 +393,25 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         
         r$features[[fid]]$group_id <- group_id
         r$features[[fid]]$member_ids <- q_ids
+        materialize_ids <- unique(c(q_ids, fid))
       }
       
       r$last_id <- fid
       
       qs <- need_probs(ft)
       if (length(qs)) r$probs <- sort(unique(c(r$probs, qs)))
+      
+      materialize_err <- tryCatch({
+        materialize_feature_ids_into_stored_data(materialize_ids)
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (!is.null(materialize_err)) {
+        showNotification(
+          paste("Feature metadata was added, but the stored feature values could not be materialized:", materialize_err),
+          type = "warning",
+          duration = 8
+        )
+      }
       
       r$force_select_fid <- fid
       r$refresh <- r$refresh + 1L
@@ -476,10 +491,12 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         return()
       }
       
+      cols_to_maybe_drop <- r$features[[fid]]$out_cols %||% character(0)
       lbl <- r$features[[fid]]$label %||% fid
       r$features[[fid]] <- NULL
       r$order <- setdiff(r$order, fid)
       if (identical(r$last_id, fid)) r$last_id <- tail(r$order, 1L)
+      drop_feature_cols_from_stored_data(cols_to_maybe_drop)
       
       cur_sel <- isolate(input$display_cols %||% character(0))
       new_sel <- setdiff(cur_sel, fid)
@@ -668,11 +685,52 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       out
     }
     
+    materialize_feature_ids_into_stored_data <- function(feature_ids) {
+      req(im$data_cls)
+      base_source <- im$data_cls$data
+      req(base_source)
+      
+      out <- data.table::as.data.table(base_source)
+      dcls <- im$data_cls
+      r <- rvr()
+      feature_ids <- unique(feature_ids %||% character(0))
+      
+      for (fid in feature_ids) {
+        f <- r$features[[fid]]
+        if (is.null(f) || !is_virtual_feature(f)) next
+        out <- apply_feature(out, f, dcls)
+      }
+      
+      im$data_cls$data <- out[]
+      im$posterior <- out[]
+      invisible(out[])
+    }
+    
+    drop_feature_cols_from_stored_data <- function(cols) {
+      cols <- unique(cols %||% character(0))
+      if (!length(cols)) return(invisible(NULL))
+      req(im$data_cls)
+      
+      r <- rvr()
+      remaining_cols <- unique(unlist(lapply(r$order %||% character(0), function(fid) {
+        f <- r$features[[fid]]
+        f$out_cols %||% character(0)
+      })))
+      cols_to_drop <- setdiff(cols, remaining_cols)
+      if (!length(cols_to_drop)) return(invisible(NULL))
+      
+      out <- data.table::as.data.table(im$data_cls$data)
+      keep <- setdiff(names(out), cols_to_drop)
+      out <- out[, ..keep]
+      im$data_cls$data <- out[]
+      im$posterior <- out[]
+      invisible(out[])
+    }
+    
     # Posterior table
     posterior_tbl <- reactive({
       req(im$data_cls)
       r <- rvr()
-      dcls <- im$data_cls
       
       base_source <- if (!is.null(im$posterior)) im$posterior else im$data_cls$data
       req(base_source)
@@ -683,38 +741,15 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       if (!length(sel)) sel <- default_display_feature_ids()
       sel <- intersect(sel, r$order %||% character(0))
       
-      base_keep <- unique(unlist(lapply(sel, function(fid) {
+      stored_keep <- unique(unlist(lapply(sel, function(fid) {
         f <- r$features[[fid]]
-        if (is.null(f) || is_virtual_feature(f)) return(character(0))
+        if (is.null(f)) return(character(0))
         f$out_cols %||% character(0)
       })))
       
       base_front <- intersect(front_cols(), names(out))
-      cols_present <- unique(c(base_front, intersect(base_keep, names(out))))
+      cols_present <- unique(c(base_front, intersect(stored_keep, names(out))))
       out <- out[, ..cols_present]
-      
-      failed <- character(0)
-      
-      for (fid in sel) {
-        f <- r$features[[fid]]
-        if (!is.null(f) && is_virtual_feature(f)) {
-          out <- tryCatch(
-            apply_feature(out, f, dcls),
-            error = function(e) {
-              failed <<- c(failed, sprintf("%s: %s", f$label %||% fid, conditionMessage(e)))
-              out
-            }
-          )
-        }
-      }
-      
-      if (length(failed)) {
-        showNotification(
-          paste("Some derived features could not be computed:", paste(failed, collapse = " | ")),
-          type = "warning",
-          duration = 8
-        )
-      }
       
       out[, c(base_front, setdiff(names(out), base_front)), with = FALSE][]
     })

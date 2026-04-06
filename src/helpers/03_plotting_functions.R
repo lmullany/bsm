@@ -854,6 +854,436 @@ build_time_series_plotly <- function(ts_plot_data, spec, ...) {
   assemble_time_series_subplots(plots)
 }
 
+fmt_qname <- function(q, digits = 3) {
+  q <- suppressWarnings(as.numeric(q))
+  out <- prettyNum(round(q, digits), digits = 12, drop0trailing = TRUE)
+  sub("^\\.", "0.", out)
+}
+
+normalize_qdf_names <- function(qdf) {
+  data.table::setDT(qdf)
+  old <- names(qdf)
+  new <- sub("^(props_|counts?_)", "", old)
+  num_like <- !is.na(suppressWarnings(as.numeric(new)))
+  if (any(num_like)) new[num_like] <- fmt_qname(new[num_like], digits = 12)
+  data.table::setnames(qdf, old, new, skip_absent = TRUE)
+  qdf
+}
+
+slice_qdf <- function(qdf, data_cls, cols_keep) {
+  data.table::setDT(qdf)
+  reg_col <- data_cls$region_column
+  date_col <- data_cls$date_column
+  if (reg_col %in% names(qdf)) qdf[, (reg_col) := as.character(get(reg_col))]
+  keep <- intersect(c(reg_col, date_col, cols_keep), names(qdf))
+  if (length(keep) == 0) return(data.table::data.table())
+  qdf[, ..keep]
+}
+
+merge_by_region_date <- function(x, y, data_cls) {
+  data.table::setDT(x)
+  data.table::setDT(y)
+  reg_col <- data_cls$region_column
+  date_col <- data_cls$date_column
+  
+  x[, (reg_col) := as.character(get(reg_col))]
+  y[, (reg_col) := as.character(get(reg_col))]
+  
+  overlap <- setdiff(intersect(names(x), names(y)), c(reg_col, date_col))
+  if (length(overlap)) x[, (overlap) := NULL]
+  
+  data.table::setkeyv(x, c(reg_col, date_col))
+  data.table::setkeyv(y, c(reg_col, date_col))
+  y[x]
+}
+
+build_virtual_feature_context <- function(features, model, data_cls) {
+  features <- Filter(Negate(is.null), features)
+  q_features <- Filter(function(f) {
+    ft <- f$feature_type %||% ""
+    ft %in% c("quantile", "confidence_interval")
+  }, features)
+  
+  q_probs <- sort(unique(unlist(lapply(q_features, function(f) {
+    ft <- f$feature_type %||% ""
+    if (identical(ft, "quantile")) return(as.numeric(f$params$q %||% 0.5))
+    if (identical(ft, "confidence_interval")) {
+      ci <- as.numeric(f$params$ci %||% 0.90)
+      a <- (1 - ci) / 2
+      return(c(a, 1 - a))
+    }
+    numeric(0)
+  }))))
+  
+  reg_col <- data_cls$region_column
+  date_col <- data_cls$date_column
+  
+  qdf_props <- if (length(q_probs)) {
+    qdf <- get_posterior_quantiles(model, data_cls, probs = q_probs, use_count_scale = FALSE)
+    qdf <- normalize_qdf_names(qdf)
+    data.table::as.data.table(qdf)
+  } else NULL
+  
+  qdf_counts <- if (length(q_probs)) {
+    qdf <- get_posterior_quantiles(model, data_cls, probs = q_probs, use_count_scale = TRUE)
+    qdf <- normalize_qdf_names(qdf)
+    qdf <- data.table::as.data.table(qdf)
+    q_only <- setdiff(names(qdf), c(reg_col, date_col))
+    if (length(q_only)) data.table::setnames(qdf, q_only, paste0(q_only, "_count"))
+    qdf
+  } else NULL
+  
+  list(
+    model = model,
+    data_cls = data_cls,
+    qdf_props = qdf_props,
+    qdf_counts = qdf_counts,
+    mean_cache = new.env(parent = emptyenv()),
+    exceed_cache = new.env(parent = emptyenv())
+  )
+}
+
+get_virtual_feature_mean_dt <- function(context, use_count_scale = FALSE) {
+  key <- if (use_count_scale) "counts" else "proportion"
+  if (exists(key, envir = context$mean_cache, inherits = FALSE)) {
+    return(get(key, envir = context$mean_cache, inherits = FALSE))
+  }
+  
+  dcls <- context$data_cls
+  reg_col <- dcls$region_column
+  date_col <- dcls$date_column
+  denom_col <- dcls$denominator_column
+  
+  mu <- context$model$summary.fitted.values[, "mean"]
+  if (is.null(mu)) return(data.table::data.table())
+  
+  dt <- data.table::as.data.table(dcls$data)
+  keep <- intersect(unique(c(reg_col, date_col, denom_col)), names(dt))
+  if (!length(keep)) return(data.table::data.table())
+  
+  dt <- dt[, ..keep]
+  dt[, mu := as.numeric(mu)]
+  
+  model_scale <- get_model_scale(context$model)
+  if (!is.null(denom_col) && denom_col %in% names(dt)) {
+    if (model_scale == "count" && !use_count_scale) dt[, mu := mu / get(denom_col)]
+    if (model_scale == "prop" && use_count_scale) dt[, mu := mu * get(denom_col)]
+  }
+  
+  if (reg_col %in% names(dt)) dt[, (reg_col) := as.character(get(reg_col))]
+  
+  out_col <- if (use_count_scale) "mean_count" else "mean_prop"
+  dt <- dt[, .(value = mu), by = c(reg_col, date_col)]
+  data.table::setnames(dt, "value", out_col)
+  assign(key, dt[], envir = context$mean_cache)
+  get(key, envir = context$mean_cache, inherits = FALSE)
+}
+
+get_virtual_feature_exceedance_dt <- function(context, threshold, use_count_scale = FALSE) {
+  key <- paste0(threshold, "::", use_count_scale)
+  if (exists(key, envir = context$exceed_cache, inherits = FALSE)) {
+    return(get(key, envir = context$exceed_cache, inherits = FALSE))
+  }
+  
+  dt <- get_exceedance_probs(
+    inla_model = context$model,
+    data_cls = context$data_cls,
+    threshold = threshold,
+    use_suffix = TRUE,
+    use_count_scale = use_count_scale
+  )
+  assign(key, dt, envir = context$exceed_cache)
+  get(key, envir = context$exceed_cache, inherits = FALSE)
+}
+
+materialize_virtual_feature <- function(out, feature, context) {
+  dcls <- context$data_cls
+  ft <- feature$feature_type %||% ""
+  sc <- feature$feature_scale %||% "other"
+  out_cols <- feature$out_cols %||% character(0)
+  
+  if (!length(out_cols)) return(out)
+  
+  data.table::setDT(out)
+  out2 <- data.table::copy(out)
+  for (cc in out_cols) {
+    if (!cc %in% names(out2)) out2[, (cc) := NA_real_]
+  }
+  
+  if (ft == "mean") {
+    use_count <- identical(sc, "counts")
+    res <- get_virtual_feature_mean_dt(context, use_count)
+    mcol <- if (use_count) "mean_count" else "mean_prop"
+    out2 <- merge_by_region_date(out2, res, dcls)
+    out2[, (out_cols[[1]]) := as.numeric(get(mcol))]
+    out2[, (mcol) := NULL]
+    return(out2[])
+  }
+  
+  if (ft == "quantile") {
+    qn <- fmt_qname(feature$params$q %||% 0.5)
+    if (identical(sc, "counts")) {
+      qdf <- context$qdf_counts
+      src <- paste0(qn, "_count")
+    } else {
+      qdf <- context$qdf_props
+      src <- qn
+    }
+    out2 <- merge_by_region_date(out2, slice_qdf(qdf, dcls, src), dcls)
+    out2[, (out_cols[[1]]) := as.numeric(get(src))]
+    out2[, (src) := NULL]
+    return(out2[])
+  }
+  
+  if (ft == "confidence_interval") {
+    ci <- feature$params$ci %||% 0.90
+    a <- (1 - ci) / 2
+    qL <- fmt_qname(a)
+    qU <- fmt_qname(1 - a)
+    if (identical(sc, "counts")) {
+      qdf <- context$qdf_counts
+      srcL <- paste0(qL, "_count")
+      srcU <- paste0(qU, "_count")
+    } else {
+      qdf <- context$qdf_props
+      srcL <- qL
+      srcU <- qU
+    }
+    out2 <- merge_by_region_date(out2, slice_qdf(qdf, dcls, c(srcL, srcU)), dcls)
+    out2[, (out_cols[[1]]) := as.numeric(get(srcL))]
+    out2[, (out_cols[[2]]) := as.numeric(get(srcU))]
+    out2[, c(srcL, srcU) := NULL]
+    return(out2[])
+  }
+  
+  if (ft == "exceedance_probability") {
+    thr <- as.numeric(feature$params$threshold %||% 0)
+    use_count <- identical(sc, "counts")
+    res <- get_virtual_feature_exceedance_dt(context, thr, use_count)
+    out2 <- merge_by_region_date(out2, res, dcls)
+    ex_col <- grep("^exceedance_prob", names(out2), value = TRUE)[1]
+    out2[, (out_cols[[1]]) := as.numeric(get(ex_col))]
+    out2[, (ex_col) := NULL]
+    return(out2[])
+  }
+  
+  out2
+}
+
+materialize_virtual_features <- function(out, features, model, data_cls) {
+  features <- Filter(function(f) {
+    !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
+  }, features)
+  if (!length(features)) return(data.table::as.data.table(out))
+  
+  context <- build_virtual_feature_context(features, model, data_cls)
+  out2 <- data.table::as.data.table(out)
+  for (f in features) {
+    out2 <- materialize_virtual_feature(out2, f, context)
+  }
+  out2[]
+}
+
+get_other_time_series_global_max <- function(plot_dt) {
+  vals <- c(plot_dt$value, plot_dt$upper)
+  vals <- vals[is.finite(vals)]
+  if (!length(vals)) return(NULL)
+  mx <- max(vals, na.rm = TRUE)
+  if (!is.finite(mx) || mx <= 0) return(NULL)
+  mx * 1.1
+}
+
+plot_ly_other_time_series_panel <- function(
+    dt,
+    panel_title,
+    fixed_y_max = NULL,
+    color_map = NULL,
+    legend_features = character(0)
+) {
+  feature_labels <- unique(dt$feature_label)
+  if (is.null(color_map)) {
+    color_map <- grDevices::hcl.colors(max(length(feature_labels), 1L), "Dark 3")
+    names(color_map) <- feature_labels
+  }
+  
+  p <- plotly::plot_ly()
+  
+  for (feat in feature_labels) {
+    feat_dt <- dt[dt$feature_label == feat, , drop = FALSE]
+    color <- color_map[[feat]] %||% "#1f77b4"
+    fill_color <- grDevices::adjustcolor(color, alpha.f = 0.2)
+    show_feat_legend <- feat %in% legend_features
+    
+    has_interval <- all(c("lower", "upper") %in% names(feat_dt)) &&
+      any(is.finite(feat_dt$lower) | is.finite(feat_dt$upper), na.rm = TRUE)
+    
+    if (isTRUE(has_interval)) {
+      p <- p |>
+        plotly::add_ribbons(
+          data = feat_dt[feat_dt$type == "Historical", , drop = FALSE],
+          x = ~date,
+          ymin = ~lower,
+          ymax = ~upper,
+          fillcolor = fill_color,
+          line = list(color = "rgba(0,0,0,0)"),
+          name = paste0(feat, " CI"),
+          legendgroup = feat,
+          showlegend = show_feat_legend,
+          hoverinfo = "none"
+        ) |>
+        plotly::add_ribbons(
+          data = feat_dt[feat_dt$type == "Forecast", , drop = FALSE],
+          x = ~date,
+          ymin = ~lower,
+          ymax = ~upper,
+          fillcolor = fill_color,
+          line = list(color = "rgba(0,0,0,0)"),
+          name = paste0(feat, " Forecast CI"),
+          legendgroup = feat,
+          showlegend = FALSE,
+          hoverinfo = "none"
+        )
+    }
+    
+    if ("value" %in% names(feat_dt) && any(is.finite(feat_dt$value), na.rm = TRUE)) {
+      hist_dt <- feat_dt[feat_dt$type == "Historical", , drop = FALSE]
+      fc_dt <- feat_dt[feat_dt$type == "Forecast", , drop = FALSE]
+      
+      if (nrow(hist_dt) > 0) {
+        p <- p |>
+          plotly::add_trace(
+            data = hist_dt,
+            x = ~date,
+            y = ~value,
+            type = "scatter",
+            mode = "lines",
+            line = list(color = color),
+            name = feat,
+            legendgroup = feat,
+            showlegend = show_feat_legend,
+            text = ~hover_text,
+            hoverinfo = "text"
+          )
+      }
+      
+      if (nrow(fc_dt) > 0) {
+        p <- p |>
+          plotly::add_trace(
+            data = fc_dt,
+            x = ~date,
+            y = ~value,
+            type = "scatter",
+            mode = "lines",
+            line = list(color = color, dash = "dash"),
+            name = paste0(feat, " Forecast"),
+            legendgroup = feat,
+            showlegend = FALSE,
+            text = ~hover_text,
+            hoverinfo = "text"
+          )
+      }
+    }
+  }
+  
+  y_max <- fixed_y_max
+  if (is.null(y_max)) y_max <- get_other_time_series_global_max(dt)
+  
+  p |>
+    plotly::layout(
+      annotations = list(
+        text = panel_title,
+        x = 0.02,
+        y = 1,
+        xref = "paper",
+        yref = "paper",
+        xanchor = "left",
+        yanchor = "bottom",
+        showarrow = FALSE,
+        font = list(size = 16, color = "black", family = "Arial black")
+      ),
+      xaxis = list(
+        title = list(text = "Date", font = list(size = 14)),
+        tickfont = list(size = 12),
+        range = c(min(dt$date), max(dt$date))
+      ),
+      yaxis = list(
+        title = list(text = "Value", font = list(size = 14)),
+        tickfont = list(size = 12),
+        range = if (!is.null(y_max)) c(0, y_max) else NULL
+      ),
+      hovermode = "x unified",
+      legend = list(orientation = "h")
+    )
+}
+
+build_other_time_series_plotly <- function(plot_dt, region_ids, separate_features = FALSE, fixed_y = FALSE) {
+  validate(
+    need(!is.null(plot_dt), "No plot data available"),
+    need(nrow(plot_dt) > 0, "No plot data available"),
+    need(length(region_ids) > 0, "Must have at least one region selected")
+  )
+  
+  fixed_y_max <- if (isTRUE(fixed_y)) get_other_time_series_global_max(plot_dt) else NULL
+  plots <- list()
+  all_features <- unique(plot_dt$feature_label)
+  color_map <- grDevices::hcl.colors(max(length(all_features), 1L), "Dark 3")
+  names(color_map) <- all_features
+  shown_features <- character(0)
+  
+  if (isTRUE(separate_features)) {
+    combos <- unique(plot_dt[, c("region_id", "region_label", "feature_label"), drop = FALSE])
+    for (i in seq_len(nrow(combos))) {
+      sub_dt <- plot_dt[
+        plot_dt$region_id == combos$region_id[[i]] &
+          plot_dt$feature_label == combos$feature_label[[i]],
+        ,
+        drop = FALSE
+      ]
+      feat <- combos$feature_label[[i]]
+      legend_features <- if (!feat %in% shown_features) feat else character(0)
+      shown_features <- unique(c(shown_features, feat))
+      plots[[length(plots) + 1L]] <- plot_ly_other_time_series_panel(
+        sub_dt,
+        panel_title = paste(combos$region_label[[i]], combos$feature_label[[i]], sep = " - "),
+        fixed_y_max = fixed_y_max,
+        color_map = color_map,
+        legend_features = legend_features
+      )
+    }
+  } else {
+    for (region_id in region_ids) {
+      sub_dt <- plot_dt[plot_dt$region_id == region_id, , drop = FALSE]
+      if (!nrow(sub_dt)) next
+      panel_title <- unique(sub_dt$region_label)[1]
+      panel_features <- unique(sub_dt$feature_label)
+      legend_features <- setdiff(panel_features, shown_features)
+      shown_features <- unique(c(shown_features, panel_features))
+      plots[[length(plots) + 1L]] <- plot_ly_other_time_series_panel(
+        sub_dt,
+        panel_title = panel_title,
+        fixed_y_max = fixed_y_max,
+        color_map = color_map,
+        legend_features = legend_features
+      )
+    }
+  }
+  
+  validate(need(length(plots) > 0, "No plot data available for the selected region/feature combination"))
+  
+  subplot(
+    plots,
+    nrows = ceiling(length(plots) / 3),
+    shareX = TRUE,
+    titleX = TRUE,
+    titleY = TRUE,
+    margin = 0.04
+  ) %>%
+    layout(
+      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.1),
+      margin = list(b = 80)
+    )
+}
+
 get_max_y_over_plots <- function(names, plot_data, ci) {
   
   
@@ -885,50 +1315,55 @@ format_time_series_prob_name <- function(q) {
   sub("^\\.", "0.", out)
 }
 
-prepare_time_series_feature_plot_data <- function(model, data_cls, spec, ci_feature, median_feature = NULL) {
+prepare_time_series_feature_plot_data <- function(feature_data, data_cls, spec, ci_feature, median_feature = NULL) {
   byvar <- get_ts_data_cls_region_col(data_cls)
   date_col <- get_ts_data_cls_date_col(data_cls)
   req(!is.null(byvar), !is.null(date_col))
   req(!is.null(ci_feature), identical(ci_feature$feature_type, "confidence_interval"))
-  
-  ci <- as.numeric(ci_feature$params$ci %||% NA_real_)
-  req(is.finite(ci), ci > 0, ci < 1)
-  
-  median_q <- as.numeric(median_feature$params$q %||% 0.5)
-  q_lower <- (1 - ci) / 2
-  q_upper <- 1 - q_lower
-  probs <- sort(unique(c(median_q, q_lower, q_upper)))
-  
-  d <- get_posterior_quantiles(
-    model,
-    data_cls,
-    use_suffix = FALSE,
-    use_count_scale = isTRUE(spec$use_count),
-    probs = probs
-  )
-  data.table::setDT(d)
-  
+
+  req(!is.null(feature_data))
+  d <- data.table::as.data.table(feature_data)
+
+  median_col <- median_feature$out_cols[[1]] %||% NULL
+  ci_cols <- ci_feature$out_cols %||% character(0)
+  req(!is.null(median_col), length(ci_cols) >= 2)
+  req(median_col %in% names(d), all(ci_cols[1:2] %in% names(d)))
+
+  keep_cols <- unique(c(
+    byvar,
+    date_col,
+    "region",
+    data_cls$numerator_column,
+    data_cls$denominator_column,
+    median_col,
+    ci_cols[1:2]
+  ))
+  keep_cols <- intersect(keep_cols, names(d))
+
+  d <- d[, ..keep_cols]
   data.table::setnames(
     d,
-    old = c(
-      format_time_series_prob_name(median_q),
-      format_time_series_prob_name(q_lower),
-      format_time_series_prob_name(q_upper)
-    ),
+    old = c(median_col, ci_cols[1], ci_cols[2]),
     new = c("median", "lower", "upper"),
     skip_absent = TRUE
   )
 
-  d[, i := (1:.N), by = byvar]
+  if (!inherits(d[[date_col]], "Date")) {
+    d[, (date_col) := as.Date(get(date_col))]
+  }
+  if (byvar %in% names(d)) {
+    d[, (byvar) := as.character(get(byvar))]
+  }
+
+  d[, i := seq_len(.N), by = byvar]
   d[order(get(date_col)), type := fifelse(i > .N - spec$future_steps, "Forecast", "Historical"), by = byvar]
-  d <- rbind(d, d[type == "Historical"][get(date_col) == max(get(date_col))][, type := "Forecast"])
+  d[, i := NULL]
+  d <- rbind(d, d[type == "Historical"][get(date_col) == max(get(date_col))][, type := "Forecast"], fill = TRUE)
 
-  if (isTRUE(spec$use_count)) d <- d[type == "Historical"]
-
-  d <- data_cls$data[d, on = c(byvar, date_col)]
-
-  obs = d[[data_cls$numerator_column]]
-  if (!isTRUE(spec$use_count)) obs <- obs/d[[data_cls$denominator_column]]
+  obs <- d[[data_cls$numerator_column]]
+  if (!isTRUE(spec$use_count) && data_cls$denominator_column %in% names(d)) {
+    obs <- obs / d[[data_cls$denominator_column]]
+  }
   d[, observed := obs]
 
   d[order(get(date_col))] |> split(by = byvar)

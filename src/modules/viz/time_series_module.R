@@ -160,9 +160,9 @@ viz_time_series_server <- function(id, im, results, feature_store) {
       
       # Get the plotly data
       tspd <- reactive({
-        req(im$posterior)
+        req(im$data_cls)
         prepare_time_series_feature_plot_data(
-          model = im$model,
+          feature_data = im$data_cls$data,
           data_cls = im$data_cls,
           spec = ts_spec(),
           ci_feature = selected_ci_feature(),
@@ -179,7 +179,7 @@ viz_time_series_server <- function(id, im, results, feature_store) {
       })
       
       output$ts_plots <- renderPlotly({
-        validate(need(im$posterior, "Load data and run model first"))
+        validate(need(!is.null(im$data_cls), "Load data and run model first"))
         validate(need(input$viz_regions, "Must have a least one region selected"))
         ts_plots()
       })

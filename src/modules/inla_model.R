@@ -381,15 +381,29 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         req(res, isTRUE(res$ok), !is.null(res$model), !is.null(res$data_class))
         
         model_state("postprocessing")
+        feat_store$register_default_virtual_features()
         
+        virtual_ids <- feat_store$rv$order[vapply(feat_store$rv$order, function(fid) {
+          f <- feat_store$get_feature(fid)
+          !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
+        }, logical(1))]
+        virtual_features <- lapply(virtual_ids, feat_store$get_feature)
+        
+        res$data_class$data <- materialize_virtual_features(
+          out = res$data_class$data,
+          features = virtual_features,
+          model = res$model,
+          data_cls = res$data_class
+        )
+        
+        im$data_cls <- res$data_class
         im$posterior <- res$data_class$data
         
         feat_store$sync_base_columns(
           data = res$data_class$data,
-          data_cls = res$data_class
+          data_cls = res$data_class,
+          exclude_cols = unique(unlist(lapply(virtual_features, function(f) f$out_cols %||% character(0))))
         )
-        
-        feat_store$register_default_virtual_features()
         
         model_state("ready")
       }) |> bindEvent(current_model_res())
@@ -1291,11 +1305,12 @@ init_feature_df <- function() {
     )
   }
   
-  sync_base_columns <- function(data, data_cls) {
+  sync_base_columns <- function(data, data_cls, exclude_cols = character(0)) {
     if (is.null(data) || is.null(data_cls)) return(invisible(NULL))
     
     dt <- data.table::as.data.table(data)
     cols <- names(dt)
+    if (length(exclude_cols)) cols <- setdiff(cols, unique(exclude_cols))
     if (!length(cols)) return(invisible(NULL))
     
     pretty_map <- map_table_names_to_display(cols, quantile_suffix = NULL, keep_names = TRUE)
