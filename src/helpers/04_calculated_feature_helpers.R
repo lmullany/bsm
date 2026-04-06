@@ -1,22 +1,22 @@
-posterior_feature_fmt_qname <- function(q, digits = 3) {
+calculated_feature_fmt_qname <- function(q, digits = 3) {
   q <- suppressWarnings(as.numeric(q))
   out <- prettyNum(round(q, digits), digits = 12, drop0trailing = TRUE)
   sub("^\\.", "0.", out)
 }
 
-posterior_feature_normalize_qdf_names <- function(qdf) {
+calculated_feature_normalize_qdf_names <- function(qdf) {
   data.table::setDT(qdf)
   old <- names(qdf)
   new <- sub("^(props_|counts?_)", "", old)
   num_like <- !is.na(suppressWarnings(as.numeric(new)))
   if (any(num_like)) {
-    new[num_like] <- posterior_feature_fmt_qname(new[num_like], digits = 12)
+    new[num_like] <- calculated_feature_fmt_qname(new[num_like], digits = 12)
   }
   data.table::setnames(qdf, old, new, skip_absent = TRUE)
   qdf
 }
 
-posterior_feature_slice_qdf <- function(qdf, data_cls, cols_keep) {
+calculated_feature_slice_qdf <- function(qdf, data_cls, cols_keep) {
   data.table::setDT(qdf)
   reg_col <- data_cls$region_column
   date_col <- data_cls$date_column
@@ -30,7 +30,7 @@ posterior_feature_slice_qdf <- function(qdf, data_cls, cols_keep) {
   qdf[, ..keep]
 }
 
-posterior_feature_merge_by_region_date <- function(x, y, data_cls) {
+calculated_feature_merge_by_region_date <- function(x, y, data_cls) {
   data.table::setDT(x)
   data.table::setDT(y)
   reg_col <- data_cls$region_column
@@ -46,7 +46,7 @@ posterior_feature_merge_by_region_date <- function(x, y, data_cls) {
   y[x]
 }
 
-build_posterior_feature_context <- function(features, model, data_cls) {
+build_calculated_feature_context <- function(features, model, data_cls) {
   features <- Filter(Negate(is.null), features)
   q_features <- Filter(function(f) {
     ft <- f$feature_type %||% ""
@@ -71,7 +71,7 @@ build_posterior_feature_context <- function(features, model, data_cls) {
 
   qdf_props <- if (length(q_probs)) {
     qdf <- get_posterior_quantiles(model, data_cls, probs = q_probs, use_count_scale = FALSE)
-    qdf <- posterior_feature_normalize_qdf_names(qdf)
+    qdf <- calculated_feature_normalize_qdf_names(qdf)
     data.table::as.data.table(qdf)
   } else {
     NULL
@@ -79,7 +79,7 @@ build_posterior_feature_context <- function(features, model, data_cls) {
 
   qdf_counts <- if (length(q_probs)) {
     qdf <- get_posterior_quantiles(model, data_cls, probs = q_probs, use_count_scale = TRUE)
-    qdf <- posterior_feature_normalize_qdf_names(qdf)
+    qdf <- calculated_feature_normalize_qdf_names(qdf)
     qdf <- data.table::as.data.table(qdf)
     q_only <- setdiff(names(qdf), c(reg_col, date_col))
     if (length(q_only)) {
@@ -100,7 +100,7 @@ build_posterior_feature_context <- function(features, model, data_cls) {
   )
 }
 
-get_posterior_feature_mean_dt <- function(context, use_count_scale = FALSE) {
+get_calculated_feature_mean_dt <- function(context, use_count_scale = FALSE) {
   key <- if (use_count_scale) "counts" else "proportion"
   if (exists(key, envir = context$mean_cache, inherits = FALSE)) {
     return(get(key, envir = context$mean_cache, inherits = FALSE))
@@ -139,7 +139,7 @@ get_posterior_feature_mean_dt <- function(context, use_count_scale = FALSE) {
   get(key, envir = context$mean_cache, inherits = FALSE)
 }
 
-get_posterior_feature_exceedance_dt <- function(context, threshold, use_count_scale = FALSE) {
+get_calculated_feature_exceedance_dt <- function(context, threshold, use_count_scale = FALSE) {
   key <- paste0(threshold, "::", use_count_scale)
   if (exists(key, envir = context$exceed_cache, inherits = FALSE)) {
     return(get(key, envir = context$exceed_cache, inherits = FALSE))
@@ -156,7 +156,7 @@ get_posterior_feature_exceedance_dt <- function(context, threshold, use_count_sc
   get(key, envir = context$exceed_cache, inherits = FALSE)
 }
 
-calculate_and_store_posterior_feature <- function(out, feature, context) {
+calculate_and_store_calculated_feature <- function(out, feature, context) {
   dcls <- context$data_cls
   ft <- feature$feature_type %||% ""
   sc <- feature$feature_scale %||% "other"
@@ -176,16 +176,16 @@ calculate_and_store_posterior_feature <- function(out, feature, context) {
 
   if (ft == "mean") {
     use_count <- identical(sc, "counts")
-    res <- get_posterior_feature_mean_dt(context, use_count)
+    res <- get_calculated_feature_mean_dt(context, use_count)
     mcol <- if (use_count) "mean_count" else "mean_prop"
-    out2 <- posterior_feature_merge_by_region_date(out2, res, dcls)
+    out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
     out2[, (out_cols[[1]]) := as.numeric(get(mcol))]
     out2[, (mcol) := NULL]
     return(out2[])
   }
 
   if (ft == "quantile") {
-    qn <- posterior_feature_fmt_qname(feature$params$q %||% 0.5)
+    qn <- calculated_feature_fmt_qname(feature$params$q %||% 0.5)
     if (identical(sc, "counts")) {
       qdf <- context$qdf_counts
       src <- paste0(qn, "_count")
@@ -193,9 +193,9 @@ calculate_and_store_posterior_feature <- function(out, feature, context) {
       qdf <- context$qdf_props
       src <- qn
     }
-    out2 <- posterior_feature_merge_by_region_date(
+    out2 <- calculated_feature_merge_by_region_date(
       out2,
-      posterior_feature_slice_qdf(qdf, dcls, src),
+      calculated_feature_slice_qdf(qdf, dcls, src),
       dcls
     )
     out2[, (out_cols[[1]]) := as.numeric(get(src))]
@@ -206,8 +206,8 @@ calculate_and_store_posterior_feature <- function(out, feature, context) {
   if (ft == "confidence_interval") {
     ci <- feature$params$ci %||% 0.90
     a <- (1 - ci) / 2
-    qL <- posterior_feature_fmt_qname(a)
-    qU <- posterior_feature_fmt_qname(1 - a)
+    qL <- calculated_feature_fmt_qname(a)
+    qU <- calculated_feature_fmt_qname(1 - a)
     if (identical(sc, "counts")) {
       qdf <- context$qdf_counts
       srcL <- paste0(qL, "_count")
@@ -217,9 +217,9 @@ calculate_and_store_posterior_feature <- function(out, feature, context) {
       srcL <- qL
       srcU <- qU
     }
-    out2 <- posterior_feature_merge_by_region_date(
+    out2 <- calculated_feature_merge_by_region_date(
       out2,
-      posterior_feature_slice_qdf(qdf, dcls, c(srcL, srcU)),
+      calculated_feature_slice_qdf(qdf, dcls, c(srcL, srcU)),
       dcls
     )
     out2[, (out_cols[[1]]) := as.numeric(get(srcL))]
@@ -231,8 +231,8 @@ calculate_and_store_posterior_feature <- function(out, feature, context) {
   if (ft == "exceedance_probability") {
     thr <- as.numeric(feature$params$threshold %||% 0)
     use_count <- identical(sc, "counts")
-    res <- get_posterior_feature_exceedance_dt(context, thr, use_count)
-    out2 <- posterior_feature_merge_by_region_date(out2, res, dcls)
+    res <- get_calculated_feature_exceedance_dt(context, thr, use_count)
+    out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
     ex_col <- grep("^exceedance_prob", names(out2), value = TRUE)[1]
     out2[, (out_cols[[1]]) := as.numeric(get(ex_col))]
     out2[, (ex_col) := NULL]
@@ -242,7 +242,7 @@ calculate_and_store_posterior_feature <- function(out, feature, context) {
   out2
 }
 
-calculate_and_store_posterior_features <- function(out, features, model, data_cls) {
+calculate_and_store_calculated_features <- function(out, features, model, data_cls) {
   features <- Filter(function(f) {
     !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
   }, features)
@@ -250,10 +250,10 @@ calculate_and_store_posterior_features <- function(out, features, model, data_cl
     return(data.table::as.data.table(out))
   }
 
-  context <- build_posterior_feature_context(features, model, data_cls)
+  context <- build_calculated_feature_context(features, model, data_cls)
   out2 <- data.table::as.data.table(out)
   for (f in features) {
-    out2 <- calculate_and_store_posterior_feature(out2, f, context)
+    out2 <- calculate_and_store_calculated_feature(out2, f, context)
   }
   out2[]
 }

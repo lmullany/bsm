@@ -381,17 +381,17 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         req(res, isTRUE(res$ok), !is.null(res$model), !is.null(res$data_class))
         
         model_state("postprocessing")
-        feat_store$register_default_virtual_features()
+        feat_store$register_default_calculated_features()
         
-        virtual_ids <- feat_store$rv$order[vapply(feat_store$rv$order, function(fid) {
+        calculated_feature_ids <- feat_store$rv$order[vapply(feat_store$rv$order, function(fid) {
           f <- feat_store$get_feature(fid)
           !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
         }, logical(1))]
-        virtual_features <- lapply(virtual_ids, feat_store$get_feature)
+        calculated_features <- lapply(calculated_feature_ids, feat_store$get_feature)
         
-        res$data_class$data <- calculate_and_store_posterior_features(
+        res$data_class$data <- calculate_and_store_calculated_features(
           out = res$data_class$data,
-          features = virtual_features,
+          features = calculated_features,
           model = res$model,
           data_cls = res$data_class
         )
@@ -402,7 +402,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         feat_store$sync_base_columns(
           data = res$data_class$data,
           data_cls = res$data_class,
-          exclude_cols = unique(unlist(lapply(virtual_features, function(f) f$out_cols %||% character(0))))
+          exclude_cols = unique(unlist(lapply(calculated_features, function(f) f$out_cols %||% character(0))))
         )
         
         model_state("ready")
@@ -1365,7 +1365,7 @@ init_feature_df <- function() {
     invisible(NULL)
   }
   
-  register_virtual_features <- function(
+  register_calculated_features <- function(
     ci_widths = c(0.5, 0.9, 0.95, 0.99),
     include_mean = TRUE,
     include_median = TRUE,
@@ -1500,8 +1500,8 @@ init_feature_df <- function() {
     invisible(NULL)
   }
   
-  register_default_virtual_features <- function() {
-    register_virtual_features(
+  register_default_calculated_features <- function() {
+    register_calculated_features(
       ci_widths = c(0.5, 0.9, 0.95, 0.99),
       include_mean = TRUE,
       include_median = TRUE,
@@ -1513,8 +1513,8 @@ init_feature_df <- function() {
   list(
     rv = rv,
     sync_base_columns = sync_base_columns,
-    register_virtual_features = register_virtual_features,
-    register_default_virtual_features = register_default_virtual_features,
+    register_calculated_features = register_calculated_features,
+    register_default_calculated_features = register_default_calculated_features,
     get_feature = function(fid) {
       rv$features[[fid]]
     },

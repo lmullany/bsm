@@ -145,7 +145,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     
     is_user_feature <- function(fid) grepl("^usr__", fid)
     
-    is_virtual_feature <- function(f) {
+    is_calculated_feature <- function(f) {
       !is.null(f$feature_type) &&
         f$feature_type %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
     }
@@ -289,7 +289,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       r <- rvr()
       ft <- input$feature
       sc <- input$feature_scale
-      materialize_ids <- character(0)
+      calculated_feature_ids <- character(0)
       
       spec <- default_feature_spec()
       nm <- trimws(input$feature_name %||% "")
@@ -350,7 +350,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         feature_kind = if (ft == "confidence_interval") "composite" else "atomic"
       )
       if (!fid %in% r$order) r$order <- c(r$order, fid)
-      materialize_ids <- fid
+      calculated_feature_ids <- fid
       
       if (ft == "confidence_interval") {
         ci <- params$ci %||% 0.90
@@ -393,7 +393,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         
         r$features[[fid]]$group_id <- group_id
         r$features[[fid]]$member_ids <- q_ids
-        materialize_ids <- unique(c(q_ids, fid))
+        calculated_feature_ids <- unique(c(q_ids, fid))
       }
       
       r$last_id <- fid
@@ -401,13 +401,13 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       qs <- need_probs(ft)
       if (length(qs)) r$probs <- sort(unique(c(r$probs, qs)))
       
-      materialize_err <- tryCatch({
-        materialize_feature_ids_into_stored_data(materialize_ids)
+      calculate_err <- tryCatch({
+        calculate_and_store_feature_ids(calculated_feature_ids)
         NULL
       }, error = function(e) conditionMessage(e))
-      if (!is.null(materialize_err)) {
+      if (!is.null(calculate_err)) {
         showNotification(
-          paste("Feature metadata was added, but the stored feature values could not be materialized:", materialize_err),
+          paste("Feature metadata was added, but the calculated feature values could not be stored:", calculate_err),
           type = "warning",
           duration = 8
         )
@@ -680,7 +680,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       out
     }
     
-    materialize_feature_ids_into_stored_data <- function(feature_ids) {
+    calculate_and_store_feature_ids <- function(feature_ids) {
       req(im$data_cls)
       base_source <- im$data_cls$data
       req(base_source)
@@ -692,7 +692,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       
       for (fid in feature_ids) {
         f <- r$features[[fid]]
-        if (is.null(f) || !is_virtual_feature(f)) next
+        if (is.null(f) || !is_calculated_feature(f)) next
         out <- apply_feature(out, f, dcls)
       }
       
