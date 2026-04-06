@@ -389,7 +389,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         }, logical(1))]
         virtual_features <- lapply(virtual_ids, feat_store$get_feature)
         
-        res$data_class$data <- materialize_virtual_features(
+        res$data_class$data <- calculate_and_store_posterior_features(
           out = res$data_class$data,
           features = virtual_features,
           model = res$model,

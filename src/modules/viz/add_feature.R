@@ -544,30 +544,25 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       dcls <- im$data_cls
       reg_col   <- dcls$region_column
       date_col  <- dcls$date_column
-      denom_col <- dcls$denominator_column
       
-      mu <- im$model$summary.fitted.values[, "mean"]
-      if (is.null(mu)) return(NULL)
-      
-      dt <- data.table::as.data.table(dcls$data)
-      
-      keep <- intersect(unique(c(reg_col, date_col, denom_col)), names(dt))
+      dt <- get_posterior_means(
+        im$model,
+        dcls,
+        use_suffix = FALSE,
+        use_count_scale = use_count_scale
+      )
+      data.table::setDT(dt)
+
+      mean_col <- intersect(c("predicted_mean", "mean"), names(dt))[1]
+      if (is.na(mean_col) || is.null(mean_col)) return(data.table::data.table())
+      keep <- intersect(unique(c(reg_col, date_col, mean_col)), names(dt))
       if (length(keep) == 0) return(data.table::data.table())
       
       dt <- dt[, ..keep]
-      dt[, mu := as.numeric(mu)]
-      
-      model_scale <- get_model_scale(im$model)
-      if (!is.null(denom_col) && denom_col %in% names(dt)) {
-        if (model_scale == "count" && !use_count_scale) dt[, mu := mu / get(denom_col)]
-        if (model_scale == "prop"  &&  use_count_scale) dt[, mu := mu * get(denom_col)]
-      }
-      
       if (reg_col %in% names(dt))  dt[, (reg_col) := as.character(get(reg_col))]
       
       out_col <- if (use_count_scale) "mean_count" else "mean_prop"
-      dt <- dt[, .(value = mu), by = c(reg_col, date_col)]
-      data.table::setnames(dt, "value", out_col)
+      data.table::setnames(dt, mean_col, out_col)
       dt[]
     }
     
