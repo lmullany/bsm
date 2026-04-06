@@ -53,20 +53,24 @@ viz_other_time_series_ui <- function(id) {
 
 viz_other_time_series_server <- function(id, im, feature_store) {
   moduleServer(id, function(input, output, session) {
+    # Resolve the shared feature-store object passed in from viz_server().
     get_store <- function() {
       if (is.function(feature_store)) feature_store() else feature_store
     }
     
+    # This tab only reads from the stored shared data table.
     get_base_source <- reactive({
       req(im$data_cls)
       im$data_cls$data
     })
     
+    # Region choices come from the same stored data that supplies the plot.
     region_choices <- reactive({
       req(im$data_cls)
       get_time_series_region_choices(im$data_cls, display_col = "region")
     })
     
+    # Keep the region selector synchronized with the current stored data.
     observe({
       req(im$data_cls)
       choices <- region_choices()
@@ -109,6 +113,8 @@ viz_other_time_series_server <- function(id, im, feature_store) {
       df[keep, , drop = FALSE]
     })
     
+    # Pass a filtered metadata view into the shared feature selector so users
+    # only see features that can actually be plotted on this tab.
     filtered_feature_store <- list(
       features_df = reactive(plottable_features_df())
     )
@@ -119,12 +125,16 @@ viz_other_time_series_server <- function(id, im, feature_store) {
       allow_multiple = TRUE
     )
     
+    # The feature selector returns keys that may include row suffixes; strip
+    # those off so downstream logic works with plain feature IDs.
     selected_feature_ids <- reactive({
       keys <- feature_filters()$selected_features %||% character(0)
       ids <- sub("::.*$", "", keys)
       unique(ids[nzchar(ids)])
     })
     
+    # Mark each row as historical or forecast so the plotting helper can style
+    # the two segments differently and bridge them visually.
     mark_time_series_type <- function(dt, region_col, date_col, future_steps = 0L) {
       data.table::setDT(dt)
       dt <- data.table::copy(dt)
@@ -165,6 +175,8 @@ viz_other_time_series_server <- function(id, im, feature_store) {
       reg_col <- dcls$region_column
       date_col <- dcls$date_column
       region_label_col <- if ("region" %in% names(base_source)) "region" else reg_col
+      # Pull only the columns needed for the selected features plus the time
+      # and region identifiers used to group panels.
       feature_cols <- unique(unlist(lapply(selected_ids, function(fid) {
         f <- store$get_feature(fid)
         if (is.null(f)) return(character(0))
@@ -182,6 +194,8 @@ viz_other_time_series_server <- function(id, im, feature_store) {
       plot_dt_base <- data.table::as.data.table(base_source)[, ..plot_keep]
       plot_dt_base <- mark_time_series_type(plot_dt_base, reg_col, date_col, future_steps = im$nforecasts %||% 0L)
       
+      # Reshape each selected feature into a standard plotting structure so
+      # line and ribbon features can be combined downstream.
       series_list <- lapply(selected_ids, function(fid) {
         f <- store$get_feature(fid)
         if (is.null(f)) return(NULL)
@@ -231,11 +245,15 @@ viz_other_time_series_server <- function(id, im, feature_store) {
         out[]
       })
       
+      # Combine all selected features into one long table for the shared
+      # plot-building helper.
       plot_dt <- data.table::rbindlist(Filter(Negate(is.null), series_list), use.names = TRUE, fill = TRUE)
       validate(need(nrow(plot_dt) > 0, "No plottable numeric data available for the selected features"))
       plot_dt[]
     })
     
+    # Filter the long plotting table to the requested regions and hand off to
+    # the shared plotly assembly helper.
     output$other_ts_plots <- renderPlotly({
       req(im$data_cls)
       validate(need(length(input$viz_regions %||% character(0)) > 0, "Must have at least one region selected"))
