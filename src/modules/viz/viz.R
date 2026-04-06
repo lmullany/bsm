@@ -32,7 +32,7 @@ viz_server <- function(id, dc, im, results) {
     
     # All viz tabs share the same feature store and stored data so calculated
     # features added in one place are immediately available elsewhere.
-    viz_regional_map_server(id = "viz_region", dc, im, results)
+    viz_regional_map_server(id = "viz_region", dc, im, results, feature_store = feature_store_getter)
     viz_time_series_server(id = "viz_time_series", im, results, feature_store = feature_store_getter)
     viz_other_time_series_server(id = "viz_other_time_series", im, feature_store = feature_store_getter)
     viz_posterior_server(id = "viz_posterior", im, results)
