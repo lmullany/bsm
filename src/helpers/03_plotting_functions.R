@@ -417,7 +417,8 @@ get_map_data <-function(model,
 #     leaflet.extras::addFullscreenControl()
 #   return (p)
 # }
-
+# Build HTML hover labels for county polygons, optionally including a mapped
+# value and title.
 get_hover_label_county <- function(county, fips, values=NULL, value_title="") {
   
   lapply(seq_along(county), \(cty) {
@@ -435,6 +436,8 @@ get_hover_label_county <- function(county, fips, values=NULL, value_title="") {
   })
 }
 
+# Return a palette as a vector of colors, supporting viridis and
+# RColorBrewer names with a viridis fallback.
 get_palette_vector <- function(name, n = 256) {
   if (is.null(name) || identical(name, "")) {
     return(viridisLite::viridis(n))
@@ -461,6 +464,8 @@ get_palette_vector <- function(name, n = 256) {
   viridisLite::viridis(n) # Fallback: viridis
 }
 
+# Join location geometry to a selected map metric/date and prepare the hover
+# labels and legend bounds needed for leaflet rendering.
 polygon_info <- function(locs, map_data, target_date) {
   # bind the location data with the map_data
   # TODO: consider merge here instead of cbind
@@ -501,8 +506,8 @@ polygon_info <- function(locs, map_data, target_date) {
   )
 }
 
-
-
+# Add polygons and an optional legend to an existing leaflet map using the
+# precomputed polygon metadata from polygon_info().
 update_polygons <- function(
     p,
     pi,
@@ -867,12 +872,16 @@ build_time_series_plotly <- function(ts_plot_data, spec, ...) {
   assemble_time_series_subplots(plots)
 }
 
+# Normalize a quantile probability into the string form used by posterior
+# quantile column lookups.
 fmt_qname <- function(q, digits = 3) {
   q <- suppressWarnings(as.numeric(q))
   out <- prettyNum(round(q, digits), digits = 12, drop0trailing = TRUE)
   sub("^\\.", "0.", out)
 }
 
+# Standardize posterior quantile table column names so downstream code can
+# request quantiles by a consistent key.
 normalize_qdf_names <- function(qdf) {
   data.table::setDT(qdf)
   old <- names(qdf)
@@ -883,6 +892,8 @@ normalize_qdf_names <- function(qdf) {
   qdf
 }
 
+# Extract the region/date keys plus selected quantile columns from a wide
+# posterior quantile table.
 slice_qdf <- function(qdf, data_cls, cols_keep) {
   data.table::setDT(qdf)
   reg_col <- data_cls$region_column
@@ -893,6 +904,8 @@ slice_qdf <- function(qdf, data_cls, cols_keep) {
   qdf[, ..keep]
 }
 
+# Merge two tables on the app's canonical region/date keys while dropping any
+# overlapping value columns from the left-hand table first.
 merge_by_region_date <- function(x, y, data_cls) {
   data.table::setDT(x)
   data.table::setDT(y)
@@ -1144,6 +1157,8 @@ get_max_y_over_plots <- function(names, plot_data, ci) {
     global_max
 }
 
+# Format a posterior probability into the quantile-column naming convention
+# used by the older time-series quantile helpers.
 format_time_series_prob_name <- function(q) {
   out <- prettyNum(as.numeric(q), digits = 12, drop0trailing = TRUE)
   sub("^\\.", "0.", out)
@@ -1269,10 +1284,8 @@ prepare_plot_ly_ts_data <- function(
   )
 }
 
-#' Given a data class, return the unique locations and map data, including
-#' shape information, using Rnssp::county_sf. This assume county locations
-#' and the function must be provided the county display column, the county
-#' code column (which default to "region", and "countyfips", respectively)
+# Return county geometry joined to the locations present in the current data
+# class so map views can render only the relevant regions.
 get_map_locations <- function(dc, county_display="region", county_code="countyfips") {
   locs = dc$data[, .SD, .SDcols = c(county_code, county_display)] |> unique()
   
@@ -1284,7 +1297,8 @@ get_map_locations <- function(dc, county_display="region", county_code="countyfi
     sf::st_transform(crs = 4326)
 }
 
-## helper to make draggable legend
+# Attach the client-side hook that makes a leaflet legend draggable after the
+# widget is rendered.
 enable_draggable_legend <- function(map) {
   map |>  htmlwidgets::onRender(
     "function(el, x) { if (window.makeLeafletLegendDraggable) window.makeLeafletLegendDraggable(el); }"
