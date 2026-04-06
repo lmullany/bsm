@@ -762,14 +762,19 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, fi
   return(p)
 }
 
+# Return the canonical region-column name from a data class, supporting both
+# the newer and older field names used in the app.
 get_ts_data_cls_region_col <- function(data_cls) {
   data_cls$region_column %||% data_cls$region_col
 }
 
+# Return the canonical date-column name from a data class, supporting both
+# the newer and older field names used in the app.
 get_ts_data_cls_date_col <- function(data_cls) {
   data_cls$date_column %||% data_cls$date_col
 }
 
+# Build named region choices for time-series selectors from the stored data.
 get_time_series_region_choices <- function(data_cls, display_col = "region") {
   region_col <- get_ts_data_cls_region_col(data_cls)
   req(!is.null(region_col), region_col %in% names(data_cls$data))
@@ -788,6 +793,7 @@ get_time_series_region_choices <- function(data_cls, display_col = "region") {
   stats::setNames(dt[[region_col]], dt[[display_col]])
 }
 
+# Collect the UI-level settings needed to build prediction time-series plots.
 build_time_series_plot_spec <- function(
     region_ids,
     ci,
@@ -806,6 +812,8 @@ build_time_series_plot_spec <- function(
   )
 }
 
+# Combine a list of plotly time-series panels into the app's shared subplot
+# layout with a single legend.
 assemble_time_series_subplots <- function(plots) {
   subplot(
     plots,
@@ -821,6 +829,7 @@ assemble_time_series_subplots <- function(plots) {
     )
 }
 
+# Render the prediction time-series view from precomputed per-region data.
 build_time_series_plotly <- function(ts_plot_data, spec, ...) {
   region_ids <- spec$regions %||% character(0)
   validate(need(length(region_ids) > 0, "Must have a least one region selected"))
@@ -897,6 +906,8 @@ merge_by_region_date <- function(x, y, data_cls) {
   y[x]
 }
 
+# Compute a shared y-axis maximum for the "Other Time Series" plot when the
+# user requests fixed axes across all panels.
 get_other_time_series_global_max <- function(plot_dt) {
   vals <- c(plot_dt$value, plot_dt$upper)
   vals <- vals[is.finite(vals)]
@@ -906,6 +917,8 @@ get_other_time_series_global_max <- function(plot_dt) {
   mx * 1.1
 }
 
+# Build a single region/feature panel for the "Other Time Series" tab,
+# including ribbons for intervals and lines for scalar series.
 plot_ly_other_time_series_panel <- function(
     dt,
     panel_title,
@@ -1029,6 +1042,8 @@ plot_ly_other_time_series_panel <- function(
     )
 }
 
+# Assemble the complete "Other Time Series" plotly figure from stored feature
+# values, optionally splitting selected features into separate panels.
 build_other_time_series_plotly <- function(plot_dt, region_ids, separate_features = FALSE, fixed_y = FALSE) {
   validate(
     need(!is.null(plot_dt), "No plot data available"),
@@ -1128,6 +1143,9 @@ format_time_series_prob_name <- function(q) {
   sub("^\\.", "0.", out)
 }
 
+# Extract the stored median and credible-interval columns needed by the
+# prediction time-series tab and reshape them into the plotting structure used
+# by build_time_series_plotly().
 prepare_time_series_feature_plot_data <- function(feature_data, data_cls, spec, ci_feature, median_feature = NULL) {
   byvar <- get_ts_data_cls_region_col(data_cls)
   date_col <- get_ts_data_cls_date_col(data_cls)

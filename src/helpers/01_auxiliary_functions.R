@@ -2,7 +2,8 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 
-
+# Null-coalescing helper used throughout the app to provide a default when a
+# value is missing or empty.
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 counties_by_state <- function(states) {

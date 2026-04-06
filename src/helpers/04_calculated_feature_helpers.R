@@ -1,9 +1,13 @@
+# Format a quantile probability into the normalized string form used in
+# calculated-feature IDs and quantile table column names.
 calculated_feature_fmt_qname <- function(q, digits = 3) {
   q <- suppressWarnings(as.numeric(q))
   out <- prettyNum(round(q, digits), digits = 12, drop0trailing = TRUE)
   sub("^\\.", "0.", out)
 }
 
+# Standardize quantile-table column names returned by posterior helper
+# functions so later lookups can use a consistent naming scheme.
 calculated_feature_normalize_qdf_names <- function(qdf) {
   data.table::setDT(qdf)
   old <- names(qdf)
@@ -16,6 +20,8 @@ calculated_feature_normalize_qdf_names <- function(qdf) {
   qdf
 }
 
+# Keep only the region/date keys and requested quantile columns from a wide
+# posterior quantile table.
 calculated_feature_slice_qdf <- function(qdf, data_cls, cols_keep) {
   data.table::setDT(qdf)
   reg_col <- data_cls$region_column
@@ -30,6 +36,8 @@ calculated_feature_slice_qdf <- function(qdf, data_cls, cols_keep) {
   qdf[, ..keep]
 }
 
+# Merge calculated feature values back onto the stored data using the app's
+# canonical region/date keys while dropping overlapping value columns first.
 calculated_feature_merge_by_region_date <- function(x, y, data_cls) {
   data.table::setDT(x)
   data.table::setDT(y)
@@ -46,6 +54,8 @@ calculated_feature_merge_by_region_date <- function(x, y, data_cls) {
   y[x]
 }
 
+# Precompute and cache the posterior summary tables needed to calculate a set
+# of calculated features efficiently.
 build_calculated_feature_context <- function(features, model, data_cls) {
   features <- Filter(Negate(is.null), features)
   q_features <- Filter(function(f) {
@@ -100,6 +110,8 @@ build_calculated_feature_context <- function(features, model, data_cls) {
   )
 }
 
+# Fetch posterior means on the requested scale and cache the keyed result for
+# reuse across multiple calculated features.
 get_calculated_feature_mean_dt <- function(context, use_count_scale = FALSE) {
   key <- if (use_count_scale) "counts" else "proportion"
   if (exists(key, envir = context$mean_cache, inherits = FALSE)) {
@@ -139,6 +151,8 @@ get_calculated_feature_mean_dt <- function(context, use_count_scale = FALSE) {
   get(key, envir = context$mean_cache, inherits = FALSE)
 }
 
+# Fetch and cache exceedance-probability summaries for a given threshold and
+# scale combination.
 get_calculated_feature_exceedance_dt <- function(context, threshold, use_count_scale = FALSE) {
   key <- paste0(threshold, "::", use_count_scale)
   if (exists(key, envir = context$exceed_cache, inherits = FALSE)) {
@@ -156,6 +170,8 @@ get_calculated_feature_exceedance_dt <- function(context, threshold, use_count_s
   get(key, envir = context$exceed_cache, inherits = FALSE)
 }
 
+# Calculate one feature from the fitted model summaries and store its output
+# columns in the shared data table.
 calculate_and_store_calculated_feature <- function(out, feature, context) {
   dcls <- context$data_cls
   ft <- feature$feature_type %||% ""
@@ -242,6 +258,8 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
   out2
 }
 
+# Calculate a batch of supported calculated features and append their stored
+# columns to the supplied data table.
 calculate_and_store_calculated_features <- function(out, features, model, data_cls) {
   features <- Filter(function(f) {
     !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
