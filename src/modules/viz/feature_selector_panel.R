@@ -104,7 +104,8 @@ feature_sidepanel_ui <- function(id, title = "Filters", allow_multiple = TRUE) {
 feature_sidepanel_server <- function(id,
                                      feature_store,
                                      allow_multiple = TRUE,
-                                     reset_clears_selected = FALSE) {
+                                     reset_clears_selected = FALSE,
+                                     initial_selected_id = NULL) {
   moduleServer(id, function(input, output, session) {
     
     get_store <- function() {
@@ -130,6 +131,17 @@ feature_sidepanel_server <- function(id,
     }
     
     selected_rv <- reactiveVal(character(0))
+    
+    observe({
+      df <- normalize_df(df_all())
+      init_id <- initial_selected_id %||% ""
+      cur <- selected_rv() %||% character(0)
+      if (!nzchar(init_id) || length(cur) > 0 || is.null(df) || !nrow(df)) return()
+      
+      match_idx <- which(df$id == init_id)
+      if (!length(match_idx)) return()
+      selected_rv(df$.key[[match_idx[[1]]]])
+    }) %>% bindEvent(df_all(), ignoreInit = FALSE)
     
     make_named_choices <- function(df) {
       if (is.null(df) || nrow(df) == 0) return(setNames(character(0), character(0)))

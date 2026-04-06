@@ -467,12 +467,16 @@ get_palette_vector <- function(name, n = 256) {
 # Join location geometry to a selected map metric/date and prepare the hover
 # labels and legend bounds needed for leaflet rendering.
 polygon_info <- function(locs, map_data, target_date) {
-  # bind the location data with the map_data
-  # TODO: consider merge here instead of cbind
-  d <- cbind(
-    locs,
-    map_data$data[date == target_date, .(outcome = get(map_data$column))]
-  )
+  date_col <- map_data$date_col %||% "date"
+  value_col <- map_data$column %||% "value"
+  region_col <- map_data$region_col %||% "countyfips"
+  
+  dt_sub <- map_data$data[get(date_col) == target_date, .(
+    join_region = as.character(get(region_col)),
+    outcome = get(value_col)
+  )]
+  
+  d <- dplyr::left_join(locs, dt_sub, by = c("GEOID" = "join_region"))
   
   minv <- maxv <- NA_real_
   
@@ -1302,6 +1306,262 @@ get_map_locations <- function(dc, county_display="region", county_code="countyfi
 enable_draggable_legend <- function(map) {
   map |>  htmlwidgets::onRender(
     "function(el, x) { if (window.makeLeafletLegendDraggable) window.makeLeafletLegendDraggable(el); }"
+  )
+}
+
+# Build a standardized map-data bundle from one stored single-column feature so
+# leaflet helpers can render it without recomputing posterior summaries.
+get_stored_map_feature_data <- function(feature_data, data_cls, feature) {
+  req(!is.null(feature_data), !is.null(data_cls), !is.null(feature))
+  
+  data.table::setDT(feature_data)
+  reg_col <- get_ts_data_cls_region_col(data_cls)
+  date_col <- get_ts_data_cls_date_col(data_cls)
+  out_cols <- feature$out_cols %||% character(0)
+  value_col <- out_cols[[1]] %||% NULL
+  
+  req(!is.null(reg_col), !is.null(date_col), !is.null(value_col))
+  req(value_col %in% names(feature_data))
+  
+  # Keep just the canonical region/date keys plus the selected stored output
+  # column so downstream map helpers work with a predictable shape.
+  keep_cols <- intersect(c(reg_col, date_col, value_col), names(feature_data))
+  dt <- data.table::copy(feature_data)[, ..keep_cols]
+  if (reg_col %in% names(dt)) dt[, (reg_col) := as.character(get(reg_col))]
+  if (date_col %in% names(dt) && !inherits(dt[[date_col]], "Date")) dt[, (date_col) := as.Date(get(date_col))]
+  
+  vals <- suppressWarnings(as.numeric(dt[[value_col]]))
+  finite_vals <- vals[is.finite(vals)]
+  minv <- if (length(finite_vals)) min(finite_vals, na.rm = TRUE) else 0
+  maxv <- if (length(finite_vals)) round_up_max(max(finite_vals, na.rm = TRUE)) else 1
+  
+  list(
+    data = dt,
+    column = value_col,
+    name = feature$label %||% value_col,
+    min = minv,
+    max = maxv,
+    date_col = date_col,
+    region_col = reg_col
+  )
+}
+
+# Summarize one stored feature over time for the draggable map date selector.
+# Count-scale features sum across regions; all other scales average.
+get_map_feature_sparkline_data <- function(feature_data, data_cls, feature, future_steps = 0L) {
+  map_data <- get_stored_map_feature_data(feature_data, data_cls, feature)
+  dt <- data.table::as.data.table(map_data$data)
+  date_col <- map_data$date_col
+  value_col <- map_data$column
+  use_sum <- identical(feature$feature_scale %||% "other", "counts")
+  
+  if (use_sum) {
+    series <- dt[, .(value = sum(get(value_col), na.rm = TRUE)), by = date_col]
+  } else {
+    series <- dt[, .(value = mean(get(value_col), na.rm = TRUE)), by = date_col]
+  }
+  data.table::setnames(series, date_col, "date")
+  data.table::setorder(series, date)
+  
+  series[, type := "Historical"]
+  if (future_steps > 0 && nrow(series) > future_steps) {
+    series[(.N - future_steps + 1L):.N, type := "Forecast"]
+    bridge <- data.table::copy(series[type == "Historical"][.N])
+    if (nrow(bridge)) {
+      bridge[, type := "Forecast"]
+      series <- data.table::rbindlist(list(series, bridge), use.names = TRUE)
+      # Preserve the historical-to-forecast handoff point so the dashed
+      # forecast segment visually connects to the observed segment.
+      series[, type_order := data.table::fifelse(type == "Historical", 1L, 2L)]
+      data.table::setorder(series, date, type_order)
+      series[, type_order := NULL]
+    }
+  }
+  
+  series[]
+}
+
+# Pull the stored time series for one region/feature pair for map popups.
+get_map_feature_popup_data <- function(feature_data, data_cls, feature, region_id, future_steps = 0L) {
+  map_data <- get_stored_map_feature_data(feature_data, data_cls, feature)
+  dt <- data.table::as.data.table(feature_data)
+  reg_col <- map_data$region_col
+  date_col <- map_data$date_col
+  value_col <- map_data$column
+  region_label_col <- if ("region" %in% names(feature_data)) "region" else reg_col
+  keep <- intersect(c(reg_col, region_label_col, date_col, value_col), names(dt))
+  dt <- data.table::copy(dt)[, ..keep]
+  
+  out <- dt[get(reg_col) == as.character(region_id), .(
+    region_label = as.character(get(region_label_col)),
+    date = as.Date(get(date_col)),
+    value = as.numeric(get(value_col))
+  )]
+  data.table::setorder(out, date)
+  out[, type := "Historical"]
+  if (future_steps > 0 && nrow(out) > future_steps) {
+    out[(.N - future_steps + 1L):.N, type := "Forecast"]
+  }
+  
+  list(
+    ts = out[],
+    region_label = out$region_label[[1]] %||% as.character(region_id),
+    feature_label = feature$label %||% value_col
+  )
+}
+
+# Build the full regional leaflet map for one stored feature and selected
+# date, including color scaling, legend placement, and optional basemap tiles.
+build_regional_feature_map <- function(
+    map_locations,
+    feature_data,
+    data_cls,
+    feature,
+    target_date,
+    includes_alaska_hawaii = TRUE,
+    use_global_range = TRUE,
+    palette = "viridis",
+    legend_position = "bottomright"
+) {
+  map_data <- get_stored_map_feature_data(feature_data, data_cls, feature)
+  pi <- polygon_info(map_locations, map_data, target_date)
+  
+  # Shared-range mode keeps the legend stable across dates, while per-date
+  # mode recomputes the domain from the currently selected slice only.
+  domain <- if (isTRUE(use_global_range)) {
+    if (is.finite(map_data$max) && map_data$max > 0) c(min(0, map_data$min %||% 0), map_data$max) else c(0, 1)
+  } else if (!is.null(pi$minv) && !is.null(pi$maxv) && is.finite(pi$maxv) && pi$maxv > 0) {
+    c(min(0, pi$minv), pi$maxv)
+  } else if (!is.null(pi$d) && "outcome" %in% names(pi$d) && any(is.finite(pi$d$outcome))) {
+    rng <- range(pi$d$outcome, na.rm = TRUE)
+    if (all(is.finite(rng)) && rng[2] > 0) c(min(0, rng[1]), rng[2]) else c(0, 1)
+  } else {
+    c(0, 1)
+  }
+  
+  m <- leaflet::leaflet()
+  if (!isTRUE(includes_alaska_hawaii)) {
+    m <- leaflet::addProviderTiles(m, "CartoDB.Positron")
+  }
+  
+  update_polygons(
+    p = m,
+    pi = pi,
+    domain = domain,
+    palette = palette,
+    legend_position = legend_position
+  ) |>
+    leaflet.extras::addFullscreenControl() |>
+    leaflet.extras::addResetMapButton()
+}
+
+# Build the draggable region-wide sparkline used to select the current map
+# date from stored feature values.
+build_map_feature_sparkline <- function(
+    series,
+    init_date,
+    yaxis_title = "Value",
+    colors = list(
+      line = "#636EFA",
+      draggable_line = "red"
+    )
+) {
+  p <- plotly::plot_ly(source = "date_spark_src")
+  
+  hist_dt <- series[series$type == "Historical", , drop = FALSE]
+  fc_dt <- series[series$type == "Forecast", , drop = FALSE]
+  
+  if (nrow(fc_dt) > 0) {
+    p <- p |>
+      plotly::add_trace(
+        data = fc_dt,
+        x = ~date, y = ~value,
+        type = "scatter", mode = "lines+markers",
+        line = list(color = colors[["line"]], dash = "dash"),
+        marker = list(color = colors[["line"]]),
+        hoverinfo = "x+y"
+      )
+  }
+  
+  if (nrow(hist_dt) > 0) {
+    p <- p |>
+      plotly::add_trace(
+        data = hist_dt,
+        x = ~date, y = ~value,
+        type = "scatter", mode = "lines+markers",
+        line = list(color = colors[["line"]]),
+        marker = list(color = colors[["line"]]),
+        hoverinfo = "x+y"
+      )
+  }
+  
+  p |>
+    plotly::layout(
+      margin = list(l = 28, r = 6, t = 4, b = 22),
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor  = "rgba(0,0,0,0)",
+      xaxis = list(
+        title = list(text = "", font = list(color = colors[["line"]], size = 10)),
+        showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE,
+        fixedrange = TRUE
+      ),
+      yaxis = list(
+        title = list(text = yaxis_title, font = list(color = colors[["line"]], size = 10)),
+        showticklabels = FALSE, ticks = "", showgrid = FALSE, zeroline = FALSE,
+        fixedrange = TRUE
+      ),
+      showlegend = FALSE,
+      shapes = list(vertical_date_line(init_date, color = colors[["draggable_line"]]))
+    ) |>
+    plotly::config(
+      displayModeBar = FALSE,
+      edits = list(shapePosition = TRUE),
+      scrollZoom = FALSE,
+      doubleClick = FALSE
+    )
+}
+
+# Build the region-level popup chart used when a polygon is clicked on the
+# stored-feature map.
+build_map_feature_popup_plot <- function(
+    ts,
+    region_label,
+    feature_label,
+    v_date,
+    colors = list(
+      point = "blue",
+      line = "black",
+      vline = "red"
+    )
+) {
+  if (!nrow(ts)) {
+    return(ggplot2::ggplot() + ggplot2::theme_void())
+  }
+  
+  ggplot2::ggplot(ts, ggplot2::aes(x = date, y = value)) +
+    ggplot2::geom_point(ggplot2::aes(shape = type), color = colors[["point"]]) +
+    ggplot2::geom_line(ggplot2::aes(linetype = type), color = colors[["line"]]) +
+    ggplot2::geom_vline(
+      ggplot2::aes(xintercept = v_date),
+      linetype = "dashed",
+      color = colors[["vline"]]
+    ) +
+    ggplot2::labs(
+      title = paste(region_label, "-", feature_label),
+      y = feature_label,
+      x = "",
+      caption = paste0("Selected Date: ", v_date)
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(plot.caption = ggplot2::element_text(color = colors[["vline"]], size = 8))
+}
+
+# Build the draggable vertical reference line used by the map sparkline.
+vertical_date_line <- function(cursor_date, color = "red") {
+  list(
+    type = "line", xref = "x", yref = "paper",
+    x0 = cursor_date, x1 = cursor_date, y0 = 0, y1 = 1,
+    line = list(color = color, width = 3, dash = "dash")
   )
 }
 
