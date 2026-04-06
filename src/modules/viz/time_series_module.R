@@ -7,13 +7,9 @@ label_list_ts <- list(
     l = "Scale",
     m = "Select the desired scale for the displayed results. Select count to display the number of visits and proportion to display the proportion of visits with the requested diagnosis out of all visits. Note that forecasts are only available when the scale matches the natural scale of the model, i.e. count for poisson and negative binomial and proportion for binomial and beta binomial."
   ),
-  ci_Count =  list(
-    l = "Credible Interval for Mean Count",
-    m = "Select the width of the credible interval for the mean count of the posterior distribution to display on the plot."
-  ),
-  ci_Proportion =  list(
-    l = "Credible Interval for Mean Proportion",
-    m = "Select the width of the credible interval for the mean proportion of the posterior distribution to display on the plot."
+  ci_select =  list(
+    l = "Credible Interval",
+    m = "Select from the available credible interval features for the current scale."
   ),
   region_selector =  list(
     l = "Select Region(s)",
@@ -24,37 +20,21 @@ label_list_ts <- list(
     m = 'Toggle on for a common/fixed axis across all plots (recommended when scale is set to "proportion"); Toggle off for independent y-axes (recommended when scale is set to "count").'
   )
 )
+
 viz_time_series_ui <- function(id) {
   ns <- NS(id)
   
-  # helper function
-  custom_quantiles <- function(probs = c(0.005, 0.01, 0.025,seq(0.05, .95, 0.05),0.975, 0.99, 0.995)) {
-    vals = 100*rev(sapply(seq(1, length(probs)/2,1), \(i) rev(probs)[i] - probs[i]))
-    names = sprintf("%2.0f%%",vals)
-    setNames(vals, names)
-  }
-  
   nav_panel(
-    title = "Time Series Plots",
+    title = "Prediction Time Series Plots",
     layout_sidebar(
       sidebar = sidebar(
         id = ns("time_series_sidebar"),
         width = SIDEBAR_WIDTH*2,
         radioButtons(ns("ts_use_count"),
-                     labeltt(label_list_rm[["scale_radio"]]),
+                     labeltt(label_list_ts[["scale_radio"]]),
                      choices = c("Count", "Proportion"),selected = "Proportion",
                      inline=TRUE),
-        uiOutput(ns("ts_quantile_ui")),
-        conditionalPanel(
-          condition = "input.ts_quantile=='Other'",
-          selectInput(
-            inputId = ns("custom_ts_quantile"), 
-            label="Custom CI Width",
-            choices = custom_quantiles(),
-            selected = 95
-          ),
-          ns = ns
-        ),
+        uiOutput(ns("ts_ci_ui")),
         selectizeInput(ns("viz_regions"), 
                        labeltt(label_list_ts[["region_selector"]]),
                        choices=NULL, 
@@ -75,78 +55,134 @@ viz_time_series_ui <- function(id) {
   
 }
 
-viz_time_series_server <- function(id, im, results) {
+viz_time_series_server <- function(id, im, results, feature_store) {
   moduleServer(
     id,
     function(input, output, session) {
-      # update the label for credible interval when count/proportion changes
-      observe({
-        # fires when ts_use_count changes
-        lbl <- labeltt(
-          label_list_ts[[paste0("ci_", input$ts_use_count)]]
-        )
-        
-        output$ts_quantile_ui <- renderUI({
-          radioButtons(
-            inputId  = session$ns("ts_quantile"),
-            label    = lbl,   # tooltip label here
-            choices  = c("99%" = 99, "95%" = 95, "90%" = 90, "50%" = 50, "Other"),
-            selected = 95,
-            inline   = TRUE
-          )
-        })
-      }) |> bindEvent(input$ts_use_count)
+      get_store <- function() {
+        if (is.function(feature_store)) feature_store() else feature_store
+      }
       
-      # get the numeric version of quantile (either preset or custom)
-      ts_quantile<- reactive({
-        req(input$ts_quantile)
-        fifelse(
-          input$ts_quantile == "Other",
-          as.numeric(input$custom_ts_quantile),
-          as.numeric(input$ts_quantile)
+      scale_key <- reactive({
+        if (identical(input$ts_use_count, "Count")) "counts" else "proportion"
+      })
+      
+      # Prediction Time Series only offers CIs that already exist in the
+      # stored calculated-feature catalog for the chosen scale.
+      available_ci_features <- reactive({
+        store <- get_store()
+        req(store)
+        df <- as.data.frame(store$features_df())
+        req(nrow(df) > 0)
+        
+        df <- df[
+          df$feature_type == "confidence_interval" &
+            df$feature_scale == scale_key(),
+          ,
+          drop = FALSE
+        ]
+        req(nrow(df) > 0)
+        
+        ci_vals <- vapply(df$id, function(fid) {
+          f <- store$get_feature(fid)
+          as.numeric(f$params$ci %||% NA_real_)
+        }, numeric(1))
+        
+        df$ci_val <- ci_vals
+        df <- df[order(-df$ci_val, df$label, df$id), , drop = FALSE]
+        df
+      })
+      
+      selected_ci_feature <- reactive({
+        store <- get_store()
+        req(store)
+        fid <- input$ts_ci_feature
+        req(!is.null(fid), nzchar(fid))
+        f <- store$get_feature(fid)
+        req(!is.null(f), identical(f$feature_type, "confidence_interval"))
+        f
+      })
+      
+      median_feature <- reactive({
+        store <- get_store()
+        req(store)
+        fid <- paste0("builtin__quantile__", scale_key(), "__q0.5")
+        f <- store$get_feature(fid)
+        req(!is.null(f), identical(f$feature_type, "quantile"))
+        f
+      })
+      
+      ts_spec <- reactive({
+        ci_feature <- selected_ci_feature()
+        build_time_series_plot_spec(
+          region_ids = input$viz_regions,
+          ci = as.numeric(ci_feature$params$ci %||% 0.95) * 100,
+          fixed_y = input$fix_ts_y_axis,
+          display_col = "region",
+          use_count = identical(input$ts_use_count, "Count"),
+          future_steps = im$nforecasts
         )
       })
       
+      observe({
+        ci_df <- available_ci_features()
+        selected_id <- isolate(input$ts_ci_feature)
+        
+        default_id <- ci_df$id[which.min(abs(ci_df$ci_val - 0.95))]
+        if (!length(default_id) || is.na(default_id)) default_id <- ci_df$id[[1]]
+        if (!length(selected_id) || !selected_id %in% ci_df$id) selected_id <- default_id
+        
+        output$ts_ci_ui <- renderUI({
+          selectInput(
+            inputId = session$ns("ts_ci_feature"),
+            label = labeltt(label_list_ts[["ci_select"]]),
+            choices = stats::setNames(ci_df$id, ci_df$label),
+            selected = selected_id
+          )
+        })
+      }) |> bindEvent(scale_key(), available_ci_features())
+      
       # get the region choices
-      input_region_choices <- reactive(
-        im$data_cls$data[, .(countyfips, region)] |> unique()
-      )
+      input_region_choices <- reactive({
+        req(im$data_cls)
+        get_time_series_region_choices(im$data_cls, display_col = "region")
+      })
       
       # Update the region choices based on the data
-      # TODO: note that this assumes county
       observe({
         req(im$data_cls)
-        choices = setNames(input_region_choices()$countyfips, input_region_choices()$region)
+        choices <- input_region_choices()
         updateSelectizeInput(
+          session = session,
           inputId = "viz_regions",
           choices = choices,
           selected = choices[1]
         )
       })
       
-      # Get the plotly data
+      # Prediction plots now read the stored median/CI columns rather than
+      # recomputing posterior summaries inside the viz tab.
       tspd <- reactive({
-        req(im$posterior)
-        prepare_plot_ly_ts_data(
-          im$model, im$data_cls, 
-          use_count = input$ts_use_count == "Count", 
-          future_steps=im$nforecasts
+        req(im$data_cls)
+        prepare_time_series_feature_plot_data(
+          feature_data = im$data_cls$data,
+          data_cls = im$data_cls,
+          spec = ts_spec(),
+          ci_feature = selected_ci_feature(),
+          median_feature = median_feature()
         )
       })
       
       ts_plots <- reactive({
         req(tspd())
-        time_series_subplots(
-          input$viz_regions,
+        build_time_series_plotly(
           ts_plot_data = tspd(),
-          display_col = "region",
-          ci = ts_quantile(),
-          fixed_y = input$fix_ts_y_axis
+          spec = ts_spec()
         )
       })
       
       output$ts_plots <- renderPlotly({
-        validate(need(im$posterior, "Load data and run model first"))
+        validate(need(!is.null(im$data_cls), "Load data and run model first"))
         validate(need(input$viz_regions, "Must have a least one region selected"))
         ts_plots()
       })

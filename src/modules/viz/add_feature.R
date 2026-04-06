@@ -145,7 +145,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     
     is_user_feature <- function(fid) grepl("^usr__", fid)
     
-    is_virtual_feature <- function(f) {
+    is_calculated_feature <- function(f) {
       !is.null(f$feature_type) &&
         f$feature_type %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
     }
@@ -193,7 +193,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       fids[keep]
     })
     
-    # default feature name/description
+    # Build the default label/description shown in the Add Feature form for
+    # the currently selected feature type and parameters.
     default_feature_spec <- reactive({
       ft <- input$feature
       ft_name <- switch(
@@ -253,7 +254,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       }
     }) |> bindEvent(input$auto_labels, ignoreInit = TRUE)
     
-    # get values for inputed quantile level/CI level
+    # Return any posterior quantile probabilities needed to calculate the
+    # selected feature type.
     need_probs <- function(ft) {
       if (ft == "quantile") return(round(input$q_val %||% 0.50, 3))
       if (ft == "confidence_interval") {
@@ -284,11 +286,13 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       cache_clear()
     }) |> bindEvent(list(im$model, im$data_cls), ignoreInit = TRUE)
     
-    # Feature
+    # Add a user-defined calculated feature and persist its stored columns so
+    # the rest of the viz tabs can read them without recalculating.
     observe({
       r <- rvr()
       ft <- input$feature
       sc <- input$feature_scale
+      calculated_feature_ids <- character(0)
       
       spec <- default_feature_spec()
       nm <- trimws(input$feature_name %||% "")
@@ -349,8 +353,11 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         feature_kind = if (ft == "confidence_interval") "composite" else "atomic"
       )
       if (!fid %in% r$order) r$order <- c(r$order, fid)
+      calculated_feature_ids <- fid
       
       if (ft == "confidence_interval") {
+        # A user-created CI is stored both as a composite interval feature and
+        # as its endpoint quantile features so each can be filtered/displayed.
         ci <- params$ci %||% 0.90
         a <- (1 - ci) / 2
         q_specs <- list(
@@ -391,12 +398,25 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         
         r$features[[fid]]$group_id <- group_id
         r$features[[fid]]$member_ids <- q_ids
+        calculated_feature_ids <- unique(c(q_ids, fid))
       }
       
       r$last_id <- fid
       
       qs <- need_probs(ft)
       if (length(qs)) r$probs <- sort(unique(c(r$probs, qs)))
+      
+      calculate_err <- tryCatch({
+        calculate_and_store_feature_ids(calculated_feature_ids)
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (!is.null(calculate_err)) {
+        showNotification(
+          paste("Feature metadata was added, but the calculated feature values could not be stored:", calculate_err),
+          type = "warning",
+          duration = 8
+        )
+      }
       
       r$force_select_fid <- fid
       r$refresh <- r$refresh + 1L
@@ -476,10 +496,12 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         return()
       }
       
+      cols_to_maybe_drop <- r$features[[fid]]$out_cols %||% character(0)
       lbl <- r$features[[fid]]$label %||% fid
       r$features[[fid]] <- NULL
       r$order <- setdiff(r$order, fid)
       if (identical(r$last_id, fid)) r$last_id <- tail(r$order, 1L)
+      drop_feature_cols_from_stored_data(cols_to_maybe_drop)
       
       cur_sel <- isolate(input$display_cols %||% character(0))
       new_sel <- setdiff(cur_sel, fid)
@@ -527,30 +549,25 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       dcls <- im$data_cls
       reg_col   <- dcls$region_column
       date_col  <- dcls$date_column
-      denom_col <- dcls$denominator_column
       
-      mu <- im$model$summary.fitted.values[, "mean"]
-      if (is.null(mu)) return(NULL)
-      
-      dt <- data.table::as.data.table(dcls$data)
-      
-      keep <- intersect(unique(c(reg_col, date_col, denom_col)), names(dt))
+      dt <- get_posterior_means(
+        im$model,
+        dcls,
+        use_suffix = FALSE,
+        use_count_scale = use_count_scale
+      )
+      data.table::setDT(dt)
+
+      mean_col <- intersect(c("predicted_mean", "mean"), names(dt))[1]
+      if (is.na(mean_col) || is.null(mean_col)) return(data.table::data.table())
+      keep <- intersect(unique(c(reg_col, date_col, mean_col)), names(dt))
       if (length(keep) == 0) return(data.table::data.table())
       
       dt <- dt[, ..keep]
-      dt[, mu := as.numeric(mu)]
-      
-      model_scale <- get_model_scale(im$model)
-      if (!is.null(denom_col) && denom_col %in% names(dt)) {
-        if (model_scale == "count" && !use_count_scale) dt[, mu := mu / get(denom_col)]
-        if (model_scale == "prop"  &&  use_count_scale) dt[, mu := mu * get(denom_col)]
-      }
-      
       if (reg_col %in% names(dt))  dt[, (reg_col) := as.character(get(reg_col))]
       
       out_col <- if (use_count_scale) "mean_count" else "mean_prop"
-      dt <- dt[, .(value = mu), by = c(reg_col, date_col)]
-      data.table::setnames(dt, "value", out_col)
+      data.table::setnames(dt, mean_col, out_col)
       dt[]
     }
     
@@ -576,7 +593,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       qdf
     })
     
-    # Add single feature and append it to table
+    # Calculate one feature's stored output columns from the fitted model and
+    # merge them into the current shared data table.
     apply_feature <- function(out, f, dcls) {
       ft <- f$feature_type
       sc <- f$feature_scale
@@ -668,11 +686,55 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       out
     }
     
-    # Posterior table
+    calculate_and_store_feature_ids <- function(feature_ids) {
+      # This is the session-level storage path for user-added calculated
+      # features; values are computed here and then kept in data_cls/posterior.
+      req(im$data_cls)
+      base_source <- im$data_cls$data
+      req(base_source)
+      
+      out <- data.table::as.data.table(base_source)
+      dcls <- im$data_cls
+      r <- rvr()
+      feature_ids <- unique(feature_ids %||% character(0))
+      
+      for (fid in feature_ids) {
+        f <- r$features[[fid]]
+        if (is.null(f) || !is_calculated_feature(f)) next
+        out <- apply_feature(out, f, dcls)
+      }
+      
+      im$data_cls$data <- out[]
+      im$posterior <- out[]
+      invisible(out[])
+    }
+    
+    drop_feature_cols_from_stored_data <- function(cols) {
+      cols <- unique(cols %||% character(0))
+      if (!length(cols)) return(invisible(NULL))
+      req(im$data_cls)
+      
+      r <- rvr()
+      remaining_cols <- unique(unlist(lapply(r$order %||% character(0), function(fid) {
+        f <- r$features[[fid]]
+        f$out_cols %||% character(0)
+      })))
+      cols_to_drop <- setdiff(cols, remaining_cols)
+      if (!length(cols_to_drop)) return(invisible(NULL))
+      
+      out <- data.table::as.data.table(im$data_cls$data)
+      keep <- setdiff(names(out), cols_to_drop)
+      out <- out[, ..keep]
+      im$data_cls$data <- out[]
+      im$posterior <- out[]
+      invisible(out[])
+    }
+    
+    # The Add Feature table now only reads stored columns; calculation happens
+    # at model fit or when a user explicitly adds a calculated feature.
     posterior_tbl <- reactive({
       req(im$data_cls)
       r <- rvr()
-      dcls <- im$data_cls
       
       base_source <- if (!is.null(im$posterior)) im$posterior else im$data_cls$data
       req(base_source)
@@ -683,38 +745,15 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       if (!length(sel)) sel <- default_display_feature_ids()
       sel <- intersect(sel, r$order %||% character(0))
       
-      base_keep <- unique(unlist(lapply(sel, function(fid) {
+      stored_keep <- unique(unlist(lapply(sel, function(fid) {
         f <- r$features[[fid]]
-        if (is.null(f) || is_virtual_feature(f)) return(character(0))
+        if (is.null(f)) return(character(0))
         f$out_cols %||% character(0)
       })))
       
       base_front <- intersect(front_cols(), names(out))
-      cols_present <- unique(c(base_front, intersect(base_keep, names(out))))
+      cols_present <- unique(c(base_front, intersect(stored_keep, names(out))))
       out <- out[, ..cols_present]
-      
-      failed <- character(0)
-      
-      for (fid in sel) {
-        f <- r$features[[fid]]
-        if (!is.null(f) && is_virtual_feature(f)) {
-          out <- tryCatch(
-            apply_feature(out, f, dcls),
-            error = function(e) {
-              failed <<- c(failed, sprintf("%s: %s", f$label %||% fid, conditionMessage(e)))
-              out
-            }
-          )
-        }
-      }
-      
-      if (length(failed)) {
-        showNotification(
-          paste("Some derived features could not be computed:", paste(failed, collapse = " | ")),
-          type = "warning",
-          duration = 8
-        )
-      }
       
       out[, c(base_front, setdiff(names(out), base_front)), with = FALSE][]
     })

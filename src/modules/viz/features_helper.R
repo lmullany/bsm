@@ -40,8 +40,8 @@ dummy_page_server <- function(id, feature_store, im) {
         )
       }
       
-      if (is.function(fs$register_default_virtual_features)) {
-        fs$register_default_virtual_features()
+      if (is.function(fs$register_default_calculated_features)) {
+        fs$register_default_calculated_features()
       }
     })
     

@@ -417,7 +417,8 @@ get_map_data <-function(model,
 #     leaflet.extras::addFullscreenControl()
 #   return (p)
 # }
-
+# Build HTML hover labels for county polygons, optionally including a mapped
+# value and title.
 get_hover_label_county <- function(county, fips, values=NULL, value_title="") {
   
   lapply(seq_along(county), \(cty) {
@@ -435,6 +436,8 @@ get_hover_label_county <- function(county, fips, values=NULL, value_title="") {
   })
 }
 
+# Return a palette as a vector of colors, supporting viridis and
+# RColorBrewer names with a viridis fallback.
 get_palette_vector <- function(name, n = 256) {
   if (is.null(name) || identical(name, "")) {
     return(viridisLite::viridis(n))
@@ -461,6 +464,8 @@ get_palette_vector <- function(name, n = 256) {
   viridisLite::viridis(n) # Fallback: viridis
 }
 
+# Join location geometry to a selected map metric/date and prepare the hover
+# labels and legend bounds needed for leaflet rendering.
 polygon_info <- function(locs, map_data, target_date) {
   # bind the location data with the map_data
   # TODO: consider merge here instead of cbind
@@ -501,8 +506,8 @@ polygon_info <- function(locs, map_data, target_date) {
   )
 }
 
-
-
+# Add polygons and an optional legend to an existing leaflet map using the
+# precomputed polygon metadata from polygon_info().
 update_polygons <- function(
     p,
     pi,
@@ -595,6 +600,8 @@ update_polygons <- function(
 ## TIME SERIES PLOTS
 ################################################
 
+# Build a single prediction time-series panel from data that already contains
+# median/lower/upper columns and optional observed values.
 plot_ly_time_series <- function(
     dt, 
     show_legend=TRUE, 
@@ -606,16 +613,9 @@ plot_ly_time_series <- function(
     max_y_val = NULL
 ) {
   
-  
-  # Let's get the data just for this q_value
-  # This could break, because it is treating numeric
-  # as character, and we could get some unfortunate results
   q = as.numeric(ci)
-  probs = c("0.5", as.character(0.5 + c(-q/2, q/2)/100))
-  new_names = c("median", "lower", "upper")
-  keep_cols = c("countyfips", "date","type", "observed", probs)
+  keep_cols = intersect(c("date", "type", "observed", "median", "lower", "upper"), names(dt))
   dt <- dt[, .SD, .SDcols=keep_cols]
-  setnames(dt, old=probs, new=new_names)
   
   yref <- paste0("y", if (axis_id == 1) "" else axis_id)
   axis_name <- paste0("yaxis", if (axis_id == 1) "" else axis_id)
@@ -632,7 +632,7 @@ plot_ly_time_series <- function(
                 x = ~date, ymin = ~lower, ymax = ~upper,
                 fillcolor = 'rgba(173,216,230,0.6)',  # Light blue
                 line = list(color = 'rgba(0,0,0,0)'),
-                name = '95% Credible Interval (Historical)',
+                name = sprintf('%2.0f%% Credible Interval (Historical)', q),
                 legendgroup = "observed",
                 showlegend = FALSE, 
                 hoverinfo = "none")
@@ -644,7 +644,7 @@ plot_ly_time_series <- function(
                 x = ~date, ymin = ~lower, ymax = ~upper,
                 fillcolor = 'rgba(144,238,144,0.6)',  # Light green
                 line = list(color = 'rgba(0,0,0,0)'),
-                name = '95% Credible Interval (Forecast)',
+                name = sprintf('%2.0f%% Credible Interval (Forecast)', q),
                 legendgroup = "future",
                 showlegend = FALSE, 
                 hoverinfo ="none"
@@ -691,7 +691,7 @@ plot_ly_time_series <- function(
      
   
   # Layout
-  if(is.null(location_display_name)) location_display_name = unique(dt$countyfips)
+  if(is.null(location_display_name)) location_display_name = "Time Series"
   
   # per-panel or global max
   if(!is.null(max_y_val)) y_max <- max_y_val
@@ -728,6 +728,8 @@ plot_ly_time_series <- function(
   
 }
 
+# Legacy helper that assembles multiple prediction time-series panels using
+# the older input structure expected by existing callers.
 time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, fixed_y=FALSE, ci = "95", ...) {
   
   global_max <- NULL
@@ -769,22 +771,379 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, fi
   return(p)
 }
 
+# Return the canonical region-column name from a data class, supporting both
+# the newer and older field names used in the app.
+get_ts_data_cls_region_col <- function(data_cls) {
+  data_cls$region_column %||% data_cls$region_col
+}
+
+# Return the canonical date-column name from a data class, supporting both
+# the newer and older field names used in the app.
+get_ts_data_cls_date_col <- function(data_cls) {
+  data_cls$date_column %||% data_cls$date_col
+}
+
+# Build named region choices for time-series selectors from the stored data.
+get_time_series_region_choices <- function(data_cls, display_col = "region") {
+  region_col <- get_ts_data_cls_region_col(data_cls)
+  req(!is.null(region_col), region_col %in% names(data_cls$data))
+  
+  cols <- unique(c(region_col, display_col))
+  cols <- cols[cols %in% names(data_cls$data)]
+  req(length(cols) >= 1)
+  
+  dt <- data.table::as.data.table(data_cls$data)[, ..cols]
+  dt <- unique(dt)
+  
+  if (!(display_col %in% names(dt))) {
+    dt[, (display_col) := as.character(get(region_col))]
+  }
+  
+  stats::setNames(dt[[region_col]], dt[[display_col]])
+}
+
+# Collect the UI-level settings needed to build prediction time-series plots.
+build_time_series_plot_spec <- function(
+    region_ids,
+    ci,
+    fixed_y = FALSE,
+    display_col = "region",
+    use_count = FALSE,
+    future_steps = 0
+) {
+  list(
+    regions = region_ids %||% character(0),
+    ci = as.numeric(ci),
+    fixed_y = isTRUE(fixed_y),
+    display_col = display_col,
+    use_count = isTRUE(use_count),
+    future_steps = as.integer(future_steps %||% 0)
+  )
+}
+
+# Combine a list of plotly time-series panels into the app's shared subplot
+# layout with a single legend.
+assemble_time_series_subplots <- function(plots) {
+  subplot(
+    plots,
+    nrows = ceiling(length(plots)/3),
+    shareX = TRUE,
+    titleX = TRUE,
+    titleY = TRUE,
+    margin = 0.04
+  ) %>%
+    layout(
+      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.1),
+      margin = list(b = 80)
+    )
+}
+
+# Render the prediction time-series view from precomputed per-region data.
+build_time_series_plotly <- function(ts_plot_data, spec, ...) {
+  region_ids <- spec$regions %||% character(0)
+  validate(need(length(region_ids) > 0, "Must have a least one region selected"))
+  
+  global_max <- NULL
+  if (isTRUE(spec$fixed_y)) {
+    global_max <- get_max_y_over_plots(region_ids, ts_plot_data, spec$ci)
+  }
+  
+  plots <- lapply(seq_along(region_ids), function(i) {
+    region_id <- region_ids[[i]]
+    d <- ts_plot_data[[region_id]]
+    validate(need(!is.null(d), sprintf("No time series data available for region %s", region_id)))
+    
+    display_name <- region_id
+    if (!is.null(spec$display_col) && spec$display_col %in% names(d)) {
+      display_name <- unique(d[[spec$display_col]])[1]
+    }
+    
+    plot_ly_time_series(
+      dt = d,
+      show_legend = (i == 1),
+      location_display_name = display_name,
+      axis_id = i,
+      ci = spec$ci,
+      max_y_val = global_max,
+      ...
+    )
+  })
+  
+  assemble_time_series_subplots(plots)
+}
+
+# Normalize a quantile probability into the string form used by posterior
+# quantile column lookups.
+fmt_qname <- function(q, digits = 3) {
+  q <- suppressWarnings(as.numeric(q))
+  out <- prettyNum(round(q, digits), digits = 12, drop0trailing = TRUE)
+  sub("^\\.", "0.", out)
+}
+
+# Standardize posterior quantile table column names so downstream code can
+# request quantiles by a consistent key.
+normalize_qdf_names <- function(qdf) {
+  data.table::setDT(qdf)
+  old <- names(qdf)
+  new <- sub("^(props_|counts?_)", "", old)
+  num_like <- !is.na(suppressWarnings(as.numeric(new)))
+  if (any(num_like)) new[num_like] <- fmt_qname(new[num_like], digits = 12)
+  data.table::setnames(qdf, old, new, skip_absent = TRUE)
+  qdf
+}
+
+# Extract the region/date keys plus selected quantile columns from a wide
+# posterior quantile table.
+slice_qdf <- function(qdf, data_cls, cols_keep) {
+  data.table::setDT(qdf)
+  reg_col <- data_cls$region_column
+  date_col <- data_cls$date_column
+  if (reg_col %in% names(qdf)) qdf[, (reg_col) := as.character(get(reg_col))]
+  keep <- intersect(c(reg_col, date_col, cols_keep), names(qdf))
+  if (length(keep) == 0) return(data.table::data.table())
+  qdf[, ..keep]
+}
+
+# Merge two tables on the app's canonical region/date keys while dropping any
+# overlapping value columns from the left-hand table first.
+merge_by_region_date <- function(x, y, data_cls) {
+  data.table::setDT(x)
+  data.table::setDT(y)
+  reg_col <- data_cls$region_column
+  date_col <- data_cls$date_column
+  
+  x[, (reg_col) := as.character(get(reg_col))]
+  y[, (reg_col) := as.character(get(reg_col))]
+  
+  overlap <- setdiff(intersect(names(x), names(y)), c(reg_col, date_col))
+  if (length(overlap)) x[, (overlap) := NULL]
+  
+  data.table::setkeyv(x, c(reg_col, date_col))
+  data.table::setkeyv(y, c(reg_col, date_col))
+  y[x]
+}
+
+# Compute a shared y-axis maximum for the "Other Time Series" plot when the
+# user requests fixed axes across all panels.
+get_other_time_series_global_max <- function(plot_dt) {
+  vals <- c(plot_dt$value, plot_dt$upper)
+  vals <- vals[is.finite(vals)]
+  if (!length(vals)) return(NULL)
+  mx <- max(vals, na.rm = TRUE)
+  if (!is.finite(mx) || mx <= 0) return(NULL)
+  mx * 1.1
+}
+
+# Build a single region/feature panel for the "Other Time Series" tab,
+# including ribbons for intervals and lines for scalar series.
+plot_ly_other_time_series_panel <- function(
+    dt,
+    panel_title,
+    fixed_y_max = NULL,
+    color_map = NULL,
+    legend_features = character(0)
+) {
+  feature_labels <- unique(dt$feature_label)
+  if (is.null(color_map)) {
+    color_map <- grDevices::hcl.colors(max(length(feature_labels), 1L), "Dark 3")
+    names(color_map) <- feature_labels
+  }
+  
+  p <- plotly::plot_ly()
+  
+  for (feat in feature_labels) {
+    feat_dt <- dt[dt$feature_label == feat, , drop = FALSE]
+    color <- color_map[[feat]] %||% "#1f77b4"
+    fill_color <- grDevices::adjustcolor(color, alpha.f = 0.2)
+    show_feat_legend <- feat %in% legend_features
+    
+    has_interval <- all(c("lower", "upper") %in% names(feat_dt)) &&
+      any(is.finite(feat_dt$lower) | is.finite(feat_dt$upper), na.rm = TRUE)
+    
+    if (isTRUE(has_interval)) {
+      p <- p |>
+        plotly::add_ribbons(
+          data = feat_dt[feat_dt$type == "Historical", , drop = FALSE],
+          x = ~date,
+          ymin = ~lower,
+          ymax = ~upper,
+          fillcolor = fill_color,
+          line = list(color = "rgba(0,0,0,0)"),
+          name = paste0(feat, " CI"),
+          legendgroup = feat,
+          showlegend = show_feat_legend,
+          hoverinfo = "none"
+        ) |>
+        plotly::add_ribbons(
+          data = feat_dt[feat_dt$type == "Forecast", , drop = FALSE],
+          x = ~date,
+          ymin = ~lower,
+          ymax = ~upper,
+          fillcolor = fill_color,
+          line = list(color = "rgba(0,0,0,0)"),
+          name = paste0(feat, " Forecast CI"),
+          legendgroup = feat,
+          showlegend = FALSE,
+          hoverinfo = "none"
+        )
+    }
+    
+    if ("value" %in% names(feat_dt) && any(is.finite(feat_dt$value), na.rm = TRUE)) {
+      hist_dt <- feat_dt[feat_dt$type == "Historical", , drop = FALSE]
+      fc_dt <- feat_dt[feat_dt$type == "Forecast", , drop = FALSE]
+      
+      if (nrow(hist_dt) > 0) {
+        p <- p |>
+          plotly::add_trace(
+            data = hist_dt,
+            x = ~date,
+            y = ~value,
+            type = "scatter",
+            mode = "lines",
+            line = list(color = color),
+            name = feat,
+            legendgroup = feat,
+            showlegend = show_feat_legend,
+            text = ~hover_text,
+            hoverinfo = "text"
+          )
+      }
+      
+      if (nrow(fc_dt) > 0) {
+        p <- p |>
+          plotly::add_trace(
+            data = fc_dt,
+            x = ~date,
+            y = ~value,
+            type = "scatter",
+            mode = "lines",
+            line = list(color = color, dash = "dash"),
+            name = paste0(feat, " Forecast"),
+            legendgroup = feat,
+            showlegend = FALSE,
+            text = ~hover_text,
+            hoverinfo = "text"
+          )
+      }
+    }
+  }
+  
+  y_max <- fixed_y_max
+  if (is.null(y_max)) y_max <- get_other_time_series_global_max(dt)
+  
+  p |>
+    plotly::layout(
+      annotations = list(
+        text = panel_title,
+        x = 0.02,
+        y = 1,
+        xref = "paper",
+        yref = "paper",
+        xanchor = "left",
+        yanchor = "bottom",
+        showarrow = FALSE,
+        font = list(size = 16, color = "black", family = "Arial black")
+      ),
+      xaxis = list(
+        title = list(text = "Date", font = list(size = 14)),
+        tickfont = list(size = 12),
+        range = c(min(dt$date), max(dt$date))
+      ),
+      yaxis = list(
+        title = list(text = "Value", font = list(size = 14)),
+        tickfont = list(size = 12),
+        range = if (!is.null(y_max)) c(0, y_max) else NULL
+      ),
+      hovermode = "x unified",
+      legend = list(orientation = "h")
+    )
+}
+
+# Assemble the complete "Other Time Series" plotly figure from stored feature
+# values, optionally splitting selected features into separate panels.
+build_other_time_series_plotly <- function(plot_dt, region_ids, separate_features = FALSE, fixed_y = FALSE) {
+  validate(
+    need(!is.null(plot_dt), "No plot data available"),
+    need(nrow(plot_dt) > 0, "No plot data available"),
+    need(length(region_ids) > 0, "Must have at least one region selected")
+  )
+  
+  fixed_y_max <- if (isTRUE(fixed_y)) get_other_time_series_global_max(plot_dt) else NULL
+  plots <- list()
+  all_features <- unique(plot_dt$feature_label)
+  color_map <- grDevices::hcl.colors(max(length(all_features), 1L), "Dark 3")
+  names(color_map) <- all_features
+  shown_features <- character(0)
+  
+  if (isTRUE(separate_features)) {
+    combos <- unique(plot_dt[, c("region_id", "region_label", "feature_label"), drop = FALSE])
+    for (i in seq_len(nrow(combos))) {
+      sub_dt <- plot_dt[
+        plot_dt$region_id == combos$region_id[[i]] &
+          plot_dt$feature_label == combos$feature_label[[i]],
+        ,
+        drop = FALSE
+      ]
+      feat <- combos$feature_label[[i]]
+      legend_features <- if (!feat %in% shown_features) feat else character(0)
+      shown_features <- unique(c(shown_features, feat))
+      plots[[length(plots) + 1L]] <- plot_ly_other_time_series_panel(
+        sub_dt,
+        panel_title = paste(combos$region_label[[i]], combos$feature_label[[i]], sep = " - "),
+        fixed_y_max = fixed_y_max,
+        color_map = color_map,
+        legend_features = legend_features
+      )
+    }
+  } else {
+    for (region_id in region_ids) {
+      sub_dt <- plot_dt[plot_dt$region_id == region_id, , drop = FALSE]
+      if (!nrow(sub_dt)) next
+      panel_title <- unique(sub_dt$region_label)[1]
+      panel_features <- unique(sub_dt$feature_label)
+      legend_features <- setdiff(panel_features, shown_features)
+      shown_features <- unique(c(shown_features, panel_features))
+      plots[[length(plots) + 1L]] <- plot_ly_other_time_series_panel(
+        sub_dt,
+        panel_title = panel_title,
+        fixed_y_max = fixed_y_max,
+        color_map = color_map,
+        legend_features = legend_features
+      )
+    }
+  }
+  
+  validate(need(length(plots) > 0, "No plot data available for the selected region/feature combination"))
+  
+  subplot(
+    plots,
+    nrows = ceiling(length(plots) / 3),
+    shareX = TRUE,
+    titleX = TRUE,
+    titleY = TRUE,
+    margin = 0.04
+  ) %>%
+    layout(
+      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.1),
+      margin = list(b = 80)
+    )
+}
+
+# Compute a shared y-axis ceiling across a set of prediction time-series
+# panels using their stored upper-interval values.
 get_max_y_over_plots <- function(names, plot_data, ci) {
   
   
     global_max <- NULL
   
-    q <- as.numeric(ci)
-    upper_name <- as.character(0.5 + q / 200)
-    
     vals <- vapply(
       names,
       function(f) {
         d <- plot_data[[f]]
-        if (is.null(d) || !(upper_name %in% names(d))) {
+        if (is.null(d) || !("upper" %in% names(d))) {
           return(NA_real_)
         }
-        mx <- suppressWarnings(max(d[[upper_name]], na.rm = TRUE))
+        mx <- suppressWarnings(max(d[["upper"]], na.rm = TRUE))
         if (!is.finite(mx)) NA_real_ else mx
       },
       numeric(1)
@@ -798,30 +1157,94 @@ get_max_y_over_plots <- function(names, plot_data, ci) {
     global_max
 }
 
-  
+# Format a posterior probability into the quantile-column naming convention
+# used by the older time-series quantile helpers.
+format_time_series_prob_name <- function(q) {
+  out <- prettyNum(as.numeric(q), digits = 12, drop0trailing = TRUE)
+  sub("^\\.", "0.", out)
+}
 
-prepare_plot_ly_ts_data <- function(
+# Extract the stored median and credible-interval columns needed by the
+# prediction time-series tab and reshape them into the plotting structure used
+# by build_time_series_plotly().
+prepare_time_series_feature_plot_data <- function(feature_data, data_cls, spec, ci_feature, median_feature = NULL) {
+  byvar <- get_ts_data_cls_region_col(data_cls)
+  date_col <- get_ts_data_cls_date_col(data_cls)
+  req(!is.null(byvar), !is.null(date_col))
+  req(!is.null(ci_feature), identical(ci_feature$feature_type, "confidence_interval"))
+
+  req(!is.null(feature_data))
+  d <- data.table::as.data.table(feature_data)
+
+  median_col <- median_feature$out_cols[[1]] %||% NULL
+  ci_cols <- ci_feature$out_cols %||% character(0)
+  req(!is.null(median_col), length(ci_cols) >= 2)
+  req(median_col %in% names(d), all(ci_cols[1:2] %in% names(d)))
+
+  keep_cols <- unique(c(
+    byvar,
+    date_col,
+    "region",
+    data_cls$numerator_column,
+    data_cls$denominator_column,
+    median_col,
+    ci_cols[1:2]
+  ))
+  keep_cols <- intersect(keep_cols, names(d))
+
+  d <- d[, ..keep_cols]
+  data.table::setnames(
+    d,
+    old = c(median_col, ci_cols[1], ci_cols[2]),
+    new = c("median", "lower", "upper"),
+    skip_absent = TRUE
+  )
+
+  if (!inherits(d[[date_col]], "Date")) {
+    d[, (date_col) := as.Date(get(date_col))]
+  }
+  if (byvar %in% names(d)) {
+    d[, (byvar) := as.character(get(byvar))]
+  }
+
+  d[, i := seq_len(.N), by = byvar]
+  d[order(get(date_col)), type := fifelse(i > .N - spec$future_steps, "Forecast", "Historical"), by = byvar]
+  d[, i := NULL]
+  d <- rbind(d, d[type == "Historical"][get(date_col) == max(get(date_col))][, type := "Forecast"], fill = TRUE)
+
+  obs <- d[[data_cls$numerator_column]]
+  if (!isTRUE(spec$use_count) && data_cls$denominator_column %in% names(d)) {
+    obs <- obs / d[[data_cls$denominator_column]]
+  }
+  d[, observed := obs]
+
+  d[order(get(date_col))] |> split(by = byvar)
+}
+
+# Legacy data-prep path that computes a dense grid of posterior quantiles for
+# prediction plots. Newer paths should prefer stored calculated features.
+prepare_time_series_plot_data <- function(
     model,
     data_cls,
-    use_count=TRUE,
-    future_steps=0, 
+    spec,
     probs = c(0.005, 0.01, 0.025,seq(0.05, .95, 0.05),0.975, 0.99, 0.995)
 ) {
-  
-  byvar = data_cls$region_col
+  byvar <- get_ts_data_cls_region_col(data_cls)
+  date_col <- get_ts_data_cls_date_col(data_cls)
+  req(!is.null(byvar), !is.null(date_col))
   
   d <- get_posterior_quantiles(
-    model, data_cls, use_suffix = FALSE,use_count_scale = use_count,probs = probs
+    model, data_cls, use_suffix = FALSE, use_count_scale = isTRUE(spec$use_count), probs = probs
   )
 
   d[, i:=(1:.N), by=byvar]
-  d[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), by=byvar]
-  d <- rbind(d,d[type=="Historical"][date==max(date)][, type:="Forecast"])
+  d[order(get(date_col)), type:=fifelse(i>.N-spec$future_steps, "Forecast", "Historical"), by=byvar]
+  d <- rbind(d,d[type=="Historical"][get(date_col)==max(get(date_col))][, type:="Forecast"])
 
 
   # drop any future dates if use_count is TRUE (but this is too strong,
   # need to also consider the model)
-  if(use_count == TRUE) d <- d[type=="Historical"]
+  if(isTRUE(spec$use_count)) d <- d[type=="Historical"]
 
   # merge back on the original data  
   d <- data_cls$data[d, on=c(names(d)[1:2])]
@@ -829,18 +1252,40 @@ prepare_plot_ly_ts_data <- function(
   # generate observed
   
   obs = d[[data_cls$numerator_column]]
-  if(use_count==FALSE) obs <- obs/d[[data_cls$denominator_column]]
+  if(!isTRUE(spec$use_count)) obs <- obs/d[[data_cls$denominator_column]]
   d[, observed:=obs]
   
   # return a list, split by county fips
-  d[order(date)] |> split(by=byvar)
+  d[order(get(date_col))] |> split(by=byvar)
   
 }
 
-#' Given a data class, return the unique locations and map data, including
-#' shape information, using Rnssp::county_sf. This assume county locations
-#' and the function must be provided the county display column, the county
-#' code column (which default to "region", and "countyfips", respectively)
+# Compatibility wrapper around prepare_time_series_plot_data() used by older
+# callers that predate the time-series plot spec helper.
+prepare_plot_ly_ts_data <- function(
+    model,
+    data_cls,
+    use_count=TRUE,
+    future_steps=0, 
+    probs = c(0.005, 0.01, 0.025,seq(0.05, .95, 0.05),0.975, 0.99, 0.995)
+) {
+  spec <- build_time_series_plot_spec(
+    region_ids = character(0),
+    ci = 95,
+    use_count = use_count,
+    future_steps = future_steps
+  )
+  
+  prepare_time_series_plot_data(
+    model = model,
+    data_cls = data_cls,
+    spec = spec,
+    probs = probs
+  )
+}
+
+# Return county geometry joined to the locations present in the current data
+# class so map views can render only the relevant regions.
 get_map_locations <- function(dc, county_display="region", county_code="countyfips") {
   locs = dc$data[, .SD, .SDcols = c(county_code, county_display)] |> unique()
   
@@ -852,7 +1297,8 @@ get_map_locations <- function(dc, county_display="region", county_code="countyfi
     sf::st_transform(crs = 4326)
 }
 
-## helper to make draggable legend
+# Attach the client-side hook that makes a leaflet legend draggable after the
+# widget is rendered.
 enable_draggable_legend <- function(map) {
   map |>  htmlwidgets::onRender(
     "function(el, x) { if (window.makeLeafletLegendDraggable) window.makeLeafletLegendDraggable(el); }"

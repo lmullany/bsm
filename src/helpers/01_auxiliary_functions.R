@@ -2,6 +2,9 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 
+# Null-coalescing helper used throughout the app to provide a default when a
+# value is missing or empty.
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 counties_by_state <- function(states) {
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
@@ -220,7 +223,8 @@ get_data<-function(sd,ed,time_res,geo_res,state_filter=NULL,county_filter, med_g
   
   return(list(data = merged, url_all = url_all, url_single = url_single))
 }
-
+# Map internal column names to user-facing display labels, with special
+# handling for plain numeric quantile column names.
 map_table_names_to_display <- function(names, title_case = FALSE, quantile_suffix = NULL, keep_names = FALSE) {
   orig_names <- names
   map = list(
@@ -285,6 +289,8 @@ non_integer_cols_to_round <- function(d, names=FALSE) {
 }
 
 
+# Unpack a saved model archive into its stored model object and serialized UI
+# values.
 load_saved_model_file <- function(path) {
 
   # unpack the archive
@@ -298,6 +304,8 @@ load_saved_model_file <- function(path) {
   
 }
 
+# Unpack a saved query archive into its stored source data and serialized UI
+# values.
 load_saved_query_file <- function(path) {
   
   # unpack the archive
@@ -311,8 +319,8 @@ load_saved_query_file <- function(path) {
   
 }
 
-# Given a path to a bsm_model zip file (created from this app),
-# read to temp location, unzip, and return
+# Load one of the app's saved zip archives and return the underlying RDS and
+# JSON payloads.
 load_saved_object_from_file <- function(path) {
   # create temp folder
   tmpdir <- tempfile()
@@ -361,6 +369,8 @@ add_button_hover <- function(title,button) {
   div(title=title,button)
 }
 
+# Convert free-form text into a stable identifier fragment for feature IDs and
+# other programmatic names.
 slugify <- function(x) {
   x <- tolower(trimws(x %||% ""))
   x <- gsub("[^a-z0-9]+", "_", x)
