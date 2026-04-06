@@ -383,6 +383,8 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         model_state("postprocessing")
         feat_store$register_default_calculated_features()
         
+        # Calculate the builtin model-based features once at fit time so viz
+        # tabs only need to read stored columns.
         calculated_feature_ids <- feat_store$rv$order[vapply(feat_store$rv$order, function(fid) {
           f <- feat_store$get_feature(fid)
           !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
@@ -1309,6 +1311,8 @@ init_feature_df <- function() {
     if (is.null(data) || is.null(data_cls)) return(invisible(NULL))
     
     dt <- data.table::as.data.table(data)
+    # Calculated features are registered separately so they can keep their own
+    # feature types and grouping metadata.
     cols <- names(dt)
     if (length(exclude_cols)) cols <- setdiff(cols, unique(exclude_cols))
     if (!length(cols)) return(invisible(NULL))
@@ -1371,6 +1375,8 @@ init_feature_df <- function() {
     include_median = TRUE,
     include_scales = c("counts", "proportion")
   ) {
+    # Builtin CIs are stored as composite features, while their endpoint
+    # quantiles are also registered as separate selectable features.
     changed <- FALSE
     
     ci_group_id <- function(scale, ci) {

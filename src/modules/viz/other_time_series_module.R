@@ -79,6 +79,8 @@ viz_other_time_series_server <- function(id, im, feature_store) {
     })
     
     plottable_features_df <- reactive({
+      # A feature is plottable on this tab only if its stored output columns
+      # already exist and are numeric in the shared data table.
       store <- get_store()
       base_source <- get_base_source()
       req(store, base_source)
@@ -147,6 +149,8 @@ viz_other_time_series_server <- function(id, im, feature_store) {
     }
     
     feature_plot_data <- reactive({
+      # Scalar features are plotted as lines, while stored confidence
+      # intervals are reshaped into ribbons using their lower/upper columns.
       req(im$data_cls)
       store <- get_store()
       req(store)

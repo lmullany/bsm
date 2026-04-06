@@ -1,3 +1,6 @@
+# These helpers are the single place where calculated feature values are
+# generated from the fitted model and written into the stored data table.
+
 # Format a quantile probability into the normalized string form used in
 # calculated-feature IDs and quantile table column names.
 calculated_feature_fmt_qname <- function(q, digits = 3) {

@@ -67,6 +67,8 @@ viz_time_series_server <- function(id, im, results, feature_store) {
         if (identical(input$ts_use_count, "Count")) "counts" else "proportion"
       })
       
+      # Prediction Time Series only offers CIs that already exist in the
+      # stored calculated-feature catalog for the chosen scale.
       available_ci_features <- reactive({
         store <- get_store()
         req(store)
@@ -158,7 +160,8 @@ viz_time_series_server <- function(id, im, results, feature_store) {
         )
       })
       
-      # Get the plotly data
+      # Prediction plots now read the stored median/CI columns rather than
+      # recomputing posterior summaries inside the viz tab.
       tspd <- reactive({
         req(im$data_cls)
         prepare_time_series_feature_plot_data(

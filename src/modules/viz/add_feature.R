@@ -284,7 +284,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       cache_clear()
     }) |> bindEvent(list(im$model, im$data_cls), ignoreInit = TRUE)
     
-    # Feature
+    # Add a user-defined calculated feature and persist its stored columns so
+    # the rest of the viz tabs can read them without recalculating.
     observe({
       r <- rvr()
       ft <- input$feature
@@ -353,6 +354,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       calculated_feature_ids <- fid
       
       if (ft == "confidence_interval") {
+        # A user-created CI is stored both as a composite interval feature and
+        # as its endpoint quantile features so each can be filtered/displayed.
         ci <- params$ci %||% 0.90
         a <- (1 - ci) / 2
         q_specs <- list(
@@ -681,6 +684,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     }
     
     calculate_and_store_feature_ids <- function(feature_ids) {
+      # This is the session-level storage path for user-added calculated
+      # features; values are computed here and then kept in data_cls/posterior.
       req(im$data_cls)
       base_source <- im$data_cls$data
       req(base_source)
@@ -722,7 +727,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       invisible(out[])
     }
     
-    # Posterior table
+    # The Add Feature table now only reads stored columns; calculation happens
+    # at model fit or when a user explicitly adds a calculated feature.
     posterior_tbl <- reactive({
       req(im$data_cls)
       r <- rvr()
