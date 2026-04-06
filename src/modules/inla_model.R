@@ -2,19 +2,19 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 label_list_im <- list(
-  num_forecasts_day = list( 
+  num_forecasts_day = list(
     l = "Number of forecasts (days)",
     m = "Select the number of future days where estimates will be generated."
   ),
-  num_forecasts_week = list( 
+  num_forecasts_week = list(
     l = "Number of forecasts (weeks)",
     m = "Select the number of future weeks where estimates will be generated."
   ),
-  num_forecasts_month = list( 
+  num_forecasts_month = list(
     l = "Number of forecasts (months)",
     m = "Select the number of future months where estimates will be generated."
   ),
-  num_forecasts_year = list( 
+  num_forecasts_year = list(
     l = "Number of forecasts (years)",
     m = "Select the number of future years where estimates will be generated."
   ),
@@ -32,17 +32,17 @@ label_list_im <- list(
   )
 )
 button_list_im <-list(
-    fit_new_model = "Define a new model to fit to the data.",
-    run_model = "Fit selected INLA model to data.",
-    load_saved_model = "Load a saved model from file.",
-    select_saved = paste0(
-      "Open file browser to select a saved model on your local machine. ",
-      "Saved models are zip files containing json and rds objects with the ",
+  fit_new_model = "Define a new model to fit to the data.",
+  run_model = "Fit selected INLA model to data.",
+  load_saved_model = "Load a saved model from file.",
+  select_saved = paste0(
+    "Open file browser to select a saved model on your local machine. ",
+    "Saved models are zip files containing json and rds objects with the ",
       "file suffix .bsm_model."),
-    download_csv = "Download processed data and save as a csv file on your local machine.",
-    save_model = "Save the query to a bsm_model file so that it can be reloaded later.",
-    actual_formula = "Show formula as parsed during model fitting."
-  )
+  download_csv = "Download processed data and save as a csv file on your local machine.",
+  save_model = "Save the query to a bsm_model file so that it can be reloaded later.",
+  actual_formula = "Show formula as parsed during model fitting."
+)
 
 inla_model_ui <- function(id) {
   
@@ -57,7 +57,7 @@ inla_model_ui <- function(id) {
   
   # small ui to render with warnings/invalid messages for model run button
   model_run_validator <- uiOutput(ns("model_run_validator"))
-
+  
   family = selectInput(
     ns("dist_family"),
     label=labeltt(label_list_im[["distribution"]]),
@@ -81,7 +81,7 @@ inla_model_ui <- function(id) {
   
   spatial_component_options <- tagList(
     radioButtons(
-      ns("sco_adjacency_type"), "Neighborhood Basis", 
+      ns("sco_adjacency_type"), "Neighborhood Basis",
       choices=c(
         "Mobility" = "mobility_adj_mat",
         "Proximity" = "physical_adj_mat"
@@ -120,14 +120,14 @@ inla_model_ui <- function(id) {
   weekly_temporal_component_options <- tagList(
     hidden(checkboxInput(ns("weekly_tco_chkbx"), "Weekly Component",value = TRUE)),
     conditionalPanel(
-      condition = "input.weekly_tco_chkbx", 
+      condition = "input.weekly_tco_chkbx",
       selectInput(
         ns("tco_model"), "Model (Weekly)",
         choices = c(
-        "Random Walk (Order 2)-Cyclical" = "rw2",
-        "Random Walk (Order 1)-Cyclical" = "rw1",
-        "Autoregressive-Cyclical" = "ar1",
-        "Autoregressive - Temporal" = "ar"
+          "Random Walk (Order 2)-Cyclical" = "rw2",
+          "Random Walk (Order 1)-Cyclical" = "rw1",
+          "Autoregressive-Cyclical" = "ar1",
+          "Autoregressive - Temporal" = "ar"
         ),
         selected = "rw2"
       ),
@@ -143,7 +143,7 @@ inla_model_ui <- function(id) {
   daily_temporal_component_options <- tagList(
     checkboxInput(ns("daily_tco_chkbx"), "Daily Component",value = TRUE),
     conditionalPanel(
-      condition = "input.daily_tco_chkbx", 
+      condition = "input.daily_tco_chkbx",
       selectInput(
         ns("tco_model_d"), "Model (Daily)",
         choices = c(
@@ -195,7 +195,7 @@ inla_model_ui <- function(id) {
       ),
       conditionalPanel(
         condition = "input.customize_spatial_component & input.spatial_component_chkbx",
-        spatial_component_options, 
+        spatial_component_options,
         ns=ns
       )
     ),
@@ -209,7 +209,7 @@ inla_model_ui <- function(id) {
           ns = ns
         ),
         col_widths = c(6,6)
-      ), 
+      ),
       conditionalPanel(
         condition = "input.customize_temporal_component & input.temporal_component_chkbx",
         hidden(div(id = ns("daily_tco_div"), daily_temporal_component_options)),
@@ -227,7 +227,7 @@ inla_model_ui <- function(id) {
         "Default Model"="default",
         "Customize Components" = "custom_components",
         "Custom Model Formula" = "custom_formula"
-      ), 
+      ),
       selected = "default",
       inline = TRUE
     ),
@@ -246,22 +246,22 @@ inla_model_ui <- function(id) {
     conditionalPanel(
       condition = "input.custom_formula && /graph/i.test(input.custom_formula)",
       radioButtons(
-        ns("sco_adjacency_type_custom"), "Adjacency Matrix", 
+        ns("sco_adjacency_type_custom"), "Adjacency Matrix",
         choices=c(
           "Mobility" = "mobility_adj_mat",
           "Proximity" = "physical_adj_mat"
         ),
         inline=TRUE
-      ), 
+      ),
       ns=ns
     ),
     tags$details(
-      tags$summary("Show Generic Formula"), 
-      verbatimTextOutput(ns("inla_model_formula_r")) |>  
+      tags$summary("Show Generic Formula"),
+      verbatimTextOutput(ns("inla_model_formula_r")) |>
         tagAppendAttributes(style = css("white-space" = "pre-wrap"))
     ) # the above displays the formula currently selected.
   )
-
+  
   
   ## Output cards:
   model_card <- card(
@@ -292,7 +292,7 @@ inla_model_ui <- function(id) {
       color = bs_get_variables(theme=THEME,"primary")
     ))
   )
-
+  
 
   
   
@@ -313,14 +313,14 @@ inla_model_ui <- function(id) {
             br(),
             id = ns("model_sidebar"),
             width = SIDEBAR_WIDTH*2,
-            forecasts, 
+            forecasts,
             family,
             formula_panel,
             add_button_hover(title = button_list_im[["run_model"]],
                              input_task_button(ns("estimate_model_btn"), "Run Model")),
             # small ui to render with warnings/invalid messages
-            model_run_validator,
-            ),
+            model_run_validator
+          ),
           nav_panel(
             title = tagList(
               "Load Saved Model",
@@ -331,7 +331,7 @@ inla_model_ui <- function(id) {
               title = button_list_im[["select_saved"]],
               fileInput(ns("zipfile_model"), "Select Saved Model", accept = ".bsm_model")
             )
-        )
+          )
         ),
         width = 450
       ),
@@ -348,32 +348,62 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
     id,
     function(input, output, session) {
       
-      model_state     <- reactiveVal("idle")
+      model_state <- reactiveVal("idle")
+      feat_store  <- init_feature_df()
+      
+      im$feature_store   <- feat_store
+      im$feature_choices <- feat_store$choices
+      im$features_df     <- feat_store$features_df
+      
+      current_model_res <- reactiveVal(NULL)
+      
+      observe({
+        im$nforecasts <- input$nforecasts
+      })
+      
       # update global reactive model object
-      observe(im$model <- inla_model()$model)
+      observe({
+        res <- current_model_res()
+        req(res, isTRUE(res$ok), !is.null(res$model))
+        im$model <- res$model
+      })
+      
       # update global reactive data_class object for current model result
-      observe(im$data_cls <- inla_model()$data_class)
+      observe({
+        res <- current_model_res()
+        req(res, isTRUE(res$ok), !is.null(res$data_class))
+        im$data_cls <- res$data_class
+      })
       
       # update global reactive posteriors for current model
       observe({
-        res <- inla_model()
-        req(isTRUE(res$ok))
-        im$posterior <- add_posteriors(
-        data_cls = res$data_class,
-        model = res$model
-        )}) |> bindEvent(inla_model())
-      observe(im$nforecasts <- input$nforecasts)
+        res <- current_model_res()
+        req(res, isTRUE(res$ok), !is.null(res$model), !is.null(res$data_class))
+        
+        model_state("postprocessing")
+        
+        im$posterior <- res$data_class$data
+        
+        feat_store$sync_base_columns(
+          data = res$data_class$data,
+          data_cls = res$data_class
+        )
+        
+        feat_store$register_default_virtual_features()
+        
+        model_state("ready")
+      }) |> bindEvent(current_model_res())
       
       # observe the time_res and update the forecasts label and 
       observe({
-          req(dc$time_res)
+        req(dc$time_res)
           lv = update_n_forecast_widget(dc$time_res)
-          output$nforecasts_ui <- renderUI({
-            numericInput(
+        output$nforecasts_ui <- renderUI({
+          numericInput(
             inputId =  session$ns("nforecasts"), 
             label = labeltt(label_list_im[[lv[["label"]]]]),
             value = lv[["value"]]
-            )
+          )
         })
       })
       
@@ -408,7 +438,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           input = setNames(
             lapply(names(input), \(n) input[[n]]),
             names(input)
-          ), 
+          ),
           dc =  data_cls,
           time_res = dc$time_res
         )
@@ -490,17 +520,17 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       # Render the validation on the selected counties
       
       output$model_run_validator <- renderUI(
-        model_ready_to_run(results$data, input)[["msg"]]
+        model_ready_to_run(results$data, formula_r(), input)[["msg"]]
       ) |> bindEvent(input$estimate_model_btn)
       
-  
+      
       inla_model_new <- reactive({
         
         # is model ready to run?
-        model_ready <- model_ready_to_run(results$data, input)
+        model_ready <- model_ready_to_run(results$data, formula_r(), input)
         model_state("fitting")
         req(model_ready[["valid"]])
-
+        
         
         # Preprocess Data:
         data_cls <- pre_process_data(results$data, input$nforecasts)
@@ -516,7 +546,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           } else {
             adj_mat_raw <- NULL
           }
-        }else if (input$spatial_component_chkbx == TRUE) {
+        } else if (isTRUE(input$spatial_component_chkbx)) {
           if(input$sco_adjacency_type == "mobility_adj_mat") {
             adj_mat_raw <- dc$mobility_adj
           } else {
@@ -524,7 +554,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           }
         } else {
           adj_mat_raw <- NULL
-        }        
+        }
         
         # Create the formula
         tmp <- get_formula(
@@ -542,42 +572,71 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         # fit if valid.
         if (valid){
           formula = eval(formula)
-        
+          
           fit_res <- tryCatch(
             {
-            # fit the model
-            model <- epistemic::fit_model(
-              data_cls=data_cls,
-              formula=formula,
-              family = input$dist_family,
-              reformulate = TRUE,
-              adjacency_matrix = adj_mat_raw
-            )
-            
-            # detect failure mode: model$inla_model is a character error message
-            err_msg <- NULL
-            ok <- TRUE
-            
-            if (is.null(model$inla_model)) {
-              ok <- FALSE
-              err_msg <- "INLA model did not converge (inla_model is NULL)."
-              model_state("error")
-            } else if (is.character(model$inla_model)) {
-              ok <- FALSE
+              # fit the model
+              before_fit_cols <- names(data_cls$data)
+              
+              model <- epistemic::fit_model(
+                data_cls=data_cls,
+                formula=formula,
+                family = input$dist_family,
+                reformulate = TRUE,
+                adjacency_matrix = adj_mat_raw
+              )
+              # detect failure mode: model$inla_model is a character error message
+              if (!is.null(model$data) && !is.null(model$data$data)) {
+                after_fit_cols <- names(model$data$data)
+                
+                model$data$added_by_fit_model <- setdiff(after_fit_cols, before_fit_cols)
+                
+                model$data$id_columns <- unique(c(
+                  data_cls$id_columns %||% character(0),
+                  model$data$region_identifiers %||% character(0),
+                  model$data$date_identifiers %||% character(0),
+                  model$data$other_ids %||% character(0)
+                ))
+                
+                model$data$covariate_columns <- unique(c(
+                  data_cls$covariate_columns %||% character(0),
+                  model$data$feature_columns %||% character(0)
+                ))
+                
+                model$data$core_columns <- unique(data_cls$core_columns %||% character(0))
+                model$data$other_columns <- unique(data_cls$other_columns %||% character(0))
+                
+                model$data$core_columns <- unique(data_cls$core_columns %||% character(0))
+                
+                model$data$column_sources <- c(
+                  data_cls$column_sources %||% list(),
+                  list(fit_model = model$data$added_by_fit_model)
+                )
+              }
+              
+              err_msg <- NULL
+              ok <- TRUE
+              
+              if (is.null(model$inla_model)) {
+                ok <- FALSE
+                err_msg <- "INLA model did not converge (inla_model is NULL)."
+                model_state("error")
+              } else if (is.character(model$inla_model)) {
+                ok <- FALSE
               err_msg <- model$inla_model  # <-- preserve the exact error string
-              model_state("error")
-            } 
+                model_state("error")
+              }
             if (ok){
-              model_state("ready")
-            }
-            
-            list(
-              model = if (ok) model$inla_model else NULL,
-              data_class = model$data,          
-              formula = deparse1(model$formula),
-              ok = ok,
-              msg = err_msg
-            )
+                model_state("ready")
+              }
+              
+              list(
+                model = if (ok) model$inla_model else NULL,
+                data_class = model$data,
+                formula = deparse1(model$formula),
+                ok = ok,
+                msg = err_msg
+              )
             },
             error = function(e) {
               list(model = NULL, data_class = data_cls, formula = NULL, ok = FALSE, msg = conditionMessage(e))
@@ -592,9 +651,9 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
 
       }) |> bindEvent(input$estimate_model_btn)
     
-    
+      
       ns <- session$ns
-
+      
       observe({
         res <- inla_model_new()
         
@@ -640,11 +699,15 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         )
       
         
-        updateSelectInput(
-          inputId = "nforecasts", selected = saved_model_info[["model_values"]]$nforecasts
+        updateNumericInput(
+          session = session,
+          inputId = "nforecasts",
+          value = saved_model_info[["model_values"]]$nforecasts
         )
         updateSelectInput(
-          inputId = "dist_family", selected = saved_model_info[["model_values"]]$dist_family
+          session = session,
+          inputId = "dist_family",
+          selected = saved_model_info[["model_values"]]$dist_family
         )
         
         # update other key global reactives from saved_model_info[["model_values"]]
@@ -654,12 +717,18 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         for(n in names(saved_model_info[["model_values"]])) {
           cache_transitions[[n]] <- saved_model_info[["model_values"]][[n]]
         }
-
+        
         # update the reactive
         loaded_model(saved_model_info[["model_object"]])
-        model_state("ready")
+        current_model_res(saved_model_info[["model_object"]])
         
       }) |> bindEvent(input$zipfile_model)
+      
+      observe({
+        res <- inla_model_new()
+        req(res)
+        current_model_res(res)
+      }) |> bindEvent(inla_model_new())
       
       inla_model <- reactiveVal(NULL)
       
@@ -687,7 +756,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
                          class = "btn-primary btn-sm")),
             
             widths=c(6,6)
-          ) 
+          )
         )
       })
       
@@ -714,20 +783,20 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           json_name <- tempfile(fileext = ".json")
           rds_name  <- tempfile(fileext = ".rds")
           jsonlite::write_json(model_vals, 
-                               json_name, 
-                               pretty = TRUE, 
-                               auto_unbox = TRUE)
+            json_name,
+            pretty = TRUE,
+            auto_unbox = TRUE)
           saveRDS(inla_model(), rds_name)
           zip::zipr(file, files = c(rds_name,json_name))
         },
         contentType = "application/zip"
-      ) 
+      )
       
       output$inla_model_object <- renderPrint({
         req(inla_model())
         summary(inla_model()$model)
       })
-
+      
       output$inla_model_formula <- renderPrint({
         req(inla_model())
         inla_model()$formula |> cat()
@@ -743,7 +812,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           need(!is.null(dat), "No table available in model"),
           need(ncol(dat) > 0, "Model table has no columns")
         )
-
+        
         # identify columns to round
         cols_to_round <- non_integer_cols_to_round(dat)
         
@@ -751,7 +820,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           dat,
           colnames = map_table_names_to_display(colnames(dat)),
           rownames=FALSE
-        ) |> 
+        ) |>
           DT::formatRound(columns=cols_to_round, digits=2)
 
       })
@@ -760,22 +829,22 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         filename = "processed_data.csv" ,
         content = \(file) data.table::fwrite(inla_model()$data_class$data, file)
       )
-  
+      
       
       # show modal box if actual formula button is pressed
       observe({
         
         req(inla_model())
         
-        showModal( 
-          modalDialog( 
+        showModal(
+          modalDialog(
             title = "Actual Formula Ingested by INLA",
             easyClose = TRUE,
-            size = "l", 
+            size = "l",
             card(div(inla_model()$formula, style="font-size:80%"))
-          ) 
-        ) 
-      }) |> bindEvent(input$actual_formula)  
+          )
+        )
+      }) |> bindEvent(input$actual_formula)
       
       
       
@@ -792,8 +861,13 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
             ),
             tags$p(class = "text-muted", "No model has been estimated yet.")
           )
+        } else if ((s == "loading") || (s == "fitting") || (s == "postprocessing")) {
+          label_txt <- if (identical(s, "postprocessing")) {
+            "Model fit complete. Registering processed data and features ..."
+          } else {
+            "Estimating Model ... please wait"
+          }
           
-        } else if ((s == "loading") | (s=="fitting")) {
           div(
             style = "min-height: 220px; display:flex; align-items:center; gap:.75rem;",
             tags$div(
@@ -801,136 +875,55 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
               role = "status",
               tags$span(class = "visually-hidden", "Loading...")
             ),
-            div("Estimating Model ... please wait")
+            div(label_txt)
           )
         } else if (s == "error") {
-            tagList(
-              tags$div(class = "text-danger fw-semibold", "Model estimation failed. Please update the model and rerun."),
-            )
+          tagList(
+            tags$div(class = "text-danger fw-semibold", "Model estimation failed. Please update the model and rerun.")
+          )
         } else { # "ready"
           verbatimTextOutput(ns("inla_model_object"))
         }
       })
-      
-      
-      
     }
   )
 }
 
-add_posteriors <- function(data_cls, 
-                           model,
-                           ci_widths = c(0.5, 0.9, 0.95, 0.99)
-                           ) {
-  
-  
-  # helper to format quantiles nicely for column names
-  fmt_q <- function(q) {
-    x <- formatC(q, format = "f", digits = 5)     # enough precision for 0.005 etc.
-    x <- sub("0+$", "", x)
-    x <- sub("\\.$", "", x)
-    x
-  }
-  
-  # helper: rename CI columns based on the numeric quantile embedded in the name
-  rename_ci_cols <- function(dt, prefix, scale_tag, lower_q, upper_q) {
-    # expected pattern: "<prefix>_<number>", e.g. "counts_0.025" or "props_0.975"
-    nms <- names(dt)
-    idx <- grep(paste0("^", prefix, "_"), nms)
-    if (length(idx) == 0) return(dt)
-    
-    q_str <- sub(paste0("^", prefix, "_"), "", nms[idx])
-    q_num <- suppressWarnings(as.numeric(q_str))
-    
-    # pick the closest match to requested lower/upper quantiles
-    pick_name <- function(target) {
-      ok <- which(!is.na(q_num))
-      if (length(ok) == 0) return(NA_character_)
-      nms[idx][ok][which.min(abs(q_num[ok] - target))]
-    }
-    
-    old_lower <- pick_name(lower_q)
-    old_upper <- pick_name(upper_q)
-    
-    new_lower <- paste0("predicted_", scale_tag, "_q_", fmt_q(lower_q))
-    new_upper <- paste0("predicted_", scale_tag, "_q_", fmt_q(upper_q))
-    
-    to_rename_old <- c(old_lower, old_upper)
-    to_rename_new <- c(new_lower, new_upper)
-    
-    keep <- !is.na(to_rename_old) & to_rename_old %in% names(dt)
-    if (any(keep)) {
-      data.table::setnames(dt, old = to_rename_old[keep], new = to_rename_new[keep])
-    }
-    dt
-  }
-  
-  compute_for_scale <- function(use_count_scale) {
-    scale_tag <- if (use_count_scale) "counts" else "props"
-    prefix    <- if (use_count_scale) "counts" else "props"
-    
-    # median
-    med <- epistemic::get_posterior_medians(
-      inla_model = model,
-      data_cls = data_cls,
-      use_count_scale = use_count_scale
-    )
-    
-    # robustly find the median column (don’t assume exact naming)
-    med_col <- grep("quant_median", names(med), value = TRUE)
-    if (length(med_col) != 1) {
-      stop("Could not uniquely identify the median column in get_posterior_medians() output.")
-    }
-    data.table::setnames(med, old = med_col, new = paste0("predicted_", scale_tag, "_q_0.5_median"))
-    
-    # CIs at multiple widths
-    ci_list <- lapply(ci_widths, function(w) {
-      ci <- epistemic::get_credible_intervals(
-        inla_model = model,
-        data_cls = data_cls,
-        ci_width = w,
-        use_count_scale = use_count_scale
-      )
-      lower_q <- (1 - w) / 2
-      upper_q <- 1 - lower_q
-      rename_ci_cols(ci, prefix, scale_tag, lower_q, upper_q)
-    })
-    
-    # merge median + all CI frames
-    out <- Reduce(function(x, y) merge(x, y, by = c(data_cls$region_column, data_cls$date_column), all = TRUE),
-                  c(list(med), ci_list))
-    out
-  }
-  
-  merged <- Reduce(
-    function(x, y) merge(x, y, by = c(data_cls$region_column, data_cls$date_column), all = TRUE),
-    list(compute_for_scale(TRUE), compute_for_scale(FALSE))
-  )
-  
-  data_cls <- epistemic::add_covariates(
-    covariates = merged,
-    dc = data_cls,
-    region = data_cls$region_column,
-    date = data_cls$date_column
-  )
-  
-  data_cls$data
-}
-
-# Helper function for forecast label and default
 update_n_forecast_widget <- function(res) {
-  lu = list(
+  lu <- list(
     "daily" = list(label = "num_forecasts_day", value = 28),
     "weekly" = list(label = "num_forecasts_week", value = 3),
     "monthly" = list(label = "num_forecasts_month", value = 1),
-    "yearly" = list(label = "num_forecasts_year", value=1)
+    "yearly" = list(label = "num_forecasts_year", value = 1)
   )
   
   lu[[res]]
 }
-pre_process_data <- function(data, nforecasts ) {
+
+pre_process_data <- function(data, nforecasts) {
+  
+  req_cols <- c("countyfips", "date", "target", "overall")
+  missing_cols <- setdiff(req_cols, names(data))
+  if (length(missing_cols)) {
+    stop(
+      sprintf(
+        "Input data is missing required columns: %s. Current columns are: %s",
+        paste(missing_cols, collapse = ", "),
+        paste(names(data), collapse = ", ")
+      )
+    )
+  }
+  
+  if (length(nforecasts) != 1 || is.na(nforecasts)) {
+    stop("nforecasts must be a single non-missing value.")
+  }
   
   data$date <- as.IDate(as.Date(data$date))
+  
+  if (any(is.na(data$date))) {
+    stop("Column `date` contains invalid or missing dates after conversion.")
+  }
+  
   data_cls <- epistemic::data_class(
     data = data,
     region_column = "countyfips",
@@ -940,34 +933,81 @@ pre_process_data <- function(data, nforecasts ) {
     generate_expected = TRUE
   )
   
-
+  cols_after_data_class <- names(data_cls$data)
+  
   data_cls <- epistemic::add_missing_and_future_dates(
-    num_future_steps = nforecasts,
+    num_future_steps = as.integer(nforecasts),
     dc = data_cls,
     forward_fill = TRUE,
     den = 1
   )
-
+  cols_after_missing_future <- names(data_cls$data)
+  
   epistemic::add_mmwr_week(data_cls)
+  cols_after_mmwr <- names(data_cls$data)
+  
   epistemic::add_day_of_week(data_cls)
-  return(data_cls)
+  cols_after_dow <- names(data_cls$data)
+  
+  data_cls$added_by_data_class <- setdiff(cols_after_data_class, names(data))
+  data_cls$added_by_missing_future <- setdiff(cols_after_missing_future, cols_after_data_class)
+  data_cls$added_by_mmwr_week <- setdiff(cols_after_mmwr, cols_after_missing_future)
+  data_cls$added_by_day_of_week <- setdiff(cols_after_dow, cols_after_mmwr)
+  
+  # Explicit ID buckets from data_class internals + known preprocessing steps
+  data_cls$id_columns <- unique(c(
+    setdiff(data_cls$region_identifiers %||% character(0), data_cls$region_column),
+    setdiff(data_cls$date_identifiers %||% character(0), data_cls$date_column),
+    data_cls$other_ids %||% character(0),
+    setdiff(data_cls$added_by_missing_future, c("denominator_source")),
+    data_cls$added_by_mmwr_week,
+    data_cls$added_by_day_of_week
+  ))
+  
+  data_cls$core_columns <- unique(c(
+    data_cls$numerator_column,
+    data_cls$denominator_column,
+    data_cls$expected_column
+  ))
+  
+  data_cls$other_columns <- unique(c(
+    data_cls$region_column,
+    data_cls$date_column,
+    "region",
+    "denominator_source"
+  ))
+  
+  known_non_covariates <- unique(c(
+    data_cls$id_columns %||% character(0),
+    data_cls$core_columns %||% character(0),
+    data_cls$other_columns %||% character(0)
+  ))
+  
+  inferred_covariates <- setdiff(names(data_cls$data), known_non_covariates)
+  
+  data_cls$covariate_columns <- unique(c(
+    data_cls$feature_columns %||% character(0),
+    inferred_covariates
+  ))
+
+  data_cls
 }
 
 get_formula <- function(formula_type, input, dc, time_res) {
   # if this is custom, return the custom input
-  if(formula_type == "custom_formula") {
-    f<-input[["custom_formula"]]
-    if (!is.null(dc)){
-      res = epistemic:::validate_inla_formula(f,dc)
-      if (!res$ok){
-        return(list(valid = FALSE,formula = pretty_formula(f), errors = res$errors))
+  if (formula_type == "custom_formula") {
+    f <- input[["custom_formula"]]
+    if (!is.null(dc)) {
+      res <- epistemic:::validate_inla_formula(f, dc)
+      if (!res$ok) {
+        return(list(valid = FALSE, formula = pretty_formula(f), errors = res$errors))
       }
     }
     return(list(valid = TRUE,formula = as.formula(f)))
   }
   
   region_random_effect=build_region_random_effect(
-    input, 
+    input,
     # use default if formula type is default, or if advance customization toggle is off
     use_default = formula_type == "default" || input[["customize_rre"]] == FALSE
   )
@@ -991,7 +1031,7 @@ get_formula <- function(formula_type, input, dc, time_res) {
     "spatial" = spatial_component,
     "temporal" = unlist(temporal_component)
   )
-
+  
   # reduce the components to those that are requested:
   requested = c("intercept")
   
@@ -1028,14 +1068,14 @@ build_region_random_effect <- function(input, use_default=FALSE) {
       input[[n]] = MODEL_COMPONENT_DEFAULTS[[n]]
     }
   }
-
+  
   check_names(input, c("rre_prec_pc_param", "rre_prec_pc_alpha"))
   
   rlang::parse_expr(
     paste(
       "f(",
       "r_id,",
-      "model='iid',", 
+      "model='iid',",
       "hyper=list(prec = list(prior = 'pc.prec', param =c(",
       input[["rre_prec_pc_param"]], ",", input[["rre_prec_pc_alpha"]], ")))",
       ")"
@@ -1092,10 +1132,10 @@ build_spatial_component <- function(input, use_default = FALSE) {
   }
   
   check_names(input, c("sco_model_type", "sco_control_group_model", "sco_control_group_ar_order"))
-
-    sc = paste0(
+  
+  sc = paste0(
     "f(",
-    "r_id, ", 
+    "r_id, ",
     "graph = adjacency_matrix,",
     "model='", input[["sco_model_type"]], "',",
     "group = d_id,",
@@ -1106,8 +1146,10 @@ build_spatial_component <- function(input, use_default = FALSE) {
       sc,
       ", order=", input[["sco_control_group_ar_order"]], "), "
     )
-  } else sc = paste0(sc, "), ")
-    
+  } else {
+    sc <- paste0(sc, "), ")
+  }
+  
   prec_prior_name = fcase(
     input[["sco_model_type"]] == "besagproper", "prec",
     input[["sco_model_type"]] == "bym", "prec.spatial",
@@ -1130,17 +1172,17 @@ MODEL_COMPONENT_DEFAULTS = list(
   rre_prec_pc_alpha = 0.01,
   
   # spatial component defaults
-  sco_model_type = "besagproper", 
+  sco_model_type = "besagproper",
   sco_control_group_model = "ar",
   sco_control_group_ar_order = 1L,
   sco_prec_pc_param = 0.2,
   sco_prec_pc_alpha = 0.01,
   
   # weekly temporal component defaults
-  tco_model = "rw2", 
+  tco_model = "rw2",
   tco_model_ar_order = 1L,
   # daily temporal component defaults
-  tco_model_d = "rw2", 
+  tco_model_d = "rw2",
   tco_model_ar_order_d = 1L,
   
   custom_formula = ""
@@ -1158,7 +1200,7 @@ model_ready_to_run <- function(data, formula, input) {
   
   # defaults - no message, primary class for text
   msg = character(0); cl = "p-2 text-primary"; valid=TRUE
-
+  
   # currently, this is the only requirement  
   if(is.null(data)) msg <- "Please load data first"
   
@@ -1204,4 +1246,300 @@ pretty_formula <- function(x) {
   
   # Otherwise, show as code
   rlang::expr_text(parsed)
+}
+
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
+
+init_feature_df <- function() {
+  rv <- reactiveValues(
+    next_id  = 0L,
+    features = list(),
+    order    = character(0),
+    last_id  = NULL,
+    probs    = 0.5,
+    refresh  = 0L,
+    force_select_fid = NULL
+  )
+  
+  add_to_order <- function(id) {
+    if (!id %in% rv$order) {
+      rv$order <- c(rv$order, id)
+      TRUE
+    } else {
+      FALSE
+    }
+  }
+  
+  get_column_meta <- function(col, data_cls) {
+    core_cols  <- unique(data_cls$core_columns %||% character(0))
+    id_cols    <- unique(data_cls$id_columns %||% character(0))
+    cov_cols   <- unique(data_cls$covariate_columns %||% character(0))
+    other_cols <- unique(data_cls$other_columns %||% character(0))
+    
+    is_id <- col %in% id_cols
+    is_core <- (col %in% core_cols) && !is_id
+    is_cov <- (col %in% cov_cols) && !(is_id || is_core)
+    is_pred <- grepl("^predicted_", col)
+    is_other <- (col %in% other_cols) && !(is_id || is_core || is_cov || is_pred)
+    
+    list(
+      is_core = is_core,
+      is_id = is_id,
+      is_pred = is_pred,
+      is_cov = is_cov,
+      is_other = is_other
+    )
+  }
+  
+  sync_base_columns <- function(data, data_cls) {
+    if (is.null(data) || is.null(data_cls)) return(invisible(NULL))
+    
+    dt <- data.table::as.data.table(data)
+    cols <- names(dt)
+    if (!length(cols)) return(invisible(NULL))
+    
+    pretty_map <- map_table_names_to_display(cols, quantile_suffix = NULL, keep_names = TRUE)
+    pretty_labs <- cols
+    if (!is.null(names(pretty_map))) {
+      pretty_labs <- unname(pretty_map[cols])
+      pretty_labs[is.na(pretty_labs) | pretty_labs == ""] <- cols[is.na(pretty_labs) | pretty_labs == ""]
+    }
+    
+    changed <- FALSE
+    
+    for (i in seq_along(cols)) {
+      col <- cols[[i]]
+      lab <- pretty_labs[[i]]
+      meta <- get_column_meta(col, data_cls)
+      
+      if (meta$is_cov) {
+        fid <- paste0("cov__", col)
+        ftype <- "covariate"
+        fscale <- "other"
+      } else if (meta$is_id) {
+        fid <- paste0("id__", col)
+        ftype <- "id"
+        fscale <- "other"
+      } else if (meta$is_core) {
+        fid <- paste0("col__", col)
+        ftype <- "core"
+        fscale <- "other"
+      } else {
+        fid <- paste0("col__", col)
+        ftype <- "other"
+        fscale <- "other"
+      }
+      
+      rv$features[[fid]] <- modifyList(
+        rv$features[[fid]] %||% list(),
+        list(
+          id = fid,
+          label = lab,
+          description = "",
+          feature_type = ftype,
+          feature_scale = fscale,
+          out_cols = col,
+          params = list(source_col = col)
+        )
+      )
+      
+      changed <- add_to_order(fid) || changed
+    }
+    
+    if (changed) rv$refresh <- rv$refresh + 1L
+    invisible(NULL)
+  }
+  
+  register_virtual_features <- function(
+    ci_widths = c(0.5, 0.9, 0.95, 0.99),
+    include_mean = TRUE,
+    include_median = TRUE,
+    include_scales = c("counts", "proportion")
+  ) {
+    changed <- FALSE
+    
+    ci_group_id <- function(scale, ci) {
+      paste0("builtin__ci_group__", scale, "__ci", fmt_qname(ci))
+    }
+    
+    quantile_feature_id <- function(scale, q) {
+      paste0("builtin__quantile__", scale, "__q", fmt_qname(q))
+    }
+    
+    quantile_feature_label <- function(scale, q) {
+      sprintf("Quantile q=%s (%s)", fmt_num(q), scale)
+    }
+    
+    add_feature_def <- function(
+      fid, label, description, feature_type, feature_scale, out_cols, params = list(),
+      feature_kind = "atomic", group_id = NA_character_, group_role = NA_character_,
+      member_ids = character(0)
+    ) {
+      if (is.null(rv$features[[fid]])) {
+        rv$features[[fid]] <- list(
+          id = fid,
+          label = label,
+          description = description,
+          feature_type = feature_type,
+          feature_scale = feature_scale,
+          out_cols = out_cols,
+          params = params,
+          feature_kind = feature_kind,
+          group_id = group_id,
+          group_role = group_role,
+          member_ids = member_ids
+        )
+        changed <<- TRUE
+      }
+      changed <<- add_to_order(fid) || changed
+    }
+    
+    for (sc in include_scales) {
+      if (isTRUE(include_mean)) {
+        add_feature_def(
+          fid = paste0("builtin__mean__", sc),
+          label = sprintf("Mean (%s)", sc),
+          description = sprintf("Posterior mean on the %s scale.", sc),
+          feature_type = "mean",
+          feature_scale = sc,
+          out_cols = sprintf("Mean (%s)", sc),
+          params = list()
+        )
+      }
+      
+      if (isTRUE(include_median)) {
+        add_feature_def(
+          fid = quantile_feature_id(sc, 0.5),
+          label = quantile_feature_label(sc, 0.5),
+          description = sprintf("Posterior median on the %s scale.", sc),
+          feature_type = "quantile",
+          feature_scale = sc,
+          out_cols = quantile_feature_label(sc, 0.5),
+          params = list(q = 0.5)
+        )
+      }
+      
+      for (ci in ci_widths) {
+        a <- (1 - ci) / 2
+        q_lower <- a
+        q_upper <- 1 - a
+        group_id <- ci_group_id(sc, ci)
+        qid_lower <- quantile_feature_id(sc, q_lower)
+        qid_upper <- quantile_feature_id(sc, q_upper)
+        qlab_lower <- quantile_feature_label(sc, q_lower)
+        qlab_upper <- quantile_feature_label(sc, q_upper)
+        nm <- sprintf("%s CI (%s)", fmt_num(ci), sc)
+        
+        add_feature_def(
+          fid = qid_lower,
+          label = qlab_lower,
+          description = sprintf(
+            "Posterior quantile at q=%s on the %s scale. Lower endpoint of the %s credible interval.",
+            fmt_num(q_lower),
+            sc,
+            fmt_num(ci)
+          ),
+          feature_type = "quantile",
+          feature_scale = sc,
+          out_cols = qlab_lower,
+          params = list(q = q_lower),
+          feature_kind = "atomic",
+          group_id = group_id,
+          group_role = "lower"
+        )
+        
+        add_feature_def(
+          fid = qid_upper,
+          label = qlab_upper,
+          description = sprintf(
+            "Posterior quantile at q=%s on the %s scale. Upper endpoint of the %s credible interval.",
+            fmt_num(q_upper),
+            sc,
+            fmt_num(ci)
+          ),
+          feature_type = "quantile",
+          feature_scale = sc,
+          out_cols = qlab_upper,
+          params = list(q = q_upper),
+          feature_kind = "atomic",
+          group_id = group_id,
+          group_role = "upper"
+        )
+        
+        add_feature_def(
+          fid = paste0("builtin__confidence_interval__", sc, "__ci", fmt_qname(ci)),
+          label = nm,
+          description = sprintf("%s%% posterior credible interval on the %s scale.", 100 * ci, sc),
+          feature_type = "confidence_interval",
+          feature_scale = sc,
+          out_cols = c(paste0(nm, " Lower"), paste0(nm, " Upper")),
+          params = list(ci = ci),
+          feature_kind = "composite",
+          group_id = group_id,
+          member_ids = c(qid_lower, qid_upper)
+        )
+      }
+    }
+    
+    if (changed) rv$refresh <- rv$refresh + 1L
+    invisible(NULL)
+  }
+  
+  register_default_virtual_features <- function() {
+    register_virtual_features(
+      ci_widths = c(0.5, 0.9, 0.95, 0.99),
+      include_mean = TRUE,
+      include_median = TRUE,
+      include_scales = c("counts", "proportion")
+    )
+  }
+  
+  
+  list(
+    rv = rv,
+    sync_base_columns = sync_base_columns,
+    register_virtual_features = register_virtual_features,
+    register_default_virtual_features = register_default_virtual_features,
+    choices = reactive({
+      rv$refresh
+      if (!length(rv$order)) return(stats::setNames(character(0), character(0)))
+      labs <- vapply(
+        rv$order,
+        function(fid) rv$features[[fid]]$label %||% fid,
+        character(1)
+      )
+      stats::setNames(rv$order, labs)
+    }),
+    features_df = reactive({
+      rv$refresh
+      if (!length(rv$order)) {
+        return(data.frame(
+          id = character(0),
+          label = character(0),
+          description = character(0),
+          feature_type = character(0),
+          feature_scale = character(0),
+          feature_kind = character(0),
+          group_id = character(0),
+          group_role = character(0),
+          stringsAsFactors = FALSE
+        ))
+      }
+      
+      do.call(rbind, lapply(rv$order, function(fid) {
+        f <- rv$features[[fid]]
+        data.frame(
+          id = f$id %||% fid,
+          label = f$label %||% fid,
+          description = f$description %||% "",
+          feature_type = f$feature_type %||% "other",
+          feature_scale = f$feature_scale %||% "other",
+          feature_kind = f$feature_kind %||% "atomic",
+          group_id = f$group_id %||% NA_character_,
+          group_role = f$group_role %||% NA_character_,
+          stringsAsFactors = FALSE
+        )
+      }))
+    })
+  )
 }

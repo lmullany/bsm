@@ -63,7 +63,8 @@ server <- function(input, output, session) {
   
   # inla model configuration reactives
   im <- reactiveValues(
-    model = NULL, data_cls = NULL, posterior=NULL, nforecasts=NULL
+    model = NULL, data_cls = NULL, posterior = NULL, nforecasts = NULL,
+    feature_store = NULL, feature_choices = NULL, features_df = NULL
   ) 
   
   # results reactives (data, plotsm etc; add to as needed for future reporting)

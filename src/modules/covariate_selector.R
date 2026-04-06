@@ -573,12 +573,32 @@ add_covariate_loader <- function(
     
     feats <- setdiff(cols, c(region_col,date_col))
     
-    updateSelectizeInput(session, "cov_features", selected = feats, server = TRUE)
+    updateSelectizeInput(
+      session,
+      "cov_features",
+      choices = feats,
+      selected = feats,
+      server = TRUE
+    )
   }) |> bindEvent(input$cov_select_all)
   
   observe({
     req(input$cov_unselect_all)
-    updateSelectizeInput(session, "cov_features", selected = character(0), server = TRUE)
+    req(cov_dt())
+    
+    cols <- names(cov_dt())
+    region_col <- null_if_blank(input$cov_region_col)
+    date_col   <- null_if_blank(input$cov_date_col)
+    
+    feats <- setdiff(cols, c(region_col, date_col))
+    
+    updateSelectizeInput(
+      session,
+      "cov_features",
+      choices = feats,
+      selected = character(0),
+      server = TRUE
+    )
   }) |> bindEvent(input$cov_unselect_all)
   
   # ---- Preview ----

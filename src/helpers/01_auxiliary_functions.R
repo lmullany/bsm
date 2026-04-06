@@ -340,9 +340,9 @@ load_saved_object_from_file <- function(path) {
   
 }
   
-# # Function to place info circle tool tip on a input label
-# # l must be a two element list, first element holds the label
-# # 2nd element holds the tool tip message
+# Function to place info circle tool tip on a input label
+# l must be a two element list, first element holds the label
+# 2nd element holds the tool tip message
 labeltt <- function(l, ...) {
   tt <- bslib::tooltip(
     trigger = list(
@@ -359,4 +359,11 @@ labeltt <- function(l, ...) {
 
 add_button_hover <- function(title,button) {
   div(title=title,button)
+}
+
+slugify <- function(x) {
+  x <- tolower(trimws(x %||% ""))
+  x <- gsub("[^a-z0-9]+", "_", x)
+  x <- gsub("^_+|_+$", "", x)
+  if (!nzchar(x)) "feature" else x
 }

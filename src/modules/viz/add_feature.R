@@ -36,23 +36,23 @@ add_feature_ui <- function(id) {
           ),
           # Dropdown tied to conditional panels
           selectInput(
-            inputId  = ns("feature"),
-            label    = "Select Feature Type",
-            choices  = c(
-              "Mean"                   = "mean",
-              "Quantile"               = "quantile",
-              "Confidence Interval"    = "confidence_interval",
+            inputId = ns("feature"),
+            label = "Select Feature Type",
+            choices = c(
+              "Mean" = "mean",
+              "Quantile" = "quantile",
+              "Confidence Interval" = "confidence_interval",
               "Exceedance Probability" = "exceedance_probability"
             ),
             selected = "mean"
           ),
           # Scale selection
           radioButtons(
-            inputId  = ns("feature_scale"),
-            label    = "Scale",
-            choices  = c("Counts" = "counts", "Proportion" = "proportion"),
+            inputId = ns("feature_scale"),
+            label = "Scale",
+            choices = c("Counts" = "counts", "Proportion" = "proportion"),
             selected = "counts",
-            inline   = TRUE
+            inline = TRUE
           ),
           
           # Conditional panels
@@ -79,12 +79,12 @@ add_feature_ui <- function(id) {
           ),
           tags$hr(),
           selectizeInput(
-            inputId  = ns("display_cols"),
-            label    = "Displayed columns",
-            choices  = character(0),
+            inputId = ns("display_cols"),
+            label = "Displayed columns",
+            choices = character(0),
             selected = character(0),
             multiple = TRUE,
-            options  = list(
+            options = list(
               placeholder = "Select columns to display…",
               plugins = list("remove_button")
             )
@@ -99,28 +99,64 @@ add_feature_ui <- function(id) {
         # Reactable Table RHS
         bslib::card(
           bslib::card_header(div(
-            style = "display:flex; align-items:center; justify-content:space-between; width:100%;",
-            span("Posterior Data")
-          ),
+              style = "display:flex; align-items:center; justify-content:space-between; width:100%;",
+              span("Posterior Data")
+            ),
           class = "bg-primary"),
           bslib::card_body(
             reactable::reactableOutput(ns("posterior_data"), width = "100%"),
             div(style="margin-top:10px;",
-                downloadButton(ns("download_posterior_csv"), "Download CSV", class = "btn-primary btn-sm")
+              downloadButton(ns("download_posterior_csv"), "Download CSV", class = "btn-primary btn-sm")
             )
           )
         )
-        
       )
     )
   )
 }
 
 
-add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
+add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature_store) {
   moduleServer(id, function(input, output, session) {
     options(shiny.fullstacktrace = TRUE)
     ns <- session$ns
+    
+    store <- reactive({
+      if (is.function(feature_store)) feature_store() else feature_store
+    })
+    
+    rvr <- reactive({
+      store()$rv
+    })
+    
+    feature_tbl <- reactive({
+      s <- store()
+      req(s)
+      as.data.frame(s$features_df())
+    })
+    
+    refresh_r <- reactive({
+      rvr()$refresh
+    })
+    
+    order_r <- reactive({
+      rvr()$order
+    })
+    
+    is_user_feature <- function(fid) grepl("^usr__", fid)
+    
+    is_virtual_feature <- function(f) {
+      !is.null(f$feature_type) &&
+        f$feature_type %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
+    }
+    
+    quantile_feature_id <- function(scale, q) {
+      paste0("builtin__quantile__", scale, "__q", fmt_qname(q))
+    }
+    
+    quantile_feature_label <- function(scale, q) {
+      sprintf("Quantile q=%s (%s)", fmt_num(q), scale)
+    }
     
     # Sidebar open/close
     sidebar_open <- reactiveVal(TRUE)
@@ -128,81 +164,82 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
       sidebar_open(!sidebar_open())
       shinyjs::toggleClass(ns("viz_wrap"), "sidebar-collapsed", !sidebar_open())
       updateActionButton(session, "toggle_sidebar", label = if (sidebar_open()) "Hide" else "Show")
-    })|> bindEvent(input$toggle_sidebar, ignoreInit = TRUE)
+    }) |> bindEvent(input$toggle_sidebar, ignoreInit = TRUE)
     
-    # Add features
-    rv <- reactiveValues(
-      next_id  = 0L,
-      features = list(),
-      order    = character(0),
-      last_id  = NULL,
-      probs    = 0.5,
-      refresh  = 0L,
-      force_select_fid = NULL
-    )
+    front_cols <- reactive({
+      req(im$data_cls)
+      d <- im$data_cls
+      unique(c("region", d$region_column, d$date_column, d$numerator_column, d$denominator_column))
+    })
     
-    feature_choice_map <- function() {
-      if (!length(rv$order)) return(setNames(character(0), character(0)))
-      setNames(
-        rv$order,
-        vapply(rv$order, function(fid) rv$features[[fid]]$label %||% fid, character(1))
-      )
-    }
+    ordered_choices_named <- reactive({
+      ft <- feature_tbl()
+      if (nrow(ft) == 0) return(stats::setNames(character(0), character(0)))
+      stats::setNames(ft$id, ft$label)
+    })
     
-    new_id <- function() {
-      rv$next_id <- rv$next_id + 1L
-      paste0("feat_", rv$next_id)
-    }
+    default_display_feature_ids <- reactive({
+      r <- rvr()
+      req(front_cols())
+      fids <- r$order %||% character(0)
+      if (!length(fids)) return(character(0))
+      
+      keep <- vapply(fids, function(fid) {
+        f <- r$features[[fid]]
+        if (is.null(f)) return(FALSE)
+        any((f$out_cols %||% character(0)) %in% front_cols())
+      }, logical(1))
+      
+      fids[keep]
+    })
     
     # default feature name/description
     default_feature_spec <- reactive({
       ft <- input$feature
       ft_name <- switch(
         ft,
-        mean = sprintf("Mean (%s)", 
-                       input$feature_scale),
-        quantile = sprintf("Quantile q=%s (%s)", 
-                           fmt_num(input$q_val %||% 0.50),
+        mean = sprintf("Mean (%s)", input$feature_scale),
+        quantile = sprintf("Quantile q=%s (%s)",
+          fmt_num(input$q_val %||% 0.50),
                            input$feature_scale),
-        confidence_interval = sprintf("%s CI (%s)", 
-                                      fmt_num(input$ci_val %||% 0.90),
+        confidence_interval = sprintf("%s CI (%s)",
+          fmt_num(input$ci_val %||% 0.90),
                                       input$feature_scale),
         exceedance_probability = sprintf("Exceedance probability with threshold %s (%s)",
-                                         fmt_num(input$exceed_val %||% 0.0),
+          fmt_num(input$exceed_val %||% 0.0),
                                          input$feature_scale),
         "Feature"
       )
-    
-      ft_desc <- switch(
-          ft,
-          mean = sprintf("Posterior mean of the fitted distribution on the %s scale.",
-                         input$feature_scale),
-          quantile = sprintf("Posterior quantile at q=%s on the %s scale.", 
-                             fmt_num(input$q_val %||% 0.50),
-                             input$feature_scale),
-          confidence_interval = sprintf("%s%% posterior credible interval on the %s scale.", 
-                                        fmt_num(100 * (input$ci_val %||% 0.90)),
-                                        input$feature_scale),
-          exceedance_probability = sprintf(
-                            "Posterior probability that the value exceeds %s on the %s scale.",
-                            fmt_num(input$exceed_val %||% 0.0),
-                            input$feature_scale
-                            ),
-          ""
-      )
-    list(name = ft_name, desc = ft_desc)
-    })
       
-    last_auto <- reactiveValues(name = "", desc = "")
+      ft_desc <- switch(
+        ft,
+        mean = sprintf("Posterior mean of the fitted distribution on the %s scale.",
+                       input$feature_scale),
+        quantile = sprintf("Posterior quantile at q=%s on the %s scale.", 
+          fmt_num(input$q_val %||% 0.50),
+                           input$feature_scale),
+        confidence_interval = sprintf("%s%% posterior credible interval on the %s scale.", 
+          fmt_num(100 * (input$ci_val %||% 0.90)),
+                                      input$feature_scale),
+        exceedance_probability = sprintf(
+          "Posterior probability that the value exceeds %s on the %s scale.",
+          fmt_num(input$exceed_val %||% 0.0),
+          input$feature_scale
+        ),
+        ""
+      )
+      
+      list(name = ft_name, desc = ft_desc)
+    })
     
     observe({
-        req(input$auto_labels)
-        if (!isTRUE(input$auto_labels)) return()
-        
-        spec <- default_feature_spec()
-        updateTextInput(session, "feature_name", value = spec$name)
-        updateTextInput(session, "feature_desc", value = spec$desc)
-      }
+      req(input$auto_labels)
+      if (!isTRUE(input$auto_labels)) return()
+      
+      spec <- default_feature_spec()
+      updateTextInput(session, "feature_name", value = spec$name)
+      updateTextInput(session, "feature_desc", value = spec$desc)
+    }
     )|>
       bindEvent(list(input$feature, input$q_val, input$ci_val, input$exceed_val, input$feature_scale),
                 ignoreInit = FALSE)
@@ -214,7 +251,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         updateTextInput(session, "feature_name", value = spec$name)
         updateTextInput(session, "feature_desc", value = spec$desc)
       }
-    }) |> bindEvent(input$auto_labels) 
+    }) |> bindEvent(input$auto_labels, ignoreInit = TRUE)
     
     # get values for inputed quantile level/CI level
     need_probs <- function(ft) {
@@ -228,7 +265,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
     }
     # all quantiles collected together
     all_probs <- reactive({
-      p <- sort(unique(c(0.5, rv$probs)))
+      r <- rvr()
+      p <- sort(unique(c(0.5, r$probs)))
       pmin(pmax(p, 0), 1)
     })
     
@@ -237,7 +275,9 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
     cache_key <- function(...) paste(..., sep = "||")
     cache_get <- function(k) feature_cache()[[k]]
     cache_set <- function(k, v) {
-      x <- feature_cache(); x[[k]] <- v; feature_cache(x)
+      x <- feature_cache()
+      x[[k]] <- v
+      feature_cache(x)
     }
     cache_clear <- function() feature_cache(list())
     observe({
@@ -246,6 +286,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
     
     # Feature
     observe({
+      r <- rvr()
       ft <- input$feature
       sc <- input$feature_scale
       
@@ -255,51 +296,23 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
       if (!nzchar(nm)) nm <- spec$name
       if (!nzchar(ds)) ds <- spec$desc
       
-      # --- gather reserved underlying names (existing) ---
-      reserved_names <- character(0)
-      if (length(rv$order)) {
-        reserved_names <- unlist(lapply(rv$order, function(fid) {
-          f <- rv$features[[fid]]
+      reserved <- character(0)
+      if (length(r$order)) {
+        reserved <- unique(unlist(lapply(r$order, function(fid) {
+          f <- r$features[[fid]]
           c(f$label, f$out_cols)
-        }))
+        })))
       }
-      reserved_base_names <- core_table_colnames()
+      reserved <- reserved[nzchar(reserved)]
       
-      reserved_under <- unique(c(reserved_names, reserved_base_names))
-      
-      # Map reserved underlying -> display
-      reserved_disp <- unique(unname(
-        map_table_names_to_display(
-          reserved_under,
-          quantile_suffix = NULL,
-          keep_names = TRUE
-        )
-      ))
-      
-      # Universe of strings you must not collide with
-      reserved_universe <- unique(c(reserved_under, reserved_disp))
-      
-      # --- proposed new names (underlying) ---
-      new_under <- c(
-        nm,
-        switch(
-          ft,
-          confidence_interval = c(paste0(nm, " Lower"), paste0(nm, " Upper")),
-          nm
-        )
+      out_cols <- switch(
+        ft,
+        confidence_interval = c(paste0(nm, " Lower"), paste0(nm, " Upper")),
+        nm
       )
       
-      # Map proposed new underlying -> display
-      new_disp <- unique(unname(
-        map_table_names_to_display(
-          new_under,
-          quantile_suffix = NULL,
-          keep_names = TRUE
-        )
-      ))
-      
-      # Block if either underlying OR display collides with anything reserved
-      block <- intersect(unique(c(new_under, new_disp)), reserved_universe)
+      proposed <- unique(c(nm, out_cols))
+      block <- intersect(proposed, reserved)
       if (length(block)) {
         showNotification(
           sprintf('A feature/column name "%s" conflicts with an existing name.', block[1]),
@@ -318,114 +331,194 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         list()
       )
       
-      out_cols <- switch(
-        ft,
-        confidence_interval = c(paste0(nm, " Lower"), paste0(nm, " Upper")),
-        nm
+      fid <- paste0(
+        "usr__", ft, "__", sc, "__", slugify(nm),
+        if (ft == "quantile") paste0("__q", fmt_qname(params$q %||% 0.5)) else "",
+        if (ft == "confidence_interval") paste0("__ci", fmt_qname(params$ci %||% 0.9)) else "",
+        if (ft == "exceedance_probability") paste0("__thr", slugify(as.character(params$threshold %||% 0))) else ""
       )
       
-      fid <- new_id()
-      rv$features[[fid]] <- list(
+      r$features[[fid]] <- list(
         id = fid,
         label = nm,
         description = ds,
         feature_type = ft,
         feature_scale = sc,
         out_cols = out_cols,
-        params = params
+        params = params,
+        feature_kind = if (ft == "confidence_interval") "composite" else "atomic"
       )
-      rv$order <- c(rv$order, fid)
-      rv$last_id <- fid
+      if (!fid %in% r$order) r$order <- c(r$order, fid)
+      
+      if (ft == "confidence_interval") {
+        ci <- params$ci %||% 0.90
+        a <- (1 - ci) / 2
+        q_specs <- list(
+          list(q = a, role = "lower"),
+          list(q = 1 - a, role = "upper")
+        )
+        q_ids <- vapply(q_specs, function(x) quantile_feature_id(sc, x$q), character(1))
+        group_id <- paste0("usr__ci_group__", sc, "__ci", fmt_qname(ci), "__", slugify(nm))
+        
+        for (i in seq_along(q_specs)) {
+          q <- q_specs[[i]]$q
+          q_role <- q_specs[[i]]$role
+          qid <- q_ids[[i]]
+          
+          if (is.null(r$features[[qid]])) {
+            q_label <- quantile_feature_label(sc, q)
+            r$features[[qid]] <- list(
+              id = qid,
+              label = q_label,
+              description = sprintf(
+                "Posterior quantile at q=%s on the %s scale. %s endpoint of the %s credible interval.",
+                fmt_num(q),
+                sc,
+                tools::toTitleCase(q_role),
+                fmt_num(ci)
+              ),
+              feature_type = "quantile",
+              feature_scale = sc,
+              out_cols = q_label,
+              params = list(q = q),
+              feature_kind = "atomic",
+              group_id = group_id,
+              group_role = q_role
+            )
+            if (!qid %in% r$order) r$order <- c(r$order, qid)
+          }
+        }
+        
+        r$features[[fid]]$group_id <- group_id
+        r$features[[fid]]$member_ids <- q_ids
+      }
+      
+      r$last_id <- fid
       
       qs <- need_probs(ft)
-      if (length(qs)) {
-        rv$probs <- sort(unique(c(rv$probs, qs)))
-        rv$refresh <- rv$refresh + 1L
+      if (length(qs)) r$probs <- sort(unique(c(r$probs, qs)))
+      
+      r$force_select_fid <- fid
+      r$refresh <- r$refresh + 1L
+      
+      showNotification(sprintf("Added feature: %s", nm), type = "message")
+    }) |> bindEvent(input$add_feature, ignoreInit = TRUE)
+    
+    feature_choice_map <- reactive({
+      r <- rvr()
+      fids <- r$order %||% character(0)
+      fids <- fids[is_user_feature(fids)]
+      if (!length(fids)) return(setNames(character(0), character(0)))
+      labs <- vapply(fids, function(fid) r$features[[fid]]$label %||% fid, character(1))
+      stats::setNames(fids, labs)
+    })
+    
+    observe({
+      ch <- feature_choice_map()
+      if (!length(ch)) {
+        showNotification("No user-added features to delete yet.", type = "warning")
+        return()
       }
       
-      choices <- setNames(
-        rv$order,
-        vapply(rv$order, function(x) rv$features[[x]]$label, character(1))
+      showModal(modalDialog(
+        title = "Delete a feature",
+        selectInput(
+          inputId = ns("delete_feature_pick"),
+          label = "Select feature to delete",
+          choices = ch,
+          selected = unname(ch[[length(ch)]])
+        ),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("confirm_delete_prompt"), "Delete…", class = "btn btn-danger")
+        ),
+        easyClose = TRUE
+      ))
+    }) |> bindEvent(input$delete_feature, ignoreInit = TRUE)
+    
+    observe({
+      r <- rvr()
+      fid <- input$delete_feature_pick
+      if (is.null(fid) || !nzchar(fid)) return()
+      
+      if (is.null(r$features[[fid]])) {
+        showNotification("That feature no longer exists.", type = "warning")
+        removeModal()
+        return()
+      }
+      
+      removeModal()
+      
+      lbl <- r$features[[fid]]$label %||% fid
+      
+      showModal(modalDialog(
+        title = "Confirm deletion",
+        tags$div(
+          class = "alert alert-warning",
+          tags$strong("This action cannot be undone."),
+          tags$div(sprintf('You are about to delete: "%s".', lbl))
+        ),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("confirm_delete_ok"), "Yes, delete", class = "btn btn-danger")
+        ),
+        easyClose = FALSE
+      ))
+    }) |> bindEvent(input$confirm_delete_prompt, ignoreInit = TRUE)
+    
+    observe({
+      r <- rvr()
+      fid <- input$delete_feature_pick
+      removeModal()
+      
+      if (is.null(fid) || !nzchar(fid) || is.null(r$features[[fid]])) {
+        showNotification("Feature not found.", type = "error")
+        return()
+      }
+      
+      lbl <- r$features[[fid]]$label %||% fid
+      r$features[[fid]] <- NULL
+      r$order <- setdiff(r$order, fid)
+      if (identical(r$last_id, fid)) r$last_id <- tail(r$order, 1L)
+      
+      cur_sel <- isolate(input$display_cols %||% character(0))
+      new_sel <- setdiff(cur_sel, fid)
+      
+      updateSelectizeInput(
+        session,
+        "display_cols",
+        choices = ordered_choices_named(),
+        selected = new_sel,
+        server = TRUE
       )
       
-      isolate({
-        cur <- input$display_cols %||% character(0)
-        if (length(cur) == 0) cur <- core_cols()
-        updateSelectizeInput(
-          session,
-          "display_cols",
-          choices  = ordered_choices_named(),
-          selected = unique(c(cur, fid)),
-          server   = TRUE
-        )
-      })
-      
-      rv$force_select_fid <- fid
-      showNotification(sprintf("Added feature: %s", nm), type = "message")
-    }) |>bindEvent(input$add_feature, ignoreInit = TRUE)
+      r$refresh <- r$refresh + 1L
+      showNotification(sprintf("Deleted feature: %s", lbl), type = "message")
+    }) |> bindEvent(input$confirm_delete_ok, ignoreInit = TRUE)
     
-    
-    core_cols <- reactive({
-      core_table_colnames() %||% character(0)
-    })
-    
-    feature_out_cols <- reactive({
-      if (!length(rv$order)) return(character(0))
-      unlist(lapply(rv$order, function(fid) rv$features[[fid]]$out_cols))
-    })
-    
-    covariate_cols <- reactive({
-      req(im$posterior, im$data_cls)   # or whichever signals covariates are available
-      setdiff(names(data.table::as.data.table(im$posterior)), core_cols() %||% character(0))
-    })
-    
-    # Order choices list to be sorted by: base, features, covariates
-    ordered_choices_named <- reactive({
-      base <- core_cols()
-      covs <- covariate_cols()
-      # Use display names for columns
-      base_choices <- pretty_base_choices(base)
-      cov_choices  <- pretty_base_choices(covs)
-      
-      # Use feature display name
-      feature_choices <- if (length(rv$order)) {
-        labs <- vapply(rv$order, function(fid) rv$features[[fid]]$label %||% fid, character(1))
-        stats::setNames(rv$order, labs)
-      } else stats::setNames(character(0), character(0))
-      
-      c(base_choices, feature_choices, cov_choices)
-    })
-    
-    
-    
-    # update the single selectize input when relevant pieces change
     observe({
-      choices <- ordered_choices_named()
-      cur_sel <- input$display_cols %||% character(0)
-      vals <- unname(choices)  # valid underlying values (colnames + feature IDs)
-      default_sel <- intersect(core_cols(), vals)
+      r <- rvr()
+      ch <- ordered_choices_named()
+      vals <- unname(ch)
       
-      if (length(cur_sel) == 0) {
-        selected <- default_sel
-      } else {
-        selected <- intersect(cur_sel, vals)
-        if (length(selected) == 0 && length(default_sel) > 0) selected <- default_sel
-      }
+      cur <- input$display_cols %||% character(0)
+      cur <- intersect(cur, vals)
       
-      if (!is.null(rv$force_select_fid) && rv$force_select_fid %in% unname(choices)) {
-        selected <- unique(c(selected, rv$force_select_fid))
-        rv$force_select_fid <- NULL
+      if (!length(cur)) cur <- intersect(default_display_feature_ids(), vals)
+      
+      if (!is.null(r$force_select_fid) && r$force_select_fid %in% vals) {
+        cur <- unique(c(cur, r$force_select_fid))
+        r$force_select_fid <- NULL
       }
       
       updateSelectizeInput(
         session,
         "display_cols",
-        choices  = choices,
-        selected = selected,
-        server   = TRUE
+        choices = ch,
+        selected = cur,
+        server = TRUE
       )
-    }) |>bindEvent(list(rv$order, im$posterior, im$data_cls, core_cols(), feature_out_cols(), covariate_cols()), ignoreNULL = FALSE, ignoreInit = FALSE)
-    
+    }) |> bindEvent(list(refresh_r(), order_r(), ordered_choices_named()), ignoreInit = FALSE)
     
     # Posterior
     get_mean_dt <- function(use_count_scale = FALSE) {
@@ -440,7 +533,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
       if (is.null(mu)) return(NULL)
       
       dt <- data.table::as.data.table(dcls$data)
-    
+      
       keep <- intersect(unique(c(reg_col, date_col, denom_col)), names(dt))
       if (length(keep) == 0) return(data.table::data.table())
       
@@ -462,7 +555,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
     }
     
     qdf_props <- reactive({
-      req(rv$refresh > 0)
+      req(im$model, im$data_cls, length(all_probs()) > 0)
       qdf <- get_posterior_quantiles(im$model, im$data_cls, probs = all_probs(), use_count_scale = FALSE)
       qdf <- normalize_qdf_names(qdf)
       data.table::setDT(qdf)
@@ -470,7 +563,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
     })
     
     qdf_counts <- reactive({
-      req(rv$refresh > 0)
+      req(im$model, im$data_cls, length(all_probs()) > 0)
       qdf <- get_posterior_quantiles(im$model, im$data_cls, probs = all_probs(), use_count_scale = TRUE)
       qdf <- normalize_qdf_names(qdf)
       
@@ -487,9 +580,13 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
     apply_feature <- function(out, f, dcls) {
       ft <- f$feature_type
       sc <- f$feature_scale
-      label <- f$label
+      out_cols <- f$out_cols %||% character(0)
       
-      for (cc in f$out_cols) if (!cc %in% names(out)) out[, (cc) := NA_real_]
+      if (!length(out_cols)) return(out)
+      
+      for (cc in out_cols) {
+        if (!cc %in% names(out)) out[, (cc) := NA_real_]
+      }
       
       if (ft == "mean") {
         use_count <- (sc == "counts")
@@ -501,19 +598,24 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         }
         mcol <- if (use_count) "mean_count" else "mean_prop"
         out2 <- merge_by_region_date(out, res, dcls)
-        out2[, (label) := as.numeric(get(mcol))]
+        out2[, (out_cols[[1]]) := as.numeric(get(mcol))]
         out2[, (mcol) := NULL]
         return(out2[])
       }
       
       if (ft == "quantile") {
         qn <- fmt_qname(f$params$q %||% 0.5)
-        if (sc == "counts") { qdf <- qdf_counts(); src <- paste0(qn, "_count") }
-        else { qdf <- qdf_props(); src <- qn }
+        if (sc == "counts") {
+          qdf <- qdf_counts()
+          src <- paste0(qn, "_count")
+        } else {
+          qdf <- qdf_props()
+          src <- qn
+        }
         
         qdf_one <- slice_qdf(qdf, dcls, src)
         out2 <- merge_by_region_date(out, qdf_one, dcls)
-        out2[, (label) := as.numeric(get(src))]
+        out2[, (out_cols[[1]]) := as.numeric(get(src))]
         out2[, (src) := NULL]
         return(out2[])
       }
@@ -523,8 +625,6 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         a <- (1 - ci) / 2
         qL <- fmt_qname(a)
         qU <- fmt_qname(1 - a)
-        cL <- paste0(label, " Lower")
-        cU <- paste0(label, " Upper")
         
         if (sc == "counts") {
           qdf <- qdf_counts()
@@ -538,8 +638,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         
         qdf_two <- slice_qdf(qdf, dcls, c(srcL, srcU))
         out2 <- merge_by_region_date(out, qdf_two, dcls)
-        out2[, (cL) := as.numeric(get(srcL))]
-        out2[, (cU) := as.numeric(get(srcU))]
+        out2[, (out_cols[[1]]) := as.numeric(get(srcL))]
+        out2[, (out_cols[[2]]) := as.numeric(get(srcU))]
         out2[, c(srcL, srcU) := NULL]
         return(out2[])
       }
@@ -561,181 +661,61 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         }
         out2 <- merge_by_region_date(out, res, dcls)
         ex_col <- grep("^exceedance_prob", names(out2), value = TRUE)[1]
-        out2[, (label) := as.numeric(get(ex_col))]
+        out2[, (out_cols[[1]]) := as.numeric(get(ex_col))]
         out2[, (ex_col) := NULL]
         return(out2[])
       }
       out
     }
-  
-    observe({
-      ch <- feature_choice_map()
-      if (!length(ch)) {
-        showNotification("No features to delete yet.", type = "warning")
-        return()
-      }
-      
-      showModal(modalDialog(
-        title = "Delete a feature",
-        selectInput(
-          inputId  = ns("delete_feature_pick"),
-          label    = "Select feature to delete",
-          choices  = ch,
-          selected = unname(ch[[length(ch)]])
-        ),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("confirm_delete_prompt"), "Delete…", class = "btn btn-danger")
-        ),
-        easyClose = TRUE
-      ))
-    }) |>bindEvent(input$delete_feature, ignoreInit = TRUE)
-    
-    observe({
-      fid <- input$delete_feature_pick
-      if (is.null(fid) || !nzchar(fid)) return()
-      
-      # if user opened the modal and the feature list changed underneath them
-      if (is.null(rv$features[[fid]])) {
-        showNotification("That feature no longer exists.", type = "warning")
-        removeModal()
-        return()
-      }
-      
-      removeModal()
-      
-      lbl <- rv$features[[fid]]$label %||% fid
-      
-      showModal(modalDialog(
-        title = "Confirm deletion",
-        tags$div(
-          class = "alert alert-warning",
-          tags$strong("This action cannot be undone."),
-          tags$div(sprintf('You are about to delete: "%s".', lbl))
-        ),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("confirm_delete_ok"), "Yes, delete", class = "btn btn-danger")
-        ),
-        easyClose = FALSE
-      ))
-    }) |>bindEvent(input$confirm_delete_prompt, ignoreInit = TRUE)
-    
-    observe({
-      fid <- input$delete_feature_pick
-      removeModal()
-      
-      if (is.null(fid) || !nzchar(fid) || is.null(rv$features[[fid]])) {
-        showNotification("Feature not found.", type = "error")
-        return()
-      }
-      
-      lbl <- rv$features[[fid]]$label %||% fid
-      rv$features[[fid]] <- NULL
-      rv$order <- setdiff(rv$order, fid)
-      if (identical(rv$last_id, fid)) rv$last_id <- tail(rv$order, 1L)
-      
-      cur_sel <- isolate(input$display_cols %||% character(0))
-      new_sel <- setdiff(cur_sel, fid)
-      
-      updateSelectizeInput(
-        session,
-        "display_cols",
-        choices  = ordered_choices_named(),
-        selected = new_sel,
-        server   = TRUE
-      )
-      
-      rv$refresh <- rv$refresh + 1L
-      showNotification(sprintf("Deleted feature: %s", lbl), type = "message")
-    }) |>bindEvent(input$confirm_delete_ok, ignoreInit = TRUE)
-    
-
-    
-    
-    front_cols <- reactive({
-      d <- im$data_cls
-      c("region", d$region_column, d$date_column, d$numerator_column, d$denominator_column)
-    })
-    
-    core_table_colnames <- reactive({
-      req(im$posterior, im$data_cls)
-      out <- data.table::as.data.table(im$posterior)
-      front0 <- intersect(front_cols(), names(out))
-      front0
-    })
-    
-    covariate_colnames <- reactive({
-      req(im$posterior, im$data_cls)
-      out <- data.table::as.data.table(im$posterior)
-      setdiff(names(out), core_table_colnames() %||% character(0))
-    })
-    
-    
-    observe({
-      core <- core_table_colnames() %||% character(0)
-      choices <- pretty_base_choices(core)
-      updateSelectizeInput(
-        session,
-        "base_cols",
-        choices  = choices,
-        selected = core,
-        server   = TRUE
-      )
-    }) |>bindEvent(list(im$posterior, im$data_cls), ignoreInit = TRUE)
-
-    observe({
-      covs <- covariate_colnames() %||% character(0)
-      choices <- pretty_base_choices(covs)
-      
-      cur_sel <- input$cov_cols %||% character(0)
-      
-      updateSelectizeInput(
-        session,
-        "cov_cols",
-        choices  = choices,
-        selected = intersect(cur_sel, covs),
-        server   = TRUE
-      )
-    }) |>bindEvent(list(im$posterior, im$data_cls), ignoreInit = TRUE)
-    
     
     # Posterior table
     posterior_tbl <- reactive({
-      req(im$posterior, im$data_cls)
+      req(im$data_cls)
+      r <- rvr()
       dcls <- im$data_cls
       
-      out <- data.table::as.data.table(im$posterior)
-      # Selected features (feature IDs)
+      base_source <- if (!is.null(im$posterior)) im$posterior else im$data_cls$data
+      req(base_source)
+      
+      out <- data.table::as.data.table(base_source)
+      
       sel <- input$display_cols %||% character(0)
-      feat_ids_selected <- intersect(sel, rv$order)
+      if (!length(sel)) sel <- default_display_feature_ids()
+      sel <- intersect(sel, r$order %||% character(0))
       
-      core <- core_table_colnames() %||% character(0)
-      base_selected <- if (length(sel) == 0) core else intersect(sel, core)
-      base_keep <- intersect(base_selected, names(out))
+      base_keep <- unique(unlist(lapply(sel, function(fid) {
+        f <- r$features[[fid]]
+        if (is.null(f) || is_virtual_feature(f)) return(character(0))
+        f$out_cols %||% character(0)
+      })))
       
-      cov_selected <- setdiff(sel, c(core, rv$order))
-      cov_keep <- intersect(cov_selected, names(out))
+      base_front <- intersect(front_cols(), names(out))
+      cols_present <- unique(c(base_front, intersect(base_keep, names(out))))
+      out <- out[, ..cols_present]
       
-      cols_to_keep <- unique(c(base_keep, cov_keep))
-      cols_to_keep <- intersect(cols_to_keep, names(out))
-      out <- out[, cols_to_keep, with = FALSE]
+      failed <- character(0)
       
-      if (length(sel) == 0) {
-        feat_ids_to_apply <- rv$last_id %||% character(0)
-      } else {
-        feat_ids_to_apply <- intersect(sel, rv$order)
-      }
-
-      for (fid in feat_ids_to_apply) {
-        f <- rv$features[[fid]]
-        if (!is.null(f)) {
-          out <- apply_feature(out, f, dcls)
+      for (fid in sel) {
+        f <- r$features[[fid]]
+        if (!is.null(f) && is_virtual_feature(f)) {
+          out <- tryCatch(
+            apply_feature(out, f, dcls),
+            error = function(e) {
+              failed <<- c(failed, sprintf("%s: %s", f$label %||% fid, conditionMessage(e)))
+              out
+            }
+          )
         }
       }
       
-      # Keep base columns first
-      base_front <- intersect(base_keep, names(out))
+      if (length(failed)) {
+        showNotification(
+          paste("Some derived features could not be computed:", paste(failed, collapse = " | ")),
+          type = "warning",
+          duration = 8
+        )
+      }
+      
       out[, c(base_front, setdiff(names(out), base_front)), with = FALSE][]
     })
     
@@ -743,23 +723,36 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
     
     output$posterior_data <- reactable::renderReactable({
       req(input$dt_digits)
-      df <- posterior_tbl(); req(df)
+      df <- posterior_tbl()
+      req(df)
+      
+      df <- tryCatch(as.data.frame(df), error = function(e) NULL)
+      validate(
+        need(!is.null(df), "No table available"),
+        need(ncol(df) > 0, "No columns available")
+      )
+      
+      if (is.null(names(df))) {
+        names(df) <- paste0("V", seq_len(ncol(df)))
+      }
       
       front <- intersect(front_cols(), names(df))
-      df <- df[, c(front, setdiff(names(df), front)), with = FALSE]
+      df <- df[, c(front, setdiff(names(df), front)), drop = FALSE]
       
-      # display names
-      display_names <- map_table_names_to_display(names(df), quantile_suffix = NULL, keep_names = TRUE)
+      display_names <- tryCatch(
+        map_table_names_to_display(names(df), quantile_suffix = NULL, keep_names = TRUE),
+        error = function(e) {
+          stats::setNames(names(df), names(df))
+        }
+      )
       if (is.null(names(display_names))) names(display_names) <- names(df)
       
       # Get the columns to round
       digits <- max(0, min(10, as.integer(input$dt_digits %||% 2)))
       date_cols <- names(df)[sapply(df, inherits, "Date")]
       
-      # only round feature columns
-      front <- intersect(front_cols(), names(df))
       feature_cols <- setdiff(names(df), front)
-      cols_to_round <- feature_cols[vapply(df[, ..feature_cols], is.numeric, logical(1))]
+      cols_to_round <- feature_cols[vapply(df[, feature_cols, drop = FALSE], is.numeric, logical(1))]
       
       # column defs
       col_defs <- lapply(names(df), function(col) {
@@ -769,30 +762,31 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         is_date <- col %in% date_cols
         is_rounded <- col %in% cols_to_round
         # define column filters
+        
         if (is_num) {
           reactable::colDef(
             name = label,
-            align        = "right",
-            filterable   = TRUE,
+            align = "right",
+            filterable = TRUE,
             filterMethod = if (exists("numeric_range_filter_method", envir = globalenv())) numeric_range_filter_method else NULL,
-            filterInput  = if (exists("numeric_range_filter_input", envir = globalenv()))
+            filterInput = if (exists("numeric_range_filter_input", envir = globalenv()))
               function(values, name) numeric_range_filter_input(values, name, table_id) else NULL,
-            format       = if (is_rounded) reactable::colFormat(digits = digits) else NULL
+            format = if (is_rounded) reactable::colFormat(digits = digits) else NULL
           )
         } else if (is_date) {
           reactable::colDef(
-            name         = label,
-            filterable   = TRUE,
+            name = label,
+            filterable = TRUE,
             filterMethod = if (exists("date_filter_method", envir = globalenv())) date_filter_method else NULL,
-            filterInput  = if (exists("date_filter_input", envir = globalenv()))
+            filterInput = if (exists("date_filter_input", envir = globalenv()))
               function(values, name) date_filter_input(values, name, table_id) else NULL
           )
         } else {
           reactable::colDef(
-            name         = label,
-            filterable   = TRUE,
+            name = label,
+            filterable = TRUE,
             filterMethod = if (exists("checkbox_filter_method", envir = globalenv())) checkbox_filter_method else NULL,
-            filterInput  = if (exists("checkbox_filter_input", envir = globalenv()))
+            filterInput = if (exists("checkbox_filter_input", envir = globalenv()))
               function(values, name) checkbox_filter_input(values, name, table_id) else NULL
           )
         }
@@ -800,6 +794,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
       names(col_defs) <- names(df)
       
       page_size <- min(nrow(df), 10L)
+      if (page_size < 1) page_size <- 1L
       
       reactable::reactable(
         df,
@@ -808,16 +803,16 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         pageSizeOptions = c(5, 10, 15, 25, 50, 100),
         searchable = TRUE,
         filterable = TRUE,
-        highlight  = TRUE,
-        striped    = TRUE,
-        bordered   = TRUE,
-        resizable  = TRUE,
-        wrap       = TRUE,
+        highlight = TRUE,
+        striped = TRUE,
+        bordered = TRUE,
+        resizable = TRUE,
+        wrap = TRUE,
         defaultColDef = reactable::colDef(
           minWidth = 120,
           headerStyle = list(
             whiteSpace = "normal",
-            wordBreak  = "break-word",
+            wordBreak = "break-word",
             lineHeight = "1.1"
           ),
           style = list(whiteSpace = "nowrap")
@@ -826,18 +821,26 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL) {
         theme = BS_REACTABLE_THEME
       )
     })
-
+    
     outputOptions(output, "posterior_data", suspendWhenHidden = TRUE)
     
     output$download_posterior_csv <- downloadHandler(
       filename = function() paste0("posterior_table_", Sys.Date(), ".csv"),
       content = function(file) {
-        df <- posterior_tbl(); req(df)
+        df <- posterior_tbl()
+        req(df)
+        df <- as.data.frame(df)
         front <- intersect(front_cols(), names(df))
-        df <- df[, c(front, setdiff(names(df), front)), with = FALSE]
+        df <- df[, c(front, setdiff(names(df), front)), drop = FALSE]
         data.table::fwrite(df, file)
       }
     )
+    
+    return(list(
+      feature_choices = reactive(store()$choices()),
+      features_df = reactive(store()$features_df()),
+      refresh = reactive(rvr()$refresh)
+    ))
   })
 }
 
@@ -863,7 +866,7 @@ slice_qdf <- function(qdf, data_cls, cols_keep) {
   data.table::setDT(qdf)
   reg_col  <- data_cls$region_column
   date_col <- data_cls$date_column
-  if (reg_col %in% names(qdf))  qdf[, (reg_col) := as.character(get(reg_col))]
+  if (reg_col %in% names(qdf)) qdf[, (reg_col) := as.character(get(reg_col))]
   keep <- intersect(c(reg_col, date_col, cols_keep), names(qdf))
   if (length(keep) == 0) return(data.table::data.table())
   qdf[, ..keep]
@@ -879,10 +882,6 @@ pretty_base_choices <- function(cols) {
   }
   stats::setNames(cols, labels)
 }
-
-
-# Merge dateframes on date and region columns
-`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 merge_by_region_date <- function(x, y, data_cls) {
   data.table::setDT(x); data.table::setDT(y)
