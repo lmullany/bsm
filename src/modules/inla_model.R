@@ -1500,6 +1500,9 @@ init_feature_df <- function() {
     sync_base_columns = sync_base_columns,
     register_virtual_features = register_virtual_features,
     register_default_virtual_features = register_default_virtual_features,
+    get_feature = function(fid) {
+      rv$features[[fid]]
+    },
     choices = reactive({
       rv$refresh
       if (!length(rv$order)) return(stats::setNames(character(0), character(0)))

@@ -3,6 +3,8 @@
 # contract no. 75D30124C19958
 
 
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
+
 counties_by_state <- function(states) {
   county_to_fips<-data.table::fread("data/Region_to_fips_mapping_dup_fips.csv")
   county_to_fips$countyfips<-str_pad(as.character(county_to_fips$countyfips), width = 5, pad = "0", side = "left")

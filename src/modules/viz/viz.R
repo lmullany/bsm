@@ -31,7 +31,7 @@ viz_server <- function(id, dc, im, results) {
     }
     
     viz_regional_map_server(id = "viz_region", dc, im, results)
-    viz_time_series_server(id = "viz_time_series", im, results)
+    viz_time_series_server(id = "viz_time_series", im, results, feature_store = feature_store_getter)
     viz_posterior_server(id = "viz_posterior", im, results)
     add_feature_server("add_feature", dc, im, results, feature_store = feature_store_getter)
     

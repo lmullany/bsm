@@ -606,16 +606,9 @@ plot_ly_time_series <- function(
     max_y_val = NULL
 ) {
   
-  
-  # Let's get the data just for this q_value
-  # This could break, because it is treating numeric
-  # as character, and we could get some unfortunate results
   q = as.numeric(ci)
-  probs = c("0.5", as.character(0.5 + c(-q/2, q/2)/100))
-  new_names = c("median", "lower", "upper")
-  keep_cols = c("countyfips", "date","type", "observed", probs)
+  keep_cols = intersect(c("date", "type", "observed", "median", "lower", "upper"), names(dt))
   dt <- dt[, .SD, .SDcols=keep_cols]
-  setnames(dt, old=probs, new=new_names)
   
   yref <- paste0("y", if (axis_id == 1) "" else axis_id)
   axis_name <- paste0("yaxis", if (axis_id == 1) "" else axis_id)
@@ -632,7 +625,7 @@ plot_ly_time_series <- function(
                 x = ~date, ymin = ~lower, ymax = ~upper,
                 fillcolor = 'rgba(173,216,230,0.6)',  # Light blue
                 line = list(color = 'rgba(0,0,0,0)'),
-                name = '95% Credible Interval (Historical)',
+                name = sprintf('%2.0f%% Credible Interval (Historical)', q),
                 legendgroup = "observed",
                 showlegend = FALSE, 
                 hoverinfo = "none")
@@ -644,7 +637,7 @@ plot_ly_time_series <- function(
                 x = ~date, ymin = ~lower, ymax = ~upper,
                 fillcolor = 'rgba(144,238,144,0.6)',  # Light green
                 line = list(color = 'rgba(0,0,0,0)'),
-                name = '95% Credible Interval (Forecast)',
+                name = sprintf('%2.0f%% Credible Interval (Forecast)', q),
                 legendgroup = "future",
                 showlegend = FALSE, 
                 hoverinfo ="none"
@@ -691,7 +684,7 @@ plot_ly_time_series <- function(
      
   
   # Layout
-  if(is.null(location_display_name)) location_display_name = unique(dt$countyfips)
+  if(is.null(location_display_name)) location_display_name = "Time Series"
   
   # per-panel or global max
   if(!is.null(max_y_val)) y_max <- max_y_val
@@ -769,22 +762,111 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, fi
   return(p)
 }
 
+get_ts_data_cls_region_col <- function(data_cls) {
+  data_cls$region_column %||% data_cls$region_col
+}
+
+get_ts_data_cls_date_col <- function(data_cls) {
+  data_cls$date_column %||% data_cls$date_col
+}
+
+get_time_series_region_choices <- function(data_cls, display_col = "region") {
+  region_col <- get_ts_data_cls_region_col(data_cls)
+  req(!is.null(region_col), region_col %in% names(data_cls$data))
+  
+  cols <- unique(c(region_col, display_col))
+  cols <- cols[cols %in% names(data_cls$data)]
+  req(length(cols) >= 1)
+  
+  dt <- data.table::as.data.table(data_cls$data)[, ..cols]
+  dt <- unique(dt)
+  
+  if (!(display_col %in% names(dt))) {
+    dt[, (display_col) := as.character(get(region_col))]
+  }
+  
+  stats::setNames(dt[[region_col]], dt[[display_col]])
+}
+
+build_time_series_plot_spec <- function(
+    region_ids,
+    ci,
+    fixed_y = FALSE,
+    display_col = "region",
+    use_count = FALSE,
+    future_steps = 0
+) {
+  list(
+    regions = region_ids %||% character(0),
+    ci = as.numeric(ci),
+    fixed_y = isTRUE(fixed_y),
+    display_col = display_col,
+    use_count = isTRUE(use_count),
+    future_steps = as.integer(future_steps %||% 0)
+  )
+}
+
+assemble_time_series_subplots <- function(plots) {
+  subplot(
+    plots,
+    nrows = ceiling(length(plots)/3),
+    shareX = TRUE,
+    titleX = TRUE,
+    titleY = TRUE,
+    margin = 0.04
+  ) %>%
+    layout(
+      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.1),
+      margin = list(b = 80)
+    )
+}
+
+build_time_series_plotly <- function(ts_plot_data, spec, ...) {
+  region_ids <- spec$regions %||% character(0)
+  validate(need(length(region_ids) > 0, "Must have a least one region selected"))
+  
+  global_max <- NULL
+  if (isTRUE(spec$fixed_y)) {
+    global_max <- get_max_y_over_plots(region_ids, ts_plot_data, spec$ci)
+  }
+  
+  plots <- lapply(seq_along(region_ids), function(i) {
+    region_id <- region_ids[[i]]
+    d <- ts_plot_data[[region_id]]
+    validate(need(!is.null(d), sprintf("No time series data available for region %s", region_id)))
+    
+    display_name <- region_id
+    if (!is.null(spec$display_col) && spec$display_col %in% names(d)) {
+      display_name <- unique(d[[spec$display_col]])[1]
+    }
+    
+    plot_ly_time_series(
+      dt = d,
+      show_legend = (i == 1),
+      location_display_name = display_name,
+      axis_id = i,
+      ci = spec$ci,
+      max_y_val = global_max,
+      ...
+    )
+  })
+  
+  assemble_time_series_subplots(plots)
+}
+
 get_max_y_over_plots <- function(names, plot_data, ci) {
   
   
     global_max <- NULL
   
-    q <- as.numeric(ci)
-    upper_name <- as.character(0.5 + q / 200)
-    
     vals <- vapply(
       names,
       function(f) {
         d <- plot_data[[f]]
-        if (is.null(d) || !(upper_name %in% names(d))) {
+        if (is.null(d) || !("upper" %in% names(d))) {
           return(NA_real_)
         }
-        mx <- suppressWarnings(max(d[[upper_name]], na.rm = TRUE))
+        mx <- suppressWarnings(max(d[["upper"]], na.rm = TRUE))
         if (!is.finite(mx)) NA_real_ else mx
       },
       numeric(1)
@@ -798,7 +880,96 @@ get_max_y_over_plots <- function(names, plot_data, ci) {
     global_max
 }
 
+format_time_series_prob_name <- function(q) {
+  out <- prettyNum(as.numeric(q), digits = 12, drop0trailing = TRUE)
+  sub("^\\.", "0.", out)
+}
+
+prepare_time_series_feature_plot_data <- function(model, data_cls, spec, ci_feature, median_feature = NULL) {
+  byvar <- get_ts_data_cls_region_col(data_cls)
+  date_col <- get_ts_data_cls_date_col(data_cls)
+  req(!is.null(byvar), !is.null(date_col))
+  req(!is.null(ci_feature), identical(ci_feature$feature_type, "confidence_interval"))
   
+  ci <- as.numeric(ci_feature$params$ci %||% NA_real_)
+  req(is.finite(ci), ci > 0, ci < 1)
+  
+  median_q <- as.numeric(median_feature$params$q %||% 0.5)
+  q_lower <- (1 - ci) / 2
+  q_upper <- 1 - q_lower
+  probs <- sort(unique(c(median_q, q_lower, q_upper)))
+  
+  d <- get_posterior_quantiles(
+    model,
+    data_cls,
+    use_suffix = FALSE,
+    use_count_scale = isTRUE(spec$use_count),
+    probs = probs
+  )
+  data.table::setDT(d)
+  
+  data.table::setnames(
+    d,
+    old = c(
+      format_time_series_prob_name(median_q),
+      format_time_series_prob_name(q_lower),
+      format_time_series_prob_name(q_upper)
+    ),
+    new = c("median", "lower", "upper"),
+    skip_absent = TRUE
+  )
+
+  d[, i := (1:.N), by = byvar]
+  d[order(get(date_col)), type := fifelse(i > .N - spec$future_steps, "Forecast", "Historical"), by = byvar]
+  d <- rbind(d, d[type == "Historical"][get(date_col) == max(get(date_col))][, type := "Forecast"])
+
+  if (isTRUE(spec$use_count)) d <- d[type == "Historical"]
+
+  d <- data_cls$data[d, on = c(byvar, date_col)]
+
+  obs = d[[data_cls$numerator_column]]
+  if (!isTRUE(spec$use_count)) obs <- obs/d[[data_cls$denominator_column]]
+  d[, observed := obs]
+
+  d[order(get(date_col))] |> split(by = byvar)
+}
+
+prepare_time_series_plot_data <- function(
+    model,
+    data_cls,
+    spec,
+    probs = c(0.005, 0.01, 0.025,seq(0.05, .95, 0.05),0.975, 0.99, 0.995)
+) {
+  byvar <- get_ts_data_cls_region_col(data_cls)
+  date_col <- get_ts_data_cls_date_col(data_cls)
+  req(!is.null(byvar), !is.null(date_col))
+  
+  d <- get_posterior_quantiles(
+    model, data_cls, use_suffix = FALSE, use_count_scale = isTRUE(spec$use_count), probs = probs
+  )
+
+  d[, i:=(1:.N), by=byvar]
+  d[order(get(date_col)), type:=fifelse(i>.N-spec$future_steps, "Forecast", "Historical"), by=byvar]
+  d <- rbind(d,d[type=="Historical"][get(date_col)==max(get(date_col))][, type:="Forecast"])
+
+
+  # drop any future dates if use_count is TRUE (but this is too strong,
+  # need to also consider the model)
+  if(isTRUE(spec$use_count)) d <- d[type=="Historical"]
+
+  # merge back on the original data  
+  d <- data_cls$data[d, on=c(names(d)[1:2])]
+  
+  # generate observed
+  
+  obs = d[[data_cls$numerator_column]]
+  if(!isTRUE(spec$use_count)) obs <- obs/d[[data_cls$denominator_column]]
+  d[, observed:=obs]
+  
+  # return a list, split by county fips
+  d[order(get(date_col))] |> split(by=byvar)
+  
+}
 
 prepare_plot_ly_ts_data <- function(
     model,
@@ -807,34 +978,19 @@ prepare_plot_ly_ts_data <- function(
     future_steps=0, 
     probs = c(0.005, 0.01, 0.025,seq(0.05, .95, 0.05),0.975, 0.99, 0.995)
 ) {
-  
-  byvar = data_cls$region_col
-  
-  d <- get_posterior_quantiles(
-    model, data_cls, use_suffix = FALSE,use_count_scale = use_count,probs = probs
+  spec <- build_time_series_plot_spec(
+    region_ids = character(0),
+    ci = 95,
+    use_count = use_count,
+    future_steps = future_steps
   )
-
-  d[, i:=(1:.N), by=byvar]
-  d[order(date), type:=fifelse(i>.N-future_steps, "Forecast", "Historical"), by=byvar]
-  d <- rbind(d,d[type=="Historical"][date==max(date)][, type:="Forecast"])
-
-
-  # drop any future dates if use_count is TRUE (but this is too strong,
-  # need to also consider the model)
-  if(use_count == TRUE) d <- d[type=="Historical"]
-
-  # merge back on the original data  
-  d <- data_cls$data[d, on=c(names(d)[1:2])]
   
-  # generate observed
-  
-  obs = d[[data_cls$numerator_column]]
-  if(use_count==FALSE) obs <- obs/d[[data_cls$denominator_column]]
-  d[, observed:=obs]
-  
-  # return a list, split by county fips
-  d[order(date)] |> split(by=byvar)
-  
+  prepare_time_series_plot_data(
+    model = model,
+    data_cls = data_cls,
+    spec = spec,
+    probs = probs
+  )
 }
 
 #' Given a data class, return the unique locations and map data, including
