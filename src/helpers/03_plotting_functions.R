@@ -595,6 +595,8 @@ update_polygons <- function(
 ## TIME SERIES PLOTS
 ################################################
 
+# Build a single prediction time-series panel from data that already contains
+# median/lower/upper columns and optional observed values.
 plot_ly_time_series <- function(
     dt, 
     show_legend=TRUE, 
@@ -721,6 +723,8 @@ plot_ly_time_series <- function(
   
 }
 
+# Legacy helper that assembles multiple prediction time-series panels using
+# the older input structure expected by existing callers.
 time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, fixed_y=FALSE, ci = "95", ...) {
   
   global_max <- NULL
@@ -1112,6 +1116,8 @@ build_other_time_series_plotly <- function(plot_dt, region_ids, separate_feature
     )
 }
 
+# Compute a shared y-axis ceiling across a set of prediction time-series
+# panels using their stored upper-interval values.
 get_max_y_over_plots <- function(names, plot_data, ci) {
   
   
@@ -1200,6 +1206,8 @@ prepare_time_series_feature_plot_data <- function(feature_data, data_cls, spec, 
   d[order(get(date_col))] |> split(by = byvar)
 }
 
+# Legacy data-prep path that computes a dense grid of posterior quantiles for
+# prediction plots. Newer paths should prefer stored calculated features.
 prepare_time_series_plot_data <- function(
     model,
     data_cls,
@@ -1237,6 +1245,8 @@ prepare_time_series_plot_data <- function(
   
 }
 
+# Compatibility wrapper around prepare_time_series_plot_data() used by older
+# callers that predate the time-series plot spec helper.
 prepare_plot_ly_ts_data <- function(
     model,
     data_cls,

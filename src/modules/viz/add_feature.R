@@ -193,7 +193,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       fids[keep]
     })
     
-    # default feature name/description
+    # Build the default label/description shown in the Add Feature form for
+    # the currently selected feature type and parameters.
     default_feature_spec <- reactive({
       ft <- input$feature
       ft_name <- switch(
@@ -253,7 +254,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       }
     }) |> bindEvent(input$auto_labels, ignoreInit = TRUE)
     
-    # get values for inputed quantile level/CI level
+    # Return any posterior quantile probabilities needed to calculate the
+    # selected feature type.
     need_probs <- function(ft) {
       if (ft == "quantile") return(round(input$q_val %||% 0.50, 3))
       if (ft == "confidence_interval") {
@@ -591,7 +593,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       qdf
     })
     
-    # Add single feature and append it to table
+    # Calculate one feature's stored output columns from the fitted model and
+    # merge them into the current shared data table.
     apply_feature <- function(out, f, dcls) {
       ft <- f$feature_type
       sc <- f$feature_scale

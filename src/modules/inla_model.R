@@ -1266,6 +1266,9 @@ pretty_formula <- function(x) {
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
+# Create the shared feature-store object used across modeling and
+# visualization. It tracks feature definitions, ordering, and the flattened
+# metadata table consumed by the viz modules.
 init_feature_df <- function() {
   rv <- reactiveValues(
     next_id  = 0L,
@@ -1286,6 +1289,8 @@ init_feature_df <- function() {
     }
   }
   
+  # Classify a stored column into the app's base feature categories so it can
+  # be registered with the correct type/scale metadata.
   get_column_meta <- function(col, data_cls) {
     core_cols  <- unique(data_cls$core_columns %||% character(0))
     id_cols    <- unique(data_cls$id_columns %||% character(0))
@@ -1534,6 +1539,8 @@ init_feature_df <- function() {
       )
       stats::setNames(rv$order, labs)
     }),
+    # Flatten the feature store into the metadata table used by the selector
+    # panels and viz modules.
     features_df = reactive({
       rv$refresh
       if (!length(rv$order)) {
