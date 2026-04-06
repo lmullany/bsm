@@ -1538,6 +1538,9 @@ build_map_feature_popup_plot <- function(
     return(ggplot2::ggplot() + ggplot2::theme_void())
   }
   
+  ts <- data.table::as.data.table(ts)
+  ts[, type := factor(type, levels = c("Historical", "Forecast"))]
+  
   ggplot2::ggplot(ts, ggplot2::aes(x = date, y = value)) +
     ggplot2::geom_point(ggplot2::aes(shape = type), color = colors[["point"]]) +
     ggplot2::geom_line(ggplot2::aes(linetype = type), color = colors[["line"]]) +
@@ -1552,6 +1555,7 @@ build_map_feature_popup_plot <- function(
       x = "",
       caption = paste0("Selected Date: ", v_date)
     ) +
+    ggplot2::scale_linetype_manual(values = c(Historical = "solid", Forecast = "dashed"), drop = FALSE) +
     ggplot2::theme_minimal() +
     ggplot2::theme(plot.caption = ggplot2::element_text(color = colors[["vline"]], size = 8))
 }
