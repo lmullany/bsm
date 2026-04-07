@@ -295,10 +295,15 @@ load_saved_model_file <- function(path) {
 
   # unpack the archive
   archive <- load_saved_object_from_file(path)
+  model_object <- archive[["rds"]]
+  
+  if (!is.null(model_object$data_class)) {
+    model_object$data_class <- normalize_loaded_data_class(model_object$data_class)
+  }
   
   # return a list of objects (model object, model values)
   return(list(
-    "model_object" = archive[["rds"]],
+    "model_object" = model_object,
     "model_values" = archive[["json"]]
   ))
   
@@ -346,6 +351,44 @@ load_saved_object_from_file <- function(path) {
     json=jsonlite::read_json(json_file[1], simplifyVector = TRUE)
   ))
   
+}
+
+# Normalize saved data-class objects onto the app's canonical field names so
+# loaded models match the structure produced by current preprocessing.
+normalize_loaded_data_class <- function(data_cls) {
+  if (is.null(data_cls)) return(data_cls)
+  
+  if (is.null(data_cls$region_column) && !is.null(data_cls$region_col)) {
+    data_cls$region_column <- data_cls$region_col
+  }
+  if (is.null(data_cls$date_column) && !is.null(data_cls$date_col)) {
+    data_cls$date_column <- data_cls$date_col
+  }
+  
+  data_cls$region_col <- NULL
+  data_cls$date_col <- NULL
+  sort_data_class_data(data_cls)
+}
+
+# Keep stored data-class rows in a stable order so downstream tables and plots
+# see one consistent region/date ordering.
+sort_data_class_data <- function(data_cls) {
+  if (is.null(data_cls) || is.null(data_cls$data)) return(data_cls)
+
+  dt <- data.table::as.data.table(data_cls$data)
+  region_col <- data_cls$region_column %||% "countyfips"
+  date_col <- data_cls$date_column %||% "date"
+  sort_cols <- intersect(c(region_col, date_col), names(dt))
+  if (length(sort_cols)) {
+    if (region_col %in% sort_cols) dt[, (region_col) := as.character(get(region_col))]
+    if (date_col %in% sort_cols && !inherits(dt[[date_col]], "Date")) {
+      suppressWarnings(dt[, (date_col) := as.Date(get(date_col))])
+    }
+    data.table::setorderv(dt, sort_cols)
+  }
+
+  data_cls$data <- dt
+  data_cls
 }
   
 # Function to place info circle tool tip on a input label

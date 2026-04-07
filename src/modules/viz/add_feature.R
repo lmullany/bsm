@@ -199,7 +199,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       ft <- input$feature
       ft_name <- switch(
         ft,
-        mean = sprintf("Mean (%s)", input$feature_scale),
+        mean = sprintf("Posterior Mean (%s)", input$feature_scale),
         quantile = sprintf("Quantile q=%s (%s)",
           fmt_num(input$q_val %||% 0.50),
                            input$feature_scale),
