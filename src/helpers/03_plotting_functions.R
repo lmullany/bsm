@@ -775,21 +775,9 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, fi
   return(p)
 }
 
-# Return the canonical region-column name from a data class, supporting both
-# the app's normalized field names.
-get_ts_data_cls_region_col <- function(data_cls) {
-  data_cls$region_column
-}
-
-# Return the canonical date-column name from a data class, supporting both
-# the app's normalized field names.
-get_ts_data_cls_date_col <- function(data_cls) {
-  data_cls$date_column
-}
-
 # Build named region choices for time-series selectors from the stored data.
 get_time_series_region_choices <- function(data_cls, display_col = "region") {
-  region_col <- get_ts_data_cls_region_col(data_cls)
+  region_col <- data_cls$region_column
   req(!is.null(region_col), region_col %in% names(data_cls$data))
   
   cols <- unique(c(region_col, display_col))
@@ -1172,8 +1160,8 @@ format_time_series_prob_name <- function(q) {
 # prediction time-series tab and reshape them into the plotting structure used
 # by build_time_series_plotly().
 prepare_time_series_feature_plot_data <- function(feature_data, data_cls, spec, ci_feature, median_feature = NULL) {
-  byvar <- get_ts_data_cls_region_col(data_cls)
-  date_col <- get_ts_data_cls_date_col(data_cls)
+  byvar <- data_cls$region_column
+  date_col <- data_cls$date_column
   req(!is.null(byvar), !is.null(date_col))
   req(!is.null(ci_feature), identical(ci_feature$feature_type, "confidence_interval"))
 
@@ -1233,8 +1221,8 @@ prepare_time_series_plot_data <- function(
     spec,
     probs = c(0.005, 0.01, 0.025,seq(0.05, .95, 0.05),0.975, 0.99, 0.995)
 ) {
-  byvar <- get_ts_data_cls_region_col(data_cls)
-  date_col <- get_ts_data_cls_date_col(data_cls)
+  byvar <- data_cls$region_column
+  date_col <- data_cls$date_column
   req(!is.null(byvar), !is.null(date_col))
   
   d <- get_posterior_quantiles(
@@ -1315,8 +1303,8 @@ get_stored_map_feature_data <- function(feature_data, data_cls, feature) {
   req(!is.null(feature_data), !is.null(data_cls), !is.null(feature))
   
   data.table::setDT(feature_data)
-  reg_col <- get_ts_data_cls_region_col(data_cls)
-  date_col <- get_ts_data_cls_date_col(data_cls)
+  reg_col <- data_cls$region_column
+  date_col <- data_cls$date_column
   out_cols <- feature$out_cols %||% character(0)
   value_col <- out_cols[[1]] %||% NULL
   

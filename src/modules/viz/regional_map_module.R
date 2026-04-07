@@ -163,7 +163,7 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
       
       all_dates <- reactive({
         req(im$data_cls)
-        date_col <- get_ts_data_cls_date_col(im$data_cls)
+        date_col <- im$data_cls$date_column
         req(!is.null(date_col), date_col %in% names(im$data_cls$data))
         as.Date(sort(unique(im$data_cls$data[[date_col]])))
       })
