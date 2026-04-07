@@ -188,7 +188,7 @@ get_map_data <-function(model,
     )
     data.table::setnames(
       dt,
-      new = c(data_cls$region_col, data_cls$date_col, display_col)
+      new = c(data_cls$region_column, data_cls$date_column, display_col)
     )
     
     maxv<- round_up_max(max(dt[[display_col]], na.rm = TRUE))
@@ -257,8 +257,8 @@ get_map_data <-function(model,
     name = display_col_name, 
     min = minv, 
     max = maxv,
-    date_col = data_cls$date_col,
-    region_col = data_cls$region_col
+    date_col = data_cls$date_column,
+    region_col = data_cls$region_column
   ))
 
 }
@@ -776,15 +776,15 @@ time_series_subplots <- function(ts_inputs, ts_plot_data, display_col = NULL, fi
 }
 
 # Return the canonical region-column name from a data class, supporting both
-# the newer and older field names used in the app.
+# the app's normalized field names.
 get_ts_data_cls_region_col <- function(data_cls) {
-  data_cls$region_column %||% data_cls$region_col
+  data_cls$region_column
 }
 
 # Return the canonical date-column name from a data class, supporting both
-# the newer and older field names used in the app.
+# the app's normalized field names.
 get_ts_data_cls_date_col <- function(data_cls) {
-  data_cls$date_column %||% data_cls$date_col
+  data_cls$date_column
 }
 
 # Build named region choices for time-series selectors from the stored data.

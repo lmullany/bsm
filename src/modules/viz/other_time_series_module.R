@@ -143,8 +143,9 @@ viz_other_time_series_server <- function(id, im, feature_store) {
       
       if ("type" %in% names(dt)) return(dt[])
       
+      data.table::setorderv(dt, c(region_col, date_col))
       dt[, i := seq_len(.N), by = region_col]
-      dt[order(get(date_col)), type := data.table::fifelse(i > .N - future_steps, "Forecast", "Historical"), by = region_col]
+      dt[, type := data.table::fifelse(i > .N - future_steps, "Forecast", "Historical"), by = region_col]
       dt[, i := NULL]
       
       if (future_steps > 0) {
@@ -154,6 +155,10 @@ viz_other_time_series_server <- function(id, im, feature_store) {
           dt <- data.table::rbindlist(list(dt, bridge), use.names = TRUE, fill = TRUE)
         }
       }
+
+      dt[, type_order := data.table::fifelse(type == "Historical", 1L, 2L)]
+      data.table::setorderv(dt, c(region_col, date_col, "type_order"))
+      dt[, type_order := NULL]
       
       dt[]
     }
@@ -249,6 +254,10 @@ viz_other_time_series_server <- function(id, im, feature_store) {
       # plot-building helper.
       plot_dt <- data.table::rbindlist(Filter(Negate(is.null), series_list), use.names = TRUE, fill = TRUE)
       validate(need(nrow(plot_dt) > 0, "No plottable numeric data available for the selected features"))
+      data.table::setDT(plot_dt)
+      plot_dt[, type_order := data.table::fifelse(type == "Historical", 1L, 2L)]
+      data.table::setorderv(plot_dt, c("region_id", "feature_label", "date", "type_order"))
+      plot_dt[, type_order := NULL]
       plot_dt[]
     })
     

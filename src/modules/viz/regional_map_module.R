@@ -139,24 +139,25 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
       
       selected_feature_id <- reactive({
         keys <- feature_filters()$selected_features %||% character(0)
-        key <- keys[[1]] %||% ""
+        if (!length(keys)) return("")
+        key <- keys[[1]]
         sub("::.*$", "", key)
       })
       
       selected_feature <- reactive({
         store <- get_store()
-        req(store)
+        if (is.null(store)) return(NULL)
         fid <- selected_feature_id()
-        req(nzchar(fid))
+        if (!nzchar(fid)) return(NULL)
         feature <- store$get_feature(fid)
-        req(!is.null(feature))
+        if (is.null(feature)) return(NULL)
         feature
       })
       
       # Reset the sparkline cursor when the mapped feature changes so the date
       # selector redraws from the new feature's stored time series.
       observe({
-        req(nzchar(selected_feature_id()))
+        if (!nzchar(selected_feature_id())) return()
         cursor_date(NULL)
       }) |> bindEvent(selected_feature_id(), ignoreInit = TRUE)
       
@@ -218,10 +219,12 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
       
       spark_series <- reactive({
         req(im$data_cls)
+        feat <- selected_feature()
+        req(!is.null(feat))
         get_map_feature_sparkline_data(
           feature_data = get_base_source(),
           data_cls = im$data_cls,
-          feature = selected_feature(),
+          feature = feat,
           future_steps = im$nforecasts %||% 0L
         )
       })
@@ -229,13 +232,15 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
       output$date_spark <- renderPlotly({
         validate(need(!is.null(im$data_cls), "Load data and run model first"))
         validate(need(nzchar(selected_feature_id()), "Select a feature to display"))
+        feat <- selected_feature()
+        validate(need(!is.null(feat), "Select a feature to display"))
         
         # The sparkline is a pure view over the stored feature values and
         # drives the selected map date through the draggable vertical line.
         p <- build_map_feature_sparkline(
           series = as.data.frame(spark_series()),
           init_date = isolate(cursor_date() %||% last_observed_date()),
-          yaxis_title = selected_feature()$label %||% "Value"
+          yaxis_title = feat$label %||% "Value"
         )
         
         htmlwidgets::onRender(
@@ -259,6 +264,8 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
       output$region_map <- renderLeaflet({
         validate(need(!is.null(im$data_cls), "Load data and run model first"))
         validate(need(nzchar(selected_feature_id()), "Select a feature to display"))
+        feat <- selected_feature()
+        validate(need(!is.null(feat), "Select a feature to display"))
         
         # The map tab only renders stored columns; any calculated feature
         # values must already have been saved during model fit or Add Feature.
@@ -266,7 +273,7 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
           map_locations = map_base_locations(),
           feature_data = get_base_source(),
           data_cls = im$data_cls,
-          feature = selected_feature(),
+          feature = feat,
           target_date = target_date(),
           includes_alaska_hawaii = dc$includes_alaska_hawaii,
           use_global_range = isTRUE(input$map_use_global_range),
@@ -279,13 +286,15 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
       observe({
         click <- input$region_map_shape_click
         if (is.null(click$id)) return()
+        feat <- selected_feature()
+        if (is.null(feat)) return()
         
         # Polygon clicks reuse the same stored feature to show the selected
         # region's time path without recomputing posterior summaries.
         plot_data <- get_map_feature_popup_data(
           feature_data = get_base_source(),
           data_cls = im$data_cls,
-          feature = selected_feature(),
+          feature = feat,
           region_id = click$id,
           future_steps = im$nforecasts %||% 0L
         )

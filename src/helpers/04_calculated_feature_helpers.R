@@ -23,12 +23,20 @@ calculated_feature_normalize_qdf_names <- function(qdf) {
   qdf
 }
 
+calculated_feature_region_col <- function(data_cls) {
+  data_cls$region_column
+}
+
+calculated_feature_date_col <- function(data_cls) {
+  data_cls$date_column
+}
+
 # Keep only the region/date keys and requested quantile columns from a wide
 # posterior quantile table.
 calculated_feature_slice_qdf <- function(qdf, data_cls, cols_keep) {
   data.table::setDT(qdf)
-  reg_col <- data_cls$region_column
-  date_col <- data_cls$date_column
+  reg_col <- calculated_feature_region_col(data_cls)
+  date_col <- calculated_feature_date_col(data_cls)
   if (reg_col %in% names(qdf)) {
     qdf[, (reg_col) := as.character(get(reg_col))]
   }
@@ -44,8 +52,8 @@ calculated_feature_slice_qdf <- function(qdf, data_cls, cols_keep) {
 calculated_feature_merge_by_region_date <- function(x, y, data_cls) {
   data.table::setDT(x)
   data.table::setDT(y)
-  reg_col <- data_cls$region_column
-  date_col <- data_cls$date_column
+  reg_col <- calculated_feature_region_col(data_cls)
+  date_col <- calculated_feature_date_col(data_cls)
   x[, (reg_col) := as.character(get(reg_col))]
   y[, (reg_col) := as.character(get(reg_col))]
   overlap <- setdiff(intersect(names(x), names(y)), c(reg_col, date_col))
@@ -79,8 +87,8 @@ build_calculated_feature_context <- function(features, model, data_cls) {
     numeric(0)
   }))))
 
-  reg_col <- data_cls$region_column
-  date_col <- data_cls$date_column
+  reg_col <- calculated_feature_region_col(data_cls)
+  date_col <- calculated_feature_date_col(data_cls)
 
   qdf_props <- if (length(q_probs)) {
     qdf <- get_posterior_quantiles(model, data_cls, probs = q_probs, use_count_scale = FALSE)
@@ -122,8 +130,8 @@ get_calculated_feature_mean_dt <- function(context, use_count_scale = FALSE) {
   }
 
   dcls <- context$data_cls
-  reg_col <- dcls$region_column
-  date_col <- dcls$date_column
+  reg_col <- calculated_feature_region_col(dcls)
+  date_col <- calculated_feature_date_col(dcls)
 
   dt <- get_posterior_means(
     context$model,

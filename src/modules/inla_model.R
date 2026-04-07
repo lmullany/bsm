@@ -397,6 +397,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           model = res$model,
           data_cls = res$data_class
         )
+        res$data_class <- sort_data_class_data(res$data_class)
         
         im$data_cls <- res$data_class
         im$posterior <- res$data_class$data
@@ -1006,7 +1007,7 @@ pre_process_data <- function(data, nforecasts) {
     inferred_covariates
   ))
 
-  data_cls
+  sort_data_class_data(data_cls)
 }
 
 get_formula <- function(formula_type, input, dc, time_res) {
@@ -1424,11 +1425,11 @@ init_feature_df <- function() {
       if (isTRUE(include_mean)) {
         add_feature_def(
           fid = paste0("builtin__mean__", sc),
-          label = sprintf("Mean (%s)", sc),
+          label = sprintf("Posterior Mean (%s)", sc),
           description = sprintf("Posterior mean on the %s scale.", sc),
           feature_type = "mean",
           feature_scale = sc,
-          out_cols = sprintf("Mean (%s)", sc),
+          out_cols = sprintf("Posterior Mean (%s)", sc),
           params = list()
         )
       }

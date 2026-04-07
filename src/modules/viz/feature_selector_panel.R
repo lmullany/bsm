@@ -2,7 +2,10 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 
-feature_sidepanel_ui <- function(id, title = "Filters", allow_multiple = TRUE) {
+feature_sidepanel_ui <- function(id,
+                                 title = "Filters",
+                                 allow_multiple = TRUE,
+                                 show_select_all = FALSE) {
   ns <- NS(id)
   
   heading <- if (allow_multiple) {
@@ -46,6 +49,14 @@ feature_sidepanel_ui <- function(id, title = "Filters", allow_multiple = TRUE) {
       ),
       tags$hr(),
       h5("Available feature(s)"),
+      if (allow_multiple && isTRUE(show_select_all)) {
+        actionButton(
+          ns("select_all_available"),
+          "Select all available",
+          class = "btn-primary btn-sm",
+          style = "width:100%; margin-bottom: 8px;"
+        )
+      },
       selectInput(
         ns("add_list"),
         label = NULL,
@@ -57,43 +68,44 @@ feature_sidepanel_ui <- function(id, title = "Filters", allow_multiple = TRUE) {
       ),
       tags$small(class = "text-muted", "Click an item to add it to the selected group."),
       tags$hr(),
-      h4(title, style = "margin:0;"),
-      
-      tags$div(
-        style = "margin-top: 8px; margin-bottom: 100px; display: block;",
-        
-        checkboxGroupInput(
-          ns("filter_scale"),
-          "Scale",
-          choices = c(
-            "Counts" = "counts",
-            "Proportion" = "proportion",
-            "Other" = "other"
+      tags$details(
+        style = "margin-top: 8px; margin-bottom: 12px; display: block;",
+        tags$summary(title, style = "cursor:pointer; font-weight:600;"),
+        tags$div(
+          style = "margin-top: 8px;",
+          checkboxGroupInput(
+            ns("filter_scale"),
+            "Scale",
+            choices = c(
+              "Counts" = "counts",
+              "Proportion" = "proportion",
+              "Other" = "other"
+            ),
+            selected = character(0)
           ),
-          selected = character(0)
-        ),
-        
-        checkboxGroupInput(
-          ns("filter_type"),
-          "Feature type",
-          choices = c(
-            "Mean" = "mean",
-            "Posterior Quantile" = "quantile",
-            "Confidence Interval" = "confidence_interval",
-            "Exceedance Probability" = "exceedance_probability",
-            "Change Probability" = "change_probability",
-            "Covariate" = "covariate",
-            "ID" = "id",
-            "Other" = "other"
+          
+          checkboxGroupInput(
+            ns("filter_type"),
+            "Feature type",
+            choices = c(
+              "Mean" = "mean",
+              "Posterior Quantile" = "quantile",
+              "Confidence Interval" = "confidence_interval",
+              "Exceedance Probability" = "exceedance_probability",
+              "Change Probability" = "change_probability",
+              "Covariate" = "covariate",
+              "ID" = "id",
+              "Other" = "other"
+            ),
+            selected = character(0)
           ),
-          selected = character(0)
-        ),
-        
-        actionButton(
-          ns("reset_filters"),
-          "Reset filters",
-          class = "btn-primary btn-sm",
-          style = "width:100%;"
+          
+          actionButton(
+            ns("reset_filters"),
+            "Reset filters",
+            class = "btn-primary btn-sm",
+            style = "width:100%;"
+          )
         )
       )
     )
@@ -104,8 +116,10 @@ feature_sidepanel_ui <- function(id, title = "Filters", allow_multiple = TRUE) {
 feature_sidepanel_server <- function(id,
                                      feature_store,
                                      allow_multiple = TRUE,
+                                     show_select_all = FALSE,
                                      reset_clears_selected = FALSE,
-                                     initial_selected_id = NULL) {
+                                     initial_selected_id = NULL,
+                                     initial_selected_ids = NULL) {
   moduleServer(id, function(input, output, session) {
     
     get_store <- function() {
@@ -116,7 +130,7 @@ feature_sidepanel_server <- function(id,
       get_store()$features_df()
     })
     
-    normalize_df <- function(df) {
+        normalize_df <- function(df) {
       if (is.null(df) || nrow(df) == 0) return(df)
       
       df$feature_scale[is.na(df$feature_scale) | df$feature_scale == ""] <- "other"
@@ -134,14 +148,28 @@ feature_sidepanel_server <- function(id,
     
     observe({
       df <- normalize_df(df_all())
-      init_id <- initial_selected_id %||% ""
+      valid_keys <- if (is.null(df) || !nrow(df)) character(0) else as.character(df$.key)
       cur <- selected_rv() %||% character(0)
-      if (!nzchar(init_id) || length(cur) > 0 || is.null(df) || !nrow(df)) return()
-      
-      match_idx <- which(df$id == init_id)
-      if (!length(match_idx)) return()
-      selected_rv(df$.key[[match_idx[[1]]]])
+      next_sel <- intersect(cur, valid_keys)
+      if (!identical(cur, next_sel)) selected_rv(next_sel)
     }) %>% bindEvent(df_all(), ignoreInit = FALSE)
+        
+        observe({
+          df <- normalize_df(df_all())
+          init_ids <- initial_selected_ids %||% character(0)
+          if (!length(init_ids)) {
+            init_ids <- initial_selected_id %||% character(0)
+          }
+          init_ids <- init_ids[nzchar(init_ids)]
+          cur <- selected_rv() %||% character(0)
+          if (!length(init_ids) || length(cur) > 0 || is.null(df) || !nrow(df)) return()
+          
+          init_keys <- df$.key[df$id %in% init_ids]
+          if (!length(init_keys)) return()
+          init_keys <- unique(as.character(init_keys))
+          if (!allow_multiple) init_keys <- init_keys[[1]]
+          selected_rv(init_keys)
+        }) %>% bindEvent(df_all(), ignoreInit = FALSE)
     
     make_named_choices <- function(df) {
       if (is.null(df) || nrow(df) == 0) return(setNames(character(0), character(0)))
@@ -156,7 +184,10 @@ feature_sidepanel_server <- function(id,
       if (is.null(df) || !nrow(df) || !length(sel)) return(setNames(character(0), character(0)))
       
       df_sel <- df[df$.key %in% sel, , drop = FALSE]
+      if (!nrow(df_sel)) return(setNames(character(0), character(0)))
       df_sel <- df_sel[match(sel, df_sel$.key), , drop = FALSE]
+      df_sel <- df_sel[!is.na(df_sel$.key), , drop = FALSE]
+      if (!nrow(df_sel)) return(setNames(character(0), character(0)))
       make_named_choices(df_sel)
     })
     
@@ -214,6 +245,15 @@ feature_sidepanel_server <- function(id,
       
       updateSelectInput(session, "add_list", selected = character(0))
     }) %>% bindEvent(input$add_list, ignoreInit = TRUE)
+
+    observe({
+      if (!isTRUE(allow_multiple) || !isTRUE(show_select_all)) return()
+      available_keys <- unname(add_choices_named())
+      if (!length(available_keys)) return()
+      cur <- selected_rv() %||% character(0)
+      selected_rv(unique(c(cur, available_keys)))
+      updateSelectInput(session, "add_list", selected = character(0))
+    }) %>% bindEvent(input$select_all_available, ignoreInit = TRUE)
     
     # remove selected item from "can-be-selected" list
     observe({
@@ -227,6 +267,7 @@ feature_sidepanel_server <- function(id,
     }) %>% bindEvent(input$selected_list, ignoreInit = TRUE)
     
     observe({
+      if (!length(selected_rv() %||% character(0))) return()
       selected_rv(character(0))
     }) %>% bindEvent(input$clear_selected, ignoreInit = TRUE)
     
