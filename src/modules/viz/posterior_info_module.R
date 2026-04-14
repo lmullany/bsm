@@ -17,6 +17,7 @@ label_list_pi <- list(
 
 viz_posterior_ui <- function(id) {
   ns <- NS(id)
+  table_id <- ns("posterior_data")
   
   nav_panel(
     title = "Posterior Data",
@@ -63,7 +64,15 @@ viz_posterior_ui <- function(id) {
               ),
               add_button_hover(
                 title = button_list_pi[["csv_button"]],
-                downloadButton(ns("download_posterior_csv"), class = BUTTON_CLASS, "Download CSV")
+                actionButton(
+                  ns("download_posterior_csv"),
+                  class = BUTTON_CLASS,
+                  "Download CSV",
+                  onclick = sprintf(
+                    "if (window.Reactable) Reactable.downloadDataCSV('%s', 'posterior_data.csv');",
+                    table_id
+                  )
+                )
               )
             )
           )
@@ -250,19 +259,6 @@ viz_posterior_server <- function(id, im, results, feature_store) {
         )
       })
       
-      output$download_posterior_csv <- downloadHandler(
-        filename = function() {
-          paste0("posterior_data.csv")
-        },
-        content = function(file) {
-          df <- posterior_tbl()
-          req(df)
-          keep <- unique(c(required_core_cols, selected_feature_cols()))
-          keep <- intersect(keep, names(df))
-          if (length(keep)) df <- df[, ..keep]
-          write.csv(df, file, row.names = FALSE)
-        }
-      )
     }
   )
 }
