@@ -2,6 +2,49 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 
+label_list_add_feature <- list(
+  feature_type = list(
+    l = "Select Feature Type",
+    m = "Choose the type of derived posterior feature to create and store for later display."
+  ),
+  feature_scale = list(
+    l = "Scale",
+    m = "Choose whether the feature should be calculated on the count scale or the proportion scale."
+  ),
+  quantile = list(
+    l = "Quantile (0-1)",
+    m = "Enter the posterior quantile to calculate. For example, 0.5 is the median."
+  ),
+  confidence_level = list(
+    l = "Confidence level (0-1)",
+    m = "Enter the central credible interval level to calculate. For example, 0.95 gives the 95% interval."
+  ),
+  exceedance_threshold = list(
+    l = "Exceedance threshold",
+    m = "Enter the threshold value for calculating the posterior probability that the feature exceeds it."
+  ),
+  auto_labels = list(
+    l = "Auto-generate name/description",
+    m = "Automatically fill the feature name and description based on the selected feature type, scale, and parameter values."
+  ),
+  feature_name = list(
+    l = "Feature name",
+    m = "Name shown in feature lists, plots, and tables."
+  ),
+  feature_desc = list(
+    l = "Feature description",
+    m = "Short description of what this derived feature represents."
+  ),
+  displayed_columns = list(
+    l = "Displayed columns",
+    m = "Choose which stored feature columns are shown in the Add Feature table."
+  ),
+  table_decimals = list(
+    l = "Table decimals",
+    m = "Set the number of decimal places shown for non-integer numeric values in the table."
+  )
+)
+
 add_feature_ui <- function(id) {
   ns <- NS(id)
   feature_id <- ns("feature")
@@ -37,7 +80,7 @@ add_feature_ui <- function(id) {
           # Dropdown tied to conditional panels
           selectInput(
             inputId = ns("feature"),
-            label = "Select Feature Type",
+            label = labeltt(label_list_add_feature[["feature_type"]]),
             choices = c(
               "Mean" = "mean",
               "Quantile" = "quantile",
@@ -49,7 +92,7 @@ add_feature_ui <- function(id) {
           # Scale selection
           radioButtons(
             inputId = ns("feature_scale"),
-            label = "Scale",
+            label = labeltt(label_list_add_feature[["feature_scale"]]),
             choices = c("Counts" = "counts", "Proportion" = "proportion"),
             selected = "counts",
             inline = TRUE
@@ -58,20 +101,20 @@ add_feature_ui <- function(id) {
           # Conditional panels
           conditionalPanel(
             condition = sprintf("input['%s'] == 'quantile'", feature_id),
-            numericInput(ns("q_val"), "Quantile (0–1)", value = 0.20, min = 0, max = 1, step = 0.01)
+            numericInput(ns("q_val"), labeltt(label_list_add_feature[["quantile"]]), value = 0.20, min = 0, max = 1, step = 0.01)
           ),
           conditionalPanel(
             condition = sprintf("input['%s'] == 'confidence_interval'", feature_id),
-            numericInput(ns("ci_val"), "Confidence level (0–1)", value = 0.90, min = 0, max = 1, step = 0.01)
+            numericInput(ns("ci_val"), labeltt(label_list_add_feature[["confidence_level"]]), value = 0.90, min = 0, max = 1, step = 0.01)
           ),
           conditionalPanel(
             condition = sprintf("input['%s'] == 'exceedance_probability'", feature_id),
-            numericInput(ns("exceed_val"), "Exceedance threshold", value = 0, min = 0, step = 0.01)
+            numericInput(ns("exceed_val"), labeltt(label_list_add_feature[["exceedance_threshold"]]), value = 0, min = 0, step = 0.01)
           ),
           # Free text fields
-          checkboxInput(ns("auto_labels"), "Auto-generate name/description", value = TRUE),
-          textInput(ns("feature_name"), "Feature name", value = ""),
-          textInput(ns("feature_desc"), "Feature description", value = ""),
+          checkboxInput(ns("auto_labels"), labeltt(label_list_add_feature[["auto_labels"]]), value = TRUE),
+          textInput(ns("feature_name"), labeltt(label_list_add_feature[["feature_name"]]), value = ""),
+          textInput(ns("feature_desc"), labeltt(label_list_add_feature[["feature_desc"]]), value = ""),
           # Add feature + select feature(s)
           add_button_hover(
             title = "Add the selected feature to the table",
@@ -80,7 +123,7 @@ add_feature_ui <- function(id) {
           tags$hr(),
           selectizeInput(
             inputId = ns("display_cols"),
-            label = "Displayed columns",
+            label = labeltt(label_list_add_feature[["displayed_columns"]]),
             choices = character(0),
             selected = character(0),
             multiple = TRUE,
@@ -94,7 +137,7 @@ add_feature_ui <- function(id) {
             actionButton(ns("delete_feature"), "Open delete feature window", class = "btn-primary btn-sm")
           ),
           # Decimal selection
-          numericInput(ns("dt_digits"), "Table decimals", value = 2, min = 0, max = 10, step = 1)
+          numericInput(ns("dt_digits"), labeltt(label_list_add_feature[["table_decimals"]]), value = 2, min = 0, max = 10, step = 1)
         ),
         # Reactable Table RHS
         bslib::card(

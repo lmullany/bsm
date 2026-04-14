@@ -2,6 +2,33 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 
+label_list_feature_side <- list(
+  selected_features = list(
+    l = "Selected feature(s)",
+    m = "Features in this list are currently active for this view. Click a feature to remove it from the selected set."
+  ),
+  selected_feature = list(
+    l = "Selected feature",
+    m = "This feature is currently active for this view. Click it to remove it from the selected set."
+  ),
+  available_features = list(
+    l = "Available feature(s)",
+    m = "These features are available for the current visualization after applying any filters below. Click a feature to add it to the selected set."
+  ),
+  feature_filters = list(
+    l = "Feature Filters",
+    m = "Filter the available feature list by scale or feature type. Filters only affect what can be added; they do not remove features that are already selected."
+  ),
+  filter_scale = list(
+    l = "Scale",
+    m = "Limit the available feature list to features on the selected scale. Counts are visit totals, proportion is relative to all visits, and Other includes features without one of those standard scales."
+  ),
+  filter_type = list(
+    l = "Feature type",
+    m = "Limit the available feature list to specific feature categories such as means, quantiles, intervals, probabilities, covariates, or identifier fields."
+  )
+)
+
 feature_sidepanel_ui <- function(id,
                                  title = "Filters",
                                  allow_multiple = TRUE,
@@ -9,9 +36,9 @@ feature_sidepanel_ui <- function(id,
   ns <- NS(id)
   
   heading <- if (allow_multiple) {
-    h5("Selected feature(s)")
+    h5(labeltt(label_list_feature_side[["selected_features"]]))
   } else {
-    h5("Selected feature")
+    h5(labeltt(label_list_feature_side[["selected_feature"]]))
   }
   
   tagList(
@@ -45,16 +72,18 @@ feature_sidepanel_ui <- function(id,
         ns("clear_selected"),
         "Clear selected",
         class = "btn-primary btn-sm",
-        style = "width:100%;"
+        style = "width:100%;",
+        title = "Remove all currently selected features from this panel. This does not delete the features from the app."
       ),
       tags$hr(),
-      h5("Available feature(s)"),
+      h5(labeltt(label_list_feature_side[["available_features"]])),
       if (allow_multiple && isTRUE(show_select_all)) {
         actionButton(
           ns("select_all_available"),
           "Select all available",
           class = "btn-primary btn-sm",
-          style = "width:100%; margin-bottom: 8px;"
+          style = "width:100%; margin-bottom: 8px;",
+          title = "Add every feature currently shown in the available list. Hidden or filtered-out features are not added."
         )
       },
       selectInput(
@@ -70,12 +99,18 @@ feature_sidepanel_ui <- function(id,
       tags$hr(),
       tags$details(
         style = "margin-top: 8px; margin-bottom: 12px; display: block;",
-        tags$summary(title, style = "cursor:pointer; font-weight:600;"),
+        tags$summary(
+          labeltt(list(
+            l = title,
+            m = label_list_feature_side[["feature_filters"]][["m"]]
+          )),
+          style = "cursor:pointer; font-weight:600;"
+        ),
         tags$div(
           style = "margin-top: 8px;",
           checkboxGroupInput(
             ns("filter_scale"),
-            "Scale",
+            labeltt(label_list_feature_side[["filter_scale"]]),
             choices = c(
               "Counts" = "counts",
               "Proportion" = "proportion",
@@ -86,7 +121,7 @@ feature_sidepanel_ui <- function(id,
           
           checkboxGroupInput(
             ns("filter_type"),
-            "Feature type",
+            labeltt(label_list_feature_side[["filter_type"]]),
             choices = c(
               "Mean" = "mean",
               "Posterior Quantile" = "quantile",
@@ -104,7 +139,8 @@ feature_sidepanel_ui <- function(id,
             ns("reset_filters"),
             "Reset filters",
             class = "btn-primary btn-sm",
-            style = "width:100%;"
+            style = "width:100%;",
+            title = "Clear the scale and feature-type filters and show the full available feature list again. Already selected features remain selected."
           )
         )
       )
