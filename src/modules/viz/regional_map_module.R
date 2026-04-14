@@ -11,6 +11,22 @@ label_list_rm <- list(
       "The sparkline summarizes the selected feature across all regions at each date.",
       sep = " "
     )
+  ),
+  advanced_settings = list(
+    l = "Advanced map settings",
+    m = "Optional controls for how values are colored and where the legend appears."
+  ),
+  shared_colorbar = list(
+    l = "Use shared colorbar range across all dates",
+    m = "Keep the same color scale across dates so map colors can be compared over time. Turn this off to rescale the colors separately for the selected date."
+  ),
+  legend_location = list(
+    l = "Legend location",
+    m = "Choose where the map legend is placed."
+  ),
+  color_palette = list(
+    l = "Color palette",
+    m = "Choose the color palette used to shade regions on the map."
   )
 )
 
@@ -43,15 +59,15 @@ viz_regional_map_ui <- function(id) {
         feature_sidepanel_ui(ns("feature_side"), title = "Feature Filters", allow_multiple = FALSE),
         tags$hr(),
         tags$details(
-          tags$summary("Advanced map settings"),
+          tags$summary(labeltt(label_list_rm[["advanced_settings"]])),
           checkboxInput(
             inputId = ns("map_use_global_range"),
-            label   = "Use shared colorbar range across all dates",
+            label   = labeltt(label_list_rm[["shared_colorbar"]]),
             value   = TRUE
           ),
           selectInput(
             ns("map_legend_position"),
-            label = "Legend location",
+            label = labeltt(label_list_rm[["legend_location"]]),
             choices = c(
               "Bottom right" = "bottomright",
               "Bottom left"  = "bottomleft",
@@ -62,7 +78,7 @@ viz_regional_map_ui <- function(id) {
           ),
           selectInput(
             inputId = ns("map_palette"),
-            label   = "Color palette",
+            label   = labeltt(label_list_rm[["color_palette"]]),
             choices = c(
               "Viridis" = "viridis",
               "Plasma" = "plasma",

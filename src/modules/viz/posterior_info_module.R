@@ -7,6 +7,13 @@ button_list_pi <- list(
   clear_filters = "Reset all data filters."
 )
 
+label_list_pi <- list(
+  table_decimals = list(
+    l = "Table decimals",
+    m = "Set the number of decimal places shown for non-integer numeric values in the table."
+  )
+)
+
 
 viz_posterior_ui <- function(id) {
   ns <- NS(id)
@@ -25,7 +32,14 @@ viz_posterior_ui <- function(id) {
           allow_multiple = TRUE,
           show_select_all = TRUE
         ),
-        numericInput(ns("dt_digits"), label = "Table decimals", value = 2, min = 0, max = 10, step = 1)
+        numericInput(
+          ns("dt_digits"),
+          label = labeltt(label_list_pi[["table_decimals"]]),
+          value = 2,
+          min = 0,
+          max = 10,
+          step = 1
+        )
       ),
       card(
         card_body(
