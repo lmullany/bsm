@@ -47,15 +47,19 @@ if(packageVersion("epistemic")<min_version) {
 
 # Profile
 source("src/01_credentials.R")
-ALLOW_SHINY_CREDENTIALS <- FALSE
-if (ALLOW_SHINY_CREDENTIALS) {
-  CREDENTIALS <- check_environ_profile("myProfile")
-} else {
-  if(rstudioapi::isAvailable() == FALSE) {
-    cli::cli_abort("Is this app being run outside of RStudio? If so, the app must be configured to ALLOW SHINY CREDENTIALS")
-  }
+ALLOW_SHINY_CREDENTIALS <- TRUE
+# regardless of shiny credentials allowable or not, if this is running in rstudio
+# set CREDENTIALS via the get_profile() function
+if(rstudioapi::isAvailable() == TRUE) {
   CREDENTIALS = get_profile(title = "Bayesian Spatiotemporal Modeling")
+} else {
+  if(ALLOW_SHINY_CREDENTIALS) {
+    CREDENTIALS <- check_environ_profile("myProfile")
+  } else {
+      cli::cli_abort("Is this app being run outside of RStudio? If so, the app must be configured to ALLOW SHINY CREDENTIALS")
+  }
 }
+
 
 
 # Other key scripts, custom filters, and global UI tags
