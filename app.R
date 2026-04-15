@@ -7,30 +7,48 @@ source("src/00_setup.R")
 
 
 options(shiny.maxRequestSize = 1000*1024^2) 
-ui <- page(
-  # get theme from the setup file
-  theme = THEME,
-  global_ui_tags,
-  useShinyjs(),
-  page_navbar(
-    id = "main_nav",
-    title = "Bayesian Spatiotemporal Modeling",
-    # Data Loader
-    data_loader_ui("data_load"),
-    # INLA Modeling
-    inla_model_ui("inla_model"),
-    # VIZ Ui
-    viz_ui("viz"),
-    # Spacer
-    nav_spacer(),
-    # Extras
-    extras_ui("extras"),
-    # Nav options
-    navbar_options = list(class = "card-header-accent top-dark-nav", theme = "dark", underline = FALSE)
+is_tutorial_view <- function(query_string) {
+  view <- shiny::parseQueryString(sub("^\\?", "", query_string %||% ""))$view
+  identical(view, "tutorial")
+}
+
+ui <- function(request) {
+  if (is_tutorial_view(request$QUERY_STRING)) {
+    return(tutorial_page_ui())
+  }
+  
+  page(
+    # get theme from the setup file
+    theme = THEME,
+    global_ui_tags,
+    useShinyjs(),
+    page_navbar(
+      id = "main_nav",
+      title = "Bayesian Spatiotemporal Modeling",
+      # Data Loader
+      data_loader_ui("data_load"),
+      # INLA Modeling
+      inla_model_ui("inla_model"),
+      # VIZ Ui
+      viz_ui("viz"),
+      # Spacer
+      nav_spacer(),
+      # Extras
+      extras_ui("extras"),
+      # Nav options
+      navbar_options = list(class = "card-header-accent top-dark-nav", theme = "dark", underline = FALSE)
+    )
   )
-)
+}
 
 server <- function(input, output, session) {
+  output$tutorial_page_content <- renderUI(
+    render_documentation_content("src/documentation/tutorial.md")
+  )
+  
+  if (is_tutorial_view(session$request$QUERY_STRING)) {
+    return(invisible(NULL))
+  }
 
   # ----------------------------------------------------------------------
   # Global Reactives for Profile

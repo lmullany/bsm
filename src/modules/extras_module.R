@@ -28,6 +28,15 @@ extras_ui <- function(id) {
           class = "btn-primary btn-sm"
         ),
         
+        actionButton(
+          ns("open_tutorial"),
+          label = tagList(
+            bsicons::bs_icon("box-arrow-up-right", title = "Tutorial"),
+            " Tutorial"
+          ),
+          class = "btn-primary btn-sm"
+        ),
+        
         # Next, we add the tooltip ui, which is just a button that
         # toggles tool tips on and off
         tooltip_ui(ns("tooltip")),
@@ -75,8 +84,9 @@ extras_server <- function(id) {
     # Call the tooltip server
     tooltip_server("tooltip")
     
-    # Return the body from the documentation server
-    docs_body <- documentation_server("documentation")
+    # Register the documentation module server and keep its UI ready for the modal.
+    documentation_server("documentation")
+    docs_body <- uiOutput(session$ns("documentation-app_documentation"))
     
     # Open the modal when the documentation book button is clicked
     observe({
@@ -96,5 +106,11 @@ extras_server <- function(id) {
       bslib::toggle_popover("settings_pop", show = FALSE)
     }) |>
       bindEvent(input$open_docs, ignoreInit = TRUE)
+    
+    observe({
+      shinyjs::runjs("window.open('?view=tutorial', '_blank', 'noopener');")
+      bslib::toggle_popover("settings_pop", show = FALSE)
+    }) |>
+      bindEvent(input$open_tutorial, ignoreInit = TRUE)
   })
 }
