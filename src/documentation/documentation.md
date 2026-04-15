@@ -7,24 +7,6 @@
 ## Bayesian Spatiotemporal Modeling Documentation
 
 <a id="top"></a>
-### Quick Navigation
-
-- [Basic User Guide](#basic-user-guide)
-  - [Loading Data](#loading-data)
-  - [Fitting a Default Model](#fitting-a-default-model)
-  - [Reviewing Results](#reviewing-results)
-  - [Choosing a Visualization](#choosing-a-visualization)
-- [Advanced User Guide](#advanced-user-guide)
-  - [Adding Covariates](#adding-covariates)
-  - [Advanced Model Specification](#advanced-model-specification)
-  - [Saved and Exported Files](#saved-and-exported-files)
-- [Tutorial](#tutorial)
-- [Troubleshooting](#troubleshooting)
-- [Developer Guide](#developer-guide)
-  - [High-Level App Structure](#high-level-app-structure)
-  - [Data Flow](#data-flow)
-  - [Feature Metadata and Stored Columns](#feature-metadata-and-stored-columns)
-- [Glossary](#glossary)
 
 <h2 id="basic-user-guide">1. Basic User Guide</h2>
 
