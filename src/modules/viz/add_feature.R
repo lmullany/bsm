@@ -23,6 +23,18 @@ label_list_add_feature <- list(
     l = "Exceedance threshold",
     m = "Enter the threshold value for calculating the posterior probability that the feature exceeds it."
   ),
+  change_mode = list(
+    l = "Change type",
+    m = "Choose whether the change threshold is interpreted as an absolute count increase, an absolute proportion increase, or a relative count increase."
+  ),
+  change_threshold = list(
+    l = "Change threshold",
+    m = "Enter the minimum increase required when calculating the posterior probability of change."
+  ),
+  lookback_value = list(
+    l = "Lookback",
+    m = "Enter the number of time steps between the target date and the reference date. The label updates automatically to match the temporal resolution of the data."
+  ),
   auto_labels = list(
     l = "Auto-generate name/description",
     m = "Automatically fill the feature name and description based on the selected feature type, scale, and parameter values."
@@ -85,17 +97,21 @@ add_feature_ui <- function(id) {
               "Mean" = "mean",
               "Quantile" = "quantile",
               "Confidence Interval" = "confidence_interval",
-              "Exceedance Probability" = "exceedance_probability"
+              "Exceedance Probability" = "exceedance_probability",
+              "Change Probability" = "change_probability"
             ),
             selected = "mean"
           ),
           # Scale selection
-          radioButtons(
-            inputId = ns("feature_scale"),
-            label = labeltt(label_list_add_feature[["feature_scale"]]),
-            choices = c("Counts" = "counts", "Proportion" = "proportion"),
-            selected = "counts",
-            inline = TRUE
+          conditionalPanel(
+            condition = sprintf("input['%s'] != 'change_probability'", feature_id),
+            radioButtons(
+              inputId = ns("feature_scale"),
+              label = labeltt(label_list_add_feature[["feature_scale"]]),
+              choices = c("Counts" = "counts", "Proportion" = "proportion"),
+              selected = "counts",
+              inline = TRUE
+            )
           ),
           
           # Conditional panels
@@ -110,6 +126,23 @@ add_feature_ui <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] == 'exceedance_probability'", feature_id),
             numericInput(ns("exceed_val"), labeltt(label_list_add_feature[["exceedance_threshold"]]), value = 0, min = 0, step = 0.01)
+          ),
+          conditionalPanel(
+            condition = sprintf("input['%s'] == 'change_probability'", feature_id),
+            tagList(
+              selectInput(
+                ns("change_mode"),
+                labeltt(label_list_add_feature[["change_mode"]]),
+                choices = c(
+                  "Absolute count" = "absolute_count",
+                  "Absolute proportion" = "absolute_prop",
+                  "Relative count" = "relative"
+                ),
+                selected = "absolute_count"
+              ),
+              numericInput(ns("change_threshold"), labeltt(label_list_add_feature[["change_threshold"]]), value = 0, min = 0, step = 0.01),
+              uiOutput(ns("change_lookback_ui"))
+            )
           ),
           # Free text fields
           checkboxInput(ns("auto_labels"), labeltt(label_list_add_feature[["auto_labels"]]), value = TRUE),
@@ -190,7 +223,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     
     is_calculated_feature <- function(f) {
       !is.null(f$feature_type) &&
-        f$feature_type %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
+        f$feature_type %in% c("mean", "quantile", "confidence_interval", "exceedance_probability", "change_probability")
     }
     
     quantile_feature_id <- function(scale, q) {
@@ -200,6 +233,78 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     quantile_feature_label <- function(scale, q) {
       sprintf("Quantile q=%s (%s)", fmt_num(q), scale)
     }
+    
+    change_scale_mode <- reactive({
+      input$change_mode %||% "absolute_count"
+    })
+
+    time_resolution <- reactive({
+      tr <- dc$time_res %||% NULL
+      if (is.null(tr) || !nzchar(tr)) return("daily")
+      tr
+    })
+
+    lookback_unit_word <- reactive({
+      if (identical(time_resolution(), "weekly")) "week" else "day"
+    })
+
+    lookback_unit_word_plural <- reactive({
+      base <- lookback_unit_word()
+      function(n) if (identical(as.integer(n), 1L)) base else paste0(base, "s")
+    })
+
+    change_feature_scale <- reactive({
+      switch(
+        change_scale_mode(),
+        absolute_count = "counts",
+        absolute_prop = "proportion",
+        relative = "counts",
+        "counts"
+      )
+    })
+
+    lookback_label <- reactive({
+      val <- as.integer(input$lookback_value %||% 1L)
+      sprintf("%s %s", val, lookback_unit_word_plural()(val))
+    })
+
+    lookback_dt_days <- reactive({
+      val <- max(1L, as.integer(input$lookback_value %||% 1L))
+      if (identical(time_resolution(), "weekly")) val * 7L else val
+    })
+
+    change_threshold_label <- reactive({
+      mode <- change_scale_mode()
+      thr <- as.numeric(input$change_threshold %||% 0)
+      if (identical(mode, "relative")) {
+        sprintf("relative increase of at least %s", fmt_percent(thr))
+      } else if (identical(mode, "absolute_prop")) {
+        sprintf("%s proportion", fmt_num(thr))
+      } else {
+        sprintf("%s counts", fmt_num(thr))
+      }
+    })
+
+    output$change_lookback_ui <- renderUI({
+      numericInput(
+        ns("lookback_value"),
+        labeltt(list(
+          l = sprintf("Lookback (%s)", paste0(lookback_unit_word(), if (identical(lookback_unit_word(), "day")) "s" else "s")),
+          m = label_list_add_feature[["lookback_value"]][["m"]]
+        )),
+        value = 1,
+        min = 1,
+        step = 1
+      )
+    })
+
+    observe({
+      if (!identical(input$feature %||% "", "change_probability")) return()
+      target_scale <- change_feature_scale()
+      if (!identical(input$feature_scale %||% "", target_scale)) {
+        updateRadioButtons(session, "feature_scale", selected = target_scale)
+      }
+    })
     
     # Sidebar open/close
     sidebar_open <- reactiveVal(TRUE)
@@ -240,35 +345,60 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     # the currently selected feature type and parameters.
     default_feature_spec <- reactive({
       ft <- input$feature
+      feature_scale <- if (identical(ft, "change_probability")) change_feature_scale() else (input$feature_scale %||% "counts")
       ft_name <- switch(
         ft,
-        mean = sprintf("Posterior Mean (%s)", input$feature_scale),
+        mean = sprintf("Posterior Mean (%s)", feature_scale),
         quantile = sprintf("Quantile q=%s (%s)",
           fmt_num(input$q_val %||% 0.50),
-                           input$feature_scale),
+                           feature_scale),
         confidence_interval = sprintf("%s CI (%s)",
           fmt_num(input$ci_val %||% 0.90),
-                                      input$feature_scale),
+                                      feature_scale),
         exceedance_probability = sprintf("Exceedance probability with threshold %s (%s)",
           fmt_num(input$exceed_val %||% 0.0),
-                                         input$feature_scale),
+                                         feature_scale),
+        change_probability = sprintf(
+          "Change probability: %s over %s",
+          change_threshold_label(),
+          lookback_label()
+        ),
         "Feature"
       )
       
       ft_desc <- switch(
         ft,
         mean = sprintf("Posterior mean of the fitted distribution on the %s scale.",
-                       input$feature_scale),
+                       feature_scale),
         quantile = sprintf("Posterior quantile at q=%s on the %s scale.", 
           fmt_num(input$q_val %||% 0.50),
-                           input$feature_scale),
+                           feature_scale),
         confidence_interval = sprintf("%s%% posterior credible interval on the %s scale.", 
           fmt_num(100 * (input$ci_val %||% 0.90)),
-                                      input$feature_scale),
+                                      feature_scale),
         exceedance_probability = sprintf(
           "Posterior probability that the value exceeds %s on the %s scale.",
           fmt_num(input$exceed_val %||% 0.0),
-          input$feature_scale
+          feature_scale
+        ),
+        change_probability = switch(
+          change_scale_mode(),
+          absolute_count = sprintf(
+            "Posterior probability that the count at the target date exceeds the count %s earlier by at least %s.",
+            lookback_label(),
+            fmt_num(input$change_threshold %||% 0)
+          ),
+          absolute_prop = sprintf(
+            "Posterior probability that the proportion at the target date exceeds the proportion %s earlier by at least %s.",
+            lookback_label(),
+            fmt_num(input$change_threshold %||% 0)
+          ),
+          relative = sprintf(
+            "Posterior probability that the count at the target date is at least %s greater than the count %s earlier.",
+            fmt_percent(input$change_threshold %||% 0),
+            lookback_label()
+          ),
+          ""
         ),
         ""
       )
@@ -285,7 +415,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       updateTextInput(session, "feature_desc", value = spec$desc)
     }
     )|>
-      bindEvent(list(input$feature, input$q_val, input$ci_val, input$exceed_val, input$feature_scale),
+      bindEvent(list(input$feature, input$q_val, input$ci_val, input$exceed_val, input$feature_scale,
+                     input$change_mode, input$change_threshold, input$lookback_value, time_resolution()),
                 ignoreInit = FALSE)
     
     observe({
@@ -334,8 +465,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     observe({
       r <- rvr()
       ft <- input$feature
-      sc <- input$feature_scale
-      calculated_feature_ids <- character(0)
+      sc <- if (identical(ft, "change_probability")) change_feature_scale() else (input$feature_scale %||% "counts")
       
       spec <- default_feature_spec()
       nm <- trimws(input$feature_name %||% "")
@@ -369,102 +499,127 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         return(NULL)
       }
       
-      params <- switch(
-        ft,
-        mean = list(),
-        quantile = list(q = input$q_val %||% 0.50),
-        confidence_interval = list(ci = input$ci_val %||% 0.90),
-        exceedance_probability = list(threshold = input$exceed_val %||% 0),
-        list()
-      )
-      
-      fid <- paste0(
-        "usr__", ft, "__", sc, "__", slugify(nm),
-        if (ft == "quantile") paste0("__q", fmt_qname(params$q %||% 0.5)) else "",
-        if (ft == "confidence_interval") paste0("__ci", fmt_qname(params$ci %||% 0.9)) else "",
-        if (ft == "exceedance_probability") paste0("__thr", slugify(as.character(params$threshold %||% 0))) else ""
-      )
-      
-      r$features[[fid]] <- list(
-        id = fid,
-        label = nm,
-        description = ds,
-        feature_type = ft,
-        feature_scale = sc,
-        out_cols = out_cols,
-        params = params,
-        feature_kind = if (ft == "confidence_interval") "composite" else "atomic"
-      )
-      if (!fid %in% r$order) r$order <- c(r$order, fid)
-      calculated_feature_ids <- fid
-      
-      if (ft == "confidence_interval") {
-        # A user-created CI is stored both as a composite interval feature and
-        # as its endpoint quantile features so each can be filtered/displayed.
-        ci <- params$ci %||% 0.90
-        a <- (1 - ci) / 2
-        q_specs <- list(
-          list(q = a, role = "lower"),
-          list(q = 1 - a, role = "upper")
-        )
-        q_ids <- vapply(q_specs, function(x) quantile_feature_id(sc, x$q), character(1))
-        group_id <- paste0("usr__ci_group__", sc, "__ci", fmt_qname(ci), "__", slugify(nm))
-        
-        for (i in seq_along(q_specs)) {
-          q <- q_specs[[i]]$q
-          q_role <- q_specs[[i]]$role
-          qid <- q_ids[[i]]
+      withProgress(
+        message = sprintf("Adding feature: %s", nm),
+        detail = "Registering feature metadata...",
+        value = 0.1,
+        {
+          calculated_feature_ids <- character(0)
           
-          if (is.null(r$features[[qid]])) {
-            q_label <- quantile_feature_label(sc, q)
-            r$features[[qid]] <- list(
-              id = qid,
-              label = q_label,
-              description = sprintf(
-                "Posterior quantile at q=%s on the %s scale. %s endpoint of the %s credible interval.",
-                fmt_num(q),
-                sc,
-                tools::toTitleCase(q_role),
-                fmt_num(ci)
-              ),
-              feature_type = "quantile",
-              feature_scale = sc,
-              out_cols = q_label,
-              params = list(q = q),
-              feature_kind = "atomic",
-              group_id = group_id,
-              group_role = q_role
+          params <- switch(
+            ft,
+            mean = list(),
+            quantile = list(q = input$q_val %||% 0.50),
+            confidence_interval = list(ci = input$ci_val %||% 0.90),
+            exceedance_probability = list(threshold = input$exceed_val %||% 0),
+            change_probability = list(
+              threshold = input$change_threshold %||% 0,
+              dt = lookback_dt_days(),
+              dt_input = as.integer(input$lookback_value %||% 1L),
+              dt_units = if (identical(time_resolution(), "weekly")) "weeks" else "days",
+              scale_mode = change_scale_mode()
+            ),
+            list()
+          )
+          
+          fid <- paste0(
+            "usr__", ft, "__", sc, "__", slugify(nm),
+            if (ft == "quantile") paste0("__q", fmt_qname(params$q %||% 0.5)) else "",
+            if (ft == "confidence_interval") paste0("__ci", fmt_qname(params$ci %||% 0.9)) else "",
+            if (ft == "exceedance_probability") paste0("__thr", slugify(as.character(params$threshold %||% 0))) else "",
+            if (ft == "change_probability") paste0(
+              "__mode", slugify(params$scale_mode %||% "absolute_count"),
+              "__dt", slugify(as.character(params$dt_input %||% 1)),
+              "__", slugify(params$dt_units %||% "days"),
+              "__thr", slugify(as.character(params$threshold %||% 0))
+            ) else ""
+          )
+          
+          r$features[[fid]] <- list(
+            id = fid,
+            label = nm,
+            description = ds,
+            feature_type = ft,
+            feature_scale = sc,
+            out_cols = out_cols,
+            params = params,
+            feature_kind = if (ft == "confidence_interval") "composite" else "atomic"
+          )
+          if (!fid %in% r$order) r$order <- c(r$order, fid)
+          calculated_feature_ids <- fid
+          
+          if (ft == "confidence_interval") {
+            # A user-created CI is stored both as a composite interval feature and
+            # as its endpoint quantile features so each can be filtered/displayed.
+            ci <- params$ci %||% 0.90
+            a <- (1 - ci) / 2
+            q_specs <- list(
+              list(q = a, role = "lower"),
+              list(q = 1 - a, role = "upper")
             )
-            if (!qid %in% r$order) r$order <- c(r$order, qid)
+            q_ids <- vapply(q_specs, function(x) quantile_feature_id(sc, x$q), character(1))
+            group_id <- paste0("usr__ci_group__", sc, "__ci", fmt_qname(ci), "__", slugify(nm))
+            
+            for (i in seq_along(q_specs)) {
+              q <- q_specs[[i]]$q
+              q_role <- q_specs[[i]]$role
+              qid <- q_ids[[i]]
+              
+              if (is.null(r$features[[qid]])) {
+                q_label <- quantile_feature_label(sc, q)
+                r$features[[qid]] <- list(
+                  id = qid,
+                  label = q_label,
+                  description = sprintf(
+                    "Posterior quantile at q=%s on the %s scale. %s endpoint of the %s credible interval.",
+                    fmt_num(q),
+                    sc,
+                    tools::toTitleCase(q_role),
+                    fmt_num(ci)
+                  ),
+                  feature_type = "quantile",
+                  feature_scale = sc,
+                  out_cols = q_label,
+                  params = list(q = q),
+                  feature_kind = "atomic",
+                  group_id = group_id,
+                  group_role = q_role
+                )
+                if (!qid %in% r$order) r$order <- c(r$order, qid)
+              }
+            }
+            
+            r$features[[fid]]$group_id <- group_id
+            r$features[[fid]]$member_ids <- q_ids
+            calculated_feature_ids <- unique(c(q_ids, fid))
+          }
+          
+          r$last_id <- fid
+          
+          qs <- need_probs(ft)
+          if (length(qs)) r$probs <- sort(unique(c(r$probs, qs)))
+          
+          incProgress(0.2, detail = "Calculating feature values...")
+          calculate_err <- tryCatch({
+            calculate_and_store_feature_ids(calculated_feature_ids)
+            NULL
+          }, error = function(e) conditionMessage(e))
+          
+          incProgress(0.6, detail = "Refreshing feature lists...")
+          r$force_select_fid <- fid
+          r$refresh <- r$refresh + 1L
+          
+          if (!is.null(calculate_err)) {
+            showNotification(
+              paste("Feature metadata was added, but the calculated feature values could not be stored:", calculate_err),
+              type = "warning",
+              duration = 8
+            )
+          } else {
+            showNotification(sprintf("Added feature: %s", nm), type = "message")
           }
         }
-        
-        r$features[[fid]]$group_id <- group_id
-        r$features[[fid]]$member_ids <- q_ids
-        calculated_feature_ids <- unique(c(q_ids, fid))
-      }
-      
-      r$last_id <- fid
-      
-      qs <- need_probs(ft)
-      if (length(qs)) r$probs <- sort(unique(c(r$probs, qs)))
-      
-      calculate_err <- tryCatch({
-        calculate_and_store_feature_ids(calculated_feature_ids)
-        NULL
-      }, error = function(e) conditionMessage(e))
-      if (!is.null(calculate_err)) {
-        showNotification(
-          paste("Feature metadata was added, but the calculated feature values could not be stored:", calculate_err),
-          type = "warning",
-          duration = 8
-        )
-      }
-      
-      r$force_select_fid <- fid
-      r$refresh <- r$refresh + 1L
-      
-      showNotification(sprintf("Added feature: %s", nm), type = "message")
+      )
     }) |> bindEvent(input$add_feature, ignoreInit = TRUE)
     
     feature_choice_map <- reactive({
@@ -726,6 +881,30 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         out2[, (ex_col) := NULL]
         return(out2[])
       }
+
+      if (ft == "change_probability") {
+        thr <- as.numeric(f$params$threshold %||% 0)
+        dt_days <- as.integer(f$params$dt %||% 1L)
+        scale_mode <- as.character(f$params$scale_mode %||% "absolute_count")
+        key <- cache_key("change", thr, dt_days, scale_mode)
+        res <- cache_get(key)
+        if (is.null(res)) {
+          res <- epistemic::get_probability_of_increase(
+            inla_model = im$model,
+            data_cls = im$data_cls,
+            threshold = thr,
+            dt = dt_days,
+            scale_mode = scale_mode,
+            use_suffix = TRUE
+          )
+          cache_set(key, res)
+        }
+        out2 <- merge_by_region_date(out, res, dcls)
+        chg_col <- grep("^change_prob", names(out2), value = TRUE)[1]
+        out2[, (out_cols[[1]]) := as.numeric(get(chg_col))]
+        out2[, (chg_col) := NULL]
+        return(out2[])
+      }
       out
     }
     
@@ -983,5 +1162,15 @@ merge_by_region_date <- function(x, y, data_cls) {
 
 # format decimals
 fmt_num <- function(x, digits = 6) {
-  trimws(formatC(x, format = "fg", digits = digits))
+  if (is.null(x) || length(x) == 0) return("")
+  x_num <- suppressWarnings(as.numeric(x[[1]]))
+  if (is.na(x_num)) return("")
+  trimws(formatC(x_num, format = "fg", digits = digits))
+}
+
+fmt_percent <- function(x, digits = 6) {
+  if (is.null(x) || length(x) == 0) return("")
+  x_num <- suppressWarnings(as.numeric(x[[1]]))
+  if (is.na(x_num)) return("")
+  paste0(fmt_num(100 * x_num, digits = digits), "%")
 }

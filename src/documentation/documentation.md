@@ -440,6 +440,7 @@ Many advanced displays work from stored feature columns rather than recalculatin
 <h3 id="posterior-summaries-and-added-features">Posterior Summaries and Added Features</h3>
 
 The `Add Feature` tab lets you create additional stored summaries without refitting the model.
+Supported derived features include posterior means, quantiles, credible intervals, exceedance probabilities, and change probabilities over a user-defined lookback window.
 
 Supported feature types include:
 
