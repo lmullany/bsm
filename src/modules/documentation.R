@@ -30,7 +30,12 @@ register_documentation_resources <- local({
 render_documentation_content <- function(path) {
   if (requireNamespace("markdown", quietly = TRUE)) {
     return(htmltools::HTML(
-      markdown::markdownToHTML(file = path, fragment.only = TRUE)
+      # Shiny serves these images via addResourcePath(); do not try to inline them.
+      markdown::markdownToHTML(
+        file = path,
+        fragment.only = TRUE,
+        options = c("-embed_resources")
+      )
     ))
   }
   
