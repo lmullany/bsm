@@ -64,17 +64,21 @@ feature_sidepanel_ui <- function(id,
         selected = character(0),
         multiple = TRUE,
         selectize = FALSE,
-        size = if (allow_multiple) NULL else 1,
+        size = if (allow_multiple) NULL else 2,
         width = "100%"
       ),
-      tags$small(class = "text-muted", "Click an item to remove it from the selected group."),
-      actionButton(
-        ns("clear_selected"),
-        "Clear selected",
-        class = "btn-primary btn-sm",
-        style = "width:100%;",
-        title = "Remove all currently selected features from this panel. This does not delete the features from the app."
-      ),
+      if(allow_multiple) {
+        tagList(
+          tags$small(class = "text-muted", "Click an item to remove it from the selected group."),
+          actionButton(
+            ns("clear_selected"),
+            "Clear selected",
+            class = "btn-primary btn-sm",
+            style = "width:100%;",
+            title = "Remove all currently selected features from this panel. This does not delete the features from the app."
+          )
+        )
+      },
       tags$hr(),
       h5(labeltt(label_list_feature_side[["available_features"]])),
       if (allow_multiple && isTRUE(show_select_all)) {
@@ -95,7 +99,9 @@ feature_sidepanel_ui <- function(id,
         selectize = FALSE,
         width = "100%"
       ),
-      tags$small(class = "text-muted", "Click an item to add it to the selected group."),
+      if(allow_multiple) {
+        tags$small(class = "text-muted", "Click an item to add it to the selected group.")
+      },
       tags$hr(),
       tags$details(
         style = "margin-top: 8px; margin-bottom: 12px; display: block;",
