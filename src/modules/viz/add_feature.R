@@ -31,6 +31,10 @@ label_list_add_feature <- list(
     l = "Change threshold",
     m = "Enter the minimum increase required when calculating the posterior probability of change."
   ),
+  change_normal_approx = list(
+    l = "Use normal approximation (faster)",
+    m = "Use the faster normal-approximation method when computing change probabilities. Leave this off to use the full numerical integration."
+  ),
   lookback_value = list(
     l = "Lookback",
     m = "Enter the number of time steps between the target date and the reference date. The label updates automatically to match the temporal resolution of the data."
@@ -130,17 +134,9 @@ add_feature_ui <- function(id) {
           conditionalPanel(
             condition = sprintf("input['%s'] == 'change_probability'", feature_id),
             tagList(
-              selectInput(
-                ns("change_mode"),
-                labeltt(label_list_add_feature[["change_mode"]]),
-                choices = c(
-                  "Absolute count" = "absolute_count",
-                  "Absolute proportion" = "absolute_prop",
-                  "Relative count" = "relative"
-                ),
-                selected = "absolute_count"
-              ),
+              uiOutput(ns("change_mode_ui")),
               numericInput(ns("change_threshold"), labeltt(label_list_add_feature[["change_threshold"]]), value = 0, min = 0, step = 0.01),
+              checkboxInput(ns("change_use_normal_approx"), labeltt(label_list_add_feature[["change_normal_approx"]]), value = FALSE),
               uiOutput(ns("change_lookback_ui"))
             )
           ),
@@ -238,6 +234,17 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       input$change_mode %||% "absolute_count"
     })
 
+    model_scale_key <- reactive({
+      req(im$model)
+      sc <- tryCatch(epistemic::get_model_scale(im$model), error = function(e) NULL)
+      if (is.null(sc) || !nzchar(sc)) return("count")
+      sc
+    })
+
+    relative_change_label <- reactive({
+      if (identical(model_scale_key(), "prop")) "Relative proportion" else "Relative count"
+    })
+
     time_resolution <- reactive({
       tr <- dc$time_res %||% NULL
       if (is.null(tr) || !nzchar(tr)) return("daily")
@@ -258,7 +265,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         change_scale_mode(),
         absolute_count = "counts",
         absolute_prop = "proportion",
-        relative = "counts",
+        relative = if (identical(model_scale_key(), "prop")) "proportion" else "counts",
         "counts"
       )
     })
@@ -283,6 +290,25 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
       } else {
         sprintf("%s counts", fmt_num(thr))
       }
+    })
+
+    change_approx_suffix <- reactive({
+      if (isTRUE(input$change_use_normal_approx)) " (approx)" else ""
+    })
+
+    output$change_mode_ui <- renderUI({
+      selectInput(
+        ns("change_mode"),
+        labeltt(label_list_add_feature[["change_mode"]]),
+        choices = stats::setNames(
+          c("absolute_count", "absolute_prop", "relative"),
+          c("Absolute count", "Absolute proportion", relative_change_label())
+        ),
+        selected = {
+          cur <- isolate(input$change_mode %||% "absolute_count")
+          if (cur %in% c("absolute_count", "absolute_prop", "relative")) cur else "absolute_count"
+        }
+      )
     })
 
     output$change_lookback_ui <- renderUI({
@@ -359,9 +385,10 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
           fmt_num(input$exceed_val %||% 0.0),
                                          feature_scale),
         change_probability = sprintf(
-          "Change probability: %s over %s",
+          "Change probability: %s over %s%s",
           change_threshold_label(),
-          lookback_label()
+          lookback_label(),
+          change_approx_suffix()
         ),
         "Feature"
       )
@@ -394,8 +421,10 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
             fmt_num(input$change_threshold %||% 0)
           ),
           relative = sprintf(
-            "Posterior probability that the count at the target date is at least %s greater than the count %s earlier.",
+            "Posterior probability that the %s at the target date is at least %s greater than the %s %s earlier.",
+            if (identical(change_feature_scale(), "proportion")) "proportion" else "count",
             fmt_percent(input$change_threshold %||% 0),
+            if (identical(change_feature_scale(), "proportion")) "proportion" else "count",
             lookback_label()
           ),
           ""
@@ -416,7 +445,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     }
     )|>
       bindEvent(list(input$feature, input$q_val, input$ci_val, input$exceed_val, input$feature_scale,
-                     input$change_mode, input$change_threshold, input$lookback_value, time_resolution()),
+                     input$change_mode, input$change_threshold, input$change_use_normal_approx,
+                     input$lookback_value, time_resolution(), model_scale_key()),
                 ignoreInit = FALSE)
     
     observe({
@@ -517,7 +547,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
               dt = lookback_dt_days(),
               dt_input = as.integer(input$lookback_value %||% 1L),
               dt_units = if (identical(time_resolution(), "weekly")) "weeks" else "days",
-              scale_mode = change_scale_mode()
+              scale_mode = change_scale_mode(),
+              use_normal_approx = isTRUE(input$change_use_normal_approx)
             ),
             list()
           )
@@ -531,7 +562,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
               "__mode", slugify(params$scale_mode %||% "absolute_count"),
               "__dt", slugify(as.character(params$dt_input %||% 1)),
               "__", slugify(params$dt_units %||% "days"),
-              "__thr", slugify(as.character(params$threshold %||% 0))
+              "__thr", slugify(as.character(params$threshold %||% 0)),
+              "__normal", as.integer(isTRUE(params$use_normal_approx))
             ) else ""
           )
           
@@ -886,7 +918,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         thr <- as.numeric(f$params$threshold %||% 0)
         dt_days <- as.integer(f$params$dt %||% 1L)
         scale_mode <- as.character(f$params$scale_mode %||% "absolute_count")
-        key <- cache_key("change", thr, dt_days, scale_mode)
+        use_normal_approx <- isTRUE(f$params$use_normal_approx)
+        key <- cache_key("change", thr, dt_days, scale_mode, use_normal_approx)
         res <- cache_get(key)
         if (is.null(res)) {
           res <- epistemic::get_probability_of_increase(
@@ -895,7 +928,8 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
             threshold = thr,
             dt = dt_days,
             scale_mode = scale_mode,
-            use_suffix = TRUE
+            use_suffix = TRUE,
+            use_normal_approx = use_normal_approx
           )
           cache_set(key, res)
         }

@@ -176,8 +176,8 @@ get_calculated_feature_exceedance_dt <- function(context, threshold, use_count_s
 
 # Fetch and cache probability-of-increase summaries for a given threshold,
 # lookback, and scale-mode combination.
-get_calculated_feature_change_dt <- function(context, threshold, dt, scale_mode) {
-  key <- paste(threshold, dt, scale_mode, sep = "::")
+get_calculated_feature_change_dt <- function(context, threshold, dt, scale_mode, use_normal_approx = FALSE) {
+  key <- paste(threshold, dt, scale_mode, use_normal_approx, sep = "::")
   if (exists(key, envir = context$change_cache, inherits = FALSE)) {
     return(get(key, envir = context$change_cache, inherits = FALSE))
   }
@@ -188,7 +188,8 @@ get_calculated_feature_change_dt <- function(context, threshold, dt, scale_mode)
     threshold = threshold,
     dt = dt,
     scale_mode = scale_mode,
-    use_suffix = TRUE
+    use_suffix = TRUE,
+    use_normal_approx = use_normal_approx
   )
   assign(key, dt_out, envir = context$change_cache)
   get(key, envir = context$change_cache, inherits = FALSE)
@@ -283,7 +284,8 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
     thr <- as.numeric(feature$params$threshold %||% 0)
     dt_days <- as.integer(feature$params$dt %||% 1L)
     scale_mode <- as.character(feature$params$scale_mode %||% "absolute_count")
-    res <- get_calculated_feature_change_dt(context, thr, dt_days, scale_mode)
+    use_normal_approx <- isTRUE(feature$params$use_normal_approx)
+    res <- get_calculated_feature_change_dt(context, thr, dt_days, scale_mode, use_normal_approx)
     out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
     change_col <- grep("^change_prob", names(out2), value = TRUE)[1]
     out2[, (out_cols[[1]]) := as.numeric(get(change_col))]
