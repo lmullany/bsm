@@ -87,6 +87,8 @@ data_loader_ui <- function(id) {
     title = "Data Loader",
     layout_sidebar(
       sidebar = sidebar(
+        id = ns('data_loader_sidebar'),
+        open = FALSE,
         navset_tab(
           nav_panel(
             title = tagList(
@@ -104,7 +106,8 @@ data_loader_ui <- function(id) {
             synd_panel,
             add_button_hover(
               title = button_list_dl[["run_query"]],
-              input_task_button(ns("load_data_btn"), "Query ESSENCE"))
+              hidden(input_task_button(ns("load_data_btn"), "Query ESSENCE"))
+            )
           ),
           nav_panel(
             title = tagList(
@@ -171,6 +174,11 @@ data_loader_server <- function(id, dc, results, profile, valid_profile, cache_tr
       observe(dc$synd_drop_menu <- input$synd_drop_menu)
       
       cat_values <- reactive(get_categorical_values(profile()))
+      
+      observe({
+        toggle("load_data_btn", condition=req(cat_values()))
+        toggle_sidebar(id = "data_loader_sidebar", open=TRUE)
+      }) |> bindEvent(cat_values())
       
       observe({
         if (is.null(data()$data)) {
