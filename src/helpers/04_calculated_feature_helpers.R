@@ -109,7 +109,8 @@ build_calculated_feature_context <- function(features, model, data_cls) {
     qdf_props = qdf_props,
     qdf_counts = qdf_counts,
     mean_cache = new.env(parent = emptyenv()),
-    exceed_cache = new.env(parent = emptyenv())
+    exceed_cache = new.env(parent = emptyenv()),
+    change_cache = new.env(parent = emptyenv())
   )
 }
 
@@ -171,6 +172,27 @@ get_calculated_feature_exceedance_dt <- function(context, threshold, use_count_s
   )
   assign(key, dt, envir = context$exceed_cache)
   get(key, envir = context$exceed_cache, inherits = FALSE)
+}
+
+# Fetch and cache probability-of-increase summaries for a given threshold,
+# lookback, and scale-mode combination.
+get_calculated_feature_change_dt <- function(context, threshold, dt, scale_mode, use_normal_approx = FALSE) {
+  key <- paste(threshold, dt, scale_mode, use_normal_approx, sep = "::")
+  if (exists(key, envir = context$change_cache, inherits = FALSE)) {
+    return(get(key, envir = context$change_cache, inherits = FALSE))
+  }
+
+  dt_out <- epistemic::get_probability_of_increase(
+    inla_model = context$model,
+    data_cls = context$data_cls,
+    threshold = threshold,
+    dt = dt,
+    scale_mode = scale_mode,
+    use_suffix = TRUE,
+    use_normal_approx = use_normal_approx
+  )
+  assign(key, dt_out, envir = context$change_cache)
+  get(key, envir = context$change_cache, inherits = FALSE)
 }
 
 # Calculate one feature from the fitted model summaries and store its output
@@ -258,6 +280,19 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
     return(out2[])
   }
 
+  if (ft == "change_probability") {
+    thr <- as.numeric(feature$params$threshold %||% 0)
+    dt_days <- as.integer(feature$params$dt %||% 1L)
+    scale_mode <- as.character(feature$params$scale_mode %||% "absolute_count")
+    use_normal_approx <- isTRUE(feature$params$use_normal_approx)
+    res <- get_calculated_feature_change_dt(context, thr, dt_days, scale_mode, use_normal_approx)
+    out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
+    change_col <- grep("^change_prob", names(out2), value = TRUE)[1]
+    out2[, (out_cols[[1]]) := as.numeric(get(change_col))]
+    out2[, (change_col) := NULL]
+    return(out2[])
+  }
+
   out2
 }
 
@@ -265,7 +300,7 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
 # columns to the supplied data table.
 calculate_and_store_calculated_features <- function(out, features, model, data_cls) {
   features <- Filter(function(f) {
-    !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
+    !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability", "change_probability")
   }, features)
   if (!length(features)) {
     return(data.table::as.data.table(out))
