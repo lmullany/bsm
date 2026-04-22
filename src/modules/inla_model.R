@@ -457,7 +457,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
           numericInput(
             inputId =  session$ns("nforecasts"), 
             label = labeltt(label_list_im[[lv[["label"]]]]),
-            value = lv[["value"]]
+            value = lv[["value"]],min = 0
           )
         })
       })
