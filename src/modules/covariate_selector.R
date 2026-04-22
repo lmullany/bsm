@@ -115,6 +115,17 @@ add_covariate_loader <- function(
     if (!nzchar(x[1])) return(NULL)
     x[1]
   }
+  
+  safe_which <- function(x) {
+    if (is.null(x)) return(integer(0))
+    x <- unlist(x, use.names = FALSE)
+    if (!is.logical(x)) {
+      x <- as.logical(x)
+    }
+    x[is.na(x)] <- FALSE
+    which(x)
+  }
+  
   impute_selected <- function(dt, region_col = NULL, date_col = NULL, feature_cols, method) {
     dt <- data.table::copy(dt)
     
@@ -191,7 +202,7 @@ add_covariate_loader <- function(
           dt[, fill := fills$fill[1]]
         }
         
-        idx <- which(is.na(dt[[nm]]) & !is.na(dt[["fill"]]) & !is.nan(dt[["fill"]]))
+        idx <- safe_which(is.na(dt[[nm]]) & !is.na(dt[["fill"]]) & !is.nan(dt[["fill"]]))
         if (length(idx) > 0) data.table::set(dt, i = idx, j = nm, value = dt[["fill"]][idx])
         
         dt[, fill := NULL]
@@ -250,9 +261,9 @@ add_covariate_loader <- function(
           # assign to all matching rows (same date? + same region) that are NA
           if (length(by_cols) > 0) {
             dval <- targets[[by_cols]][i]
-            idx <- which(dt[[by_cols]] == dval & dt[[region_col]] == f & is.na(dt[[nm]]))
+            idx <- safe_which(dt[[by_cols]] == dval & dt[[region_col]] == f & is.na(dt[[nm]]))
           } else {
-            idx <- which(dt[[region_col]] == f & is.na(dt[[nm]]))
+            idx <- safe_which(dt[[region_col]] == f & is.na(dt[[nm]]))
           }
           
           if (length(idx) > 0) data.table::set(dt, i = idx, j = nm, value = fill)
@@ -359,7 +370,7 @@ add_covariate_loader <- function(
         
         div(style = "margin-top: 8px;"),
         strong("Preview:"),
-        DT::DTOutput(ns("cov_preview_dt")),
+        reactable::reactableOutput(ns("cov_preview_dt"), width = "100%"),
         
         footer = tagList(
           add_button_hover(title = button_list_cs[["cancel"]],actionButton(ns("cov_cancel"), "Cancel", class = "btn-primary")),
@@ -618,18 +629,56 @@ add_covariate_loader <- function(
     dt[, keep, with = FALSE]
   })
   
-  output$cov_preview_dt <- DT::renderDT({
-    DT::datatable(
-      preview_dt(),
-      rownames = FALSE,
-      options = list(
-        scrollX = TRUE,
-        scrollY = "45vh",
-        pageLength = 10,
-        lengthMenu = c(10, 25, 50, 100)
+  output$cov_preview_dt <- reactable::renderReactable({
+    df <- preview_dt()
+    if (ncol(df) == 0) {
+      return(
+        reactable::reactable(
+          data.frame(Message = "Select at least one preview column to display.", check.names = FALSE),
+          searchable = FALSE,
+          filterable = FALSE,
+          sortable = FALSE,
+          pagination = FALSE,
+          bordered = TRUE,
+          striped = FALSE,
+          highlight = FALSE,
+          fullWidth = TRUE,
+          theme = BS_REACTABLE_THEME
+        )
       )
+    }
+    digits <- 4L
+    cols_to_round <- non_integer_cols_to_round(df, names = TRUE)
+    
+    col_defs <- lapply(names(df), function(col) {
+      is_num <- is.numeric(df[[col]])
+      reactable::colDef(
+        name = map_table_names_to_display(col, keep_names = FALSE),
+        align = if (is_num) "right" else "left",
+        format = if (is_num && col %in% cols_to_round) reactable::colFormat(digits = digits) else NULL
+      )
+    })
+    names(col_defs) <- names(df)
+    
+      reactable::reactable(
+        df,
+        columns = col_defs,
+        defaultPageSize = min(nrow(df), 10L),
+        pageSizeOptions = c(10, 25, 50),
+        searchable = FALSE,
+        filterable = FALSE,
+        sortable = TRUE,
+        highlight = FALSE,
+        striped = TRUE,
+        bordered = TRUE,
+      resizable = FALSE,
+      wrap = FALSE,
+      showPageSizeOptions = TRUE,
+      defaultColDef = reactable::colDef(minWidth = 110),
+      fullWidth = TRUE,
+      theme = BS_REACTABLE_THEME
     )
-  }, server = TRUE)
+  })
   
   # ---- Filter ----
   observe({
@@ -768,7 +817,7 @@ add_covariate_loader <- function(
       imp_by_row <- apply(imputed_mask, 1, function(rowmask) paste(feats_num[rowmask], collapse = ","))
       # imp_by_row is "" when nothing was imputed in that row
       
-      idx <- which(nzchar(imp_by_row))
+      idx <- safe_which(nzchar(imp_by_row))
       if (length(idx) > 0) {
         dt_after[idx, imputed_features := ifelse(
           imputed_features == "",
