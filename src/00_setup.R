@@ -9,7 +9,6 @@ library(cli)
 library(data.table)
 library(bslib)
 library(bsicons)
-library(DT)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -482,6 +481,54 @@ html:not([data-bs-theme='dark']) .mode-side.right .mode-icon { opacity:0.45; }
   outline: 3px solid rgba(13,110,253,0.35);
   outline-offset: 2px;
 }
+")
+
+THEME <- bs_add_rules(THEME, "
+  .reactable-top-controls {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.35rem;
+  }
+
+  .reactable-top-controls .form-group,
+  .reactable-top-controls .mb-3 {
+    margin-bottom: 0;
+  }
+
+  .reactable-top-controls .reactable-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 240px;
+    margin-left: auto;
+  }
+
+  .reactable-top-controls .reactable-search-wrap label {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .reactable-top-controls .reactable-search-wrap .form-control {
+    min-width: 240px;
+  }
+
+  .reactable-bottom-controls {
+    margin-top: 0.75rem;
+  }
+
+  .rt-page-size-select,
+  .rt-page-info,
+  .rt-page-button {
+    color: var(--bs-body-color) !important;
+  }
+
+  .rt-page-size-select {
+    background-color: var(--bs-body-bg) !important;
+    border-color: var(--bs-border-color) !important;
+  }
 ")
 
 
