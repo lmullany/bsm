@@ -52,7 +52,9 @@ add_covariate_loader <- function(
   ns <- session$ns
   
   cov_dt       <- reactiveVal(NULL)
+  cov_raw_dt   <- reactiveVal(NULL)
   cov_filtered <- reactiveVal(FALSE)
+  cov_imputed  <- reactiveVal(FALSE)
   
   # UI state: show/hide imputation controls
   show_impute_ui <- reactiveVal(FALSE)
@@ -62,8 +64,11 @@ add_covariate_loader <- function(
   
   # ---- Helpers ----
   normalize_fips <- function(x) {
-    x <- sprintf("%05s", as.character(x))
-    gsub(" ", "0", x, fixed = TRUE)
+    x_chr <- trimws(as.character(x))
+    out <- sprintf("%05s", x_chr)
+    out <- gsub(" ", "0", out, fixed = TRUE)
+    out[is.na(x) | !nzchar(x_chr)] <- NA_character_
+    out
   }
   
   show_missing_warnings <- function(dt, cols) {
@@ -115,6 +120,86 @@ add_covariate_loader <- function(
     if (!nzchar(x[1])) return(NULL)
     x[1]
   }
+  get_selected_cov_keys <- function(dt = cov_raw_dt()) {
+    cols <- names(dt %||% data.table::data.table())
+    region_col <- null_if_blank(input$cov_region_col)
+    date_col   <- null_if_blank(input$cov_date_col)
+
+    list(
+      region_col = if (!is.null(region_col) && region_col %in% cols) region_col else NULL,
+      date_col   = if (!is.null(date_col) && date_col %in% cols) date_col else NULL
+    )
+  }
+
+  apply_selected_key_parsing <- function(dt) {
+    dt <- data.table::copy(dt)
+    keys <- get_selected_cov_keys(dt)
+
+    if (!is.null(keys$region_col)) {
+      region_vals <- dt[[keys$region_col]]
+      region_chr <- trimws(as.character(region_vals))
+      invalid_region <- !is.na(region_vals) & nzchar(region_chr) & !grepl("^\\d{1,5}$", region_chr)
+
+      if (any(invalid_region)) {
+        showNotification(
+          paste0(
+            "Column '", keys$region_col,
+            "' could not be parsed as a 5-digit FIPS code. The region selection was cleared."
+          ),
+          type = "warning",
+          duration = 6
+        )
+        updateSelectInput(session, "cov_region_col", selected = "")
+      } else {
+        dt[, (keys$region_col) := normalize_fips(get(keys$region_col))]
+      }
+    }
+    if (!is.null(keys$date_col)) {
+      date_vals <- dt[[keys$date_col]]
+      date_chr <- trimws(as.character(date_vals))
+      parsed_dates <- suppressWarnings(as.Date(date_vals))
+      invalid_date <- !is.na(date_vals) & nzchar(date_chr) & is.na(parsed_dates)
+
+      if (any(invalid_date)) {
+        showNotification(
+          paste0(
+            "Column '", keys$date_col,
+            "' could not be parsed as dates. The date selection was cleared."
+          ),
+          type = "warning",
+          duration = 6
+        )
+        updateSelectInput(session, "cov_date_col", selected = "")
+      } else {
+        dt[, (keys$date_col) := parsed_dates]
+      }
+    }
+
+    dt
+  }
+
+  reset_cov_working_data <- function(notify = TRUE) {
+    raw_dt <- cov_raw_dt()
+    if (is.null(raw_dt)) return(invisible(FALSE))
+
+    had_derived_state <- isTRUE(cov_filtered()) || isTRUE(cov_imputed())
+
+    cov_dt(apply_selected_key_parsing(raw_dt))
+    cov_filtered(FALSE)
+    cov_imputed(FALSE)
+    show_impute_ui(FALSE)
+    updateSelectInput(session, "cov_impute_method", selected = "mean_overall")
+
+    if (notify && had_derived_state) {
+      showNotification(
+        "Changing the date or region column reset filtered and imputed covariate data.",
+        type = "warning",
+        duration = 6
+      )
+    }
+
+    invisible(had_derived_state)
+  }
   
   safe_which <- function(x) {
     if (is.null(x)) return(integer(0))
@@ -125,7 +210,7 @@ add_covariate_loader <- function(
     x[is.na(x)] <- FALSE
     which(x)
   }
-  
+
   impute_selected <- function(dt, region_col = NULL, date_col = NULL, feature_cols, method) {
     dt <- data.table::copy(dt)
     
@@ -308,6 +393,9 @@ add_covariate_loader <- function(
     updateSelectInput(session, "cov_impute_method", selected = "mean_overall")
     show_impute_ui(FALSE)
     cov_dt(NULL)
+    cov_raw_dt(NULL)
+    cov_filtered(FALSE)
+    cov_imputed(FALSE)
   }
   
   
@@ -435,8 +523,10 @@ add_covariate_loader <- function(
       data.table::setnames(dt, make.unique(names(dt)))
     }
     
-    cov_dt(dt)
+    cov_raw_dt(data.table::copy(dt))
+    cov_dt(apply_selected_key_parsing(dt))
     cov_filtered(FALSE)
+    cov_imputed(FALSE)
     
     cols <- names(cov_dt())
     
@@ -523,14 +613,7 @@ add_covariate_loader <- function(
       server = TRUE
     )
     
-    if (is.null(region_col)) return()
-    
-    dt <- data.table::copy(cov_dt())
-    tryCatch({
-      dt[, (region_col) := normalize_fips(get(region_col))]
-    }, error = function(msg){"Error parsing region column. Skipping."}
-    )
-    cov_dt(dt)
+    reset_cov_working_data(notify = TRUE)
   }) |> bindEvent(input$cov_region_col)
   
   
@@ -562,14 +645,7 @@ add_covariate_loader <- function(
       server = TRUE
     )
     
-    if (is.null(date_col)) return()
-    
-    dt <- data.table::copy(cov_dt())
-    tryCatch({
-      dt[, (date_col) :=as.Date(get(date_col))]
-    }, error = function(msg){"Error parsing date column. Skipping"}
-    )
-    cov_dt(dt)
+    reset_cov_working_data(notify = TRUE)
   })|> bindEvent(input$cov_date_col)
   
   
@@ -799,6 +875,7 @@ add_covariate_loader <- function(
     feats_num <- feats[vapply(feats, function(nm) is.numeric(dt_before[[nm]]), logical(1))]
     if (length(feats_num) == 0) {
       cov_dt(dt_after[, .__row_id__ := NULL])
+      cov_imputed(TRUE)
       showNotification("Imputation applied (no numeric features selected).", type = "message")
       return()
     }
@@ -832,6 +909,7 @@ add_covariate_loader <- function(
     
     
     cov_dt(dt_after)
+    cov_imputed(TRUE)
     
     show_missing_warnings(dt_after, feats)
     
