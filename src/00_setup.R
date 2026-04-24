@@ -2,88 +2,25 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 
-package_handler <- function() {
-  
-  # check all the names of installed packages accessible in .libPaths()
-  accessible_packages <- lapply(
-    .libPaths(), \(lp) installed.packages(lp) |> row.names()
-  ) |> 
-    unlist() |> 
-    unique()
-    
-  # Is INLA available?
-  INLA_version = "0.0.0"
-  MIN_INLA_VERSION = "25.04.29"
-  if("INLA" %in% accessible_packages) INLA_version <-utils::packageVersion("INLA") 
-  
-  if(INLA_version < MIN_INLA_VERSION) {
-    stop(paste0(
-      "This app cannot be run until you install INLA version ",
-      MIN_INLA_VERSION,
-      " or greater.\n",
-      "See https://r-inla.org/download/index.html for more information"
-    ))
-  }
-  
-  # Can a test INLA model be fit on this machine?
-  msg <- "a test run of INLA failed; app cannot be run"
-  tryCatch(
-    {
-      x <- rnorm(100); y <- 1 + 2*x + rnorm(100)
-      fit <- INLA::inla(y ~ x, data = data.frame(x = x, y = y))
-      if(!fit$ok) stop(msg)
-    },
-    error =  function(e) stop(msg)
-  )
-  
-  required_packages <- c(
-    "shiny", "shinyjs", "cli", "data.table", "bing", "bslib",
-    "bsicons", "DT", "ggplot2", "dplyr", "tidyr", "stringr",
-    "lubridate","MMWRweek", "shinycssloaders", "INLA", "gridExtra",
-    "rlang", "plotly", "geojsonsf", "igraph", "leaflet", "leaflet.extras",
-    "leafpop", "reactable", "viridisLite", "sf"
-  )
-  
-  INSTALL_REQUIRED=FALSE
-  missing_required <- required_packages[
-    !required_packages %in% accessible_packages
-  ]
-  if(INSTALL_REQUIRED) {
-    cat(
-      "The following required app dependencies are missing, and will be installed:",
-      paste0(missing_required,collapse = ",")
-    )
-    lapply(missing_required, \(mr) install.packages(mr))
-  } else {
-    stop(
-     "Install the following missing packages and try again:\n",
-     paste0(missing_required, collapse = ",")
-    )
-  }
-  
-  epistemic_version = "0.0.0"
-  epistemic_installed <- "epistemic" %in% accessible_packages
-  # update the version if epistemic is installed
-  if(epistemic_installed) epistemic_version <- utils::packageVersion("epistemic")
-  
-  # Also need epistemic, and must be of a certain version
-  MIN_EPISTEMIC_VERSION = "1.6.0"
-  if(epistemic_version<MIN_EPISTEMIC_VERSION) {
-    # devtools might not be availabe
-    if(!"pak" %in% accessible_packages) {
-      stop(paste(
-        "epistemic is not installed and must be installed from github, but",
-        "pak package is not available. Install pak, devtools or remotes, and",
-        "manually install using pak::pak(\"mpanaggio/epistemic\") or similar."
-      ))
-    } else {
-      cat("Installing 'epistemic' package from github repo")
-      pak::pak("mpanaggio/epistemic")
-    }
-  }
-}
+#################################################################
+# Run the package handler
+source("src/04_package_handler.R")
+INLA_MIN = "25.04.09" # Set the minimum INLA version
+EPISTEMIC_MIN = "1.6.0" # Set the minimum epistemic version
+AUTO_INSTALL = TRUE # Should missing (installable) packages be auto-installed?
+TEST_INLA = TRUE # Should we test inla?
 
-# Libraries
+# Call the handler; any failures will abort app launch
+package_handler(
+  inla_min = INLA_MIN,
+  epistemic_min = EPISTEMIC_MIN,
+  auto_install = AUTO_INSTALL, 
+  test_inla = TEST_INLA
+)
+#################################################################
+
+
+# Load the libraries
 library(shiny)
 library(shinyjs)
 library(cli)
@@ -109,31 +46,14 @@ library(leafpop)
 library(reactable)
 library(viridisLite)
 library(sf)
-
-
-# Run the package handler
-package_handler()
-
-# Rnssp is required, but too heavy to load
-# lets check for existence instead
-
-# epistemic required
 library(epistemic)
-
-# Check minimum epistemic version
-min_version = "1.6.0"
-if(packageVersion("epistemic")<min_version) {
-  cli::cli_abort(
-    paste0("epistemic version must be at least ", min_version)
-  )
-}
 
 
 # Profile
 source("src/01_credentials.R")
 ALLOW_SHINY_CREDENTIALS <- TRUE
 # regardless of shiny credentials allowable or not, if this is running in rstudio
-# set CREDENTIALS via the get_profile() function
+# set CREDENTIALS via the rstudio get_profile() function
 if(rstudioapi::isAvailable() == TRUE) {
   CREDENTIALS = get_profile(title = "Bayesian Spatiotemporal Modeling")
 } else {

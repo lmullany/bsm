@@ -5,118 +5,184 @@
 # Package check and handle function. 
 
 package_handler <- function(
-    install_required=FALSE, 
     inla_min = "25.04.09", 
-    epistemic_min = "1.6.0"
+    epistemic_min = "1.6.0",
+    auto_install=FALSE, 
+    test_inla = TRUE
 ) {
   
+  # 1. get accessible packages
+  accessible_pkgs <- accessible_packages()
+
+  # 2. check inla
+  check_inla(inla_min = inla_min,ac = accessible_pkgs)
+
+  # 3. test inla
+  if(test_inla) test_inla()
+  
+  # 4. check Rnssp
+  check_rnssp(ac = accessible_pkgs)
+
+  # 5. check other non-automatically installed packages
+  check_other_uninstallable(ac = accessible_pkgs)
+
+  # 6. check installable packages
+  check_installable(ac = accessible_pkgs, auto_install = auto_install)
+
+  # 7. check episemtic
+  check_epistemic(epistemic_min = epistemic_min,ac = accessible_pkgs, auto_install=auto_install)
+  
+  # If we have made it this far, all dependencies are available
+  cat("all required packages and version(s) found.")
+  
+  invisible()
+}
+
+accessible_packages <- function() {
   # check all the names of installed packages accessible in .libPaths()
-  accessible_packages <- lapply(
+  lapply(
     .libPaths(), \(lp) installed.packages(lp) |> row.names()
   ) |> 
     unlist() |> 
     unique()
-  
-  # Is INLA available?
+}
+ 
+# function checks if a minimum version of inla is available
+check_inla <- function(inla_min, ac = accessible_packages()) {
   
   # set the current version with a NULL value
   INLA_version = "0.0.0"
   
-  # set the minimum INLA version
-  MIN_INLA_VERSION = inla_min
-  
   # Update the current version to the one that is installed, if any
-  if("INLA" %in% accessible_packages) INLA_version <-utils::packageVersion("INLA") 
+  if("INLA" %in% ac) INLA_version <- utils::packageVersion("INLA") 
   
   # if the current version is less than the minimum fail gracefully
-  if(INLA_version < MIN_INLA_VERSION) {
+  if(INLA_version < inla_min) {
     stop(paste0(
       "This app cannot be run until you install INLA version ",
-      MIN_INLA_VERSION,
+      inla_min,
       " or greater.\n",
       "See https://r-inla.org/download/index.html for more information"
     ))
   }
   
-  # Okay, if we get to this point, INLA is installed, and meets the minimum 
-  # version. Can a test INLA model be fit on this machine?
+  invisible()
+}
+
+test_inla <- function() {
+
+  # Can a test INLA model be fit on this machine?
+  
   failure_msg <- "a test run of INLA failed; app cannot be run"
   tryCatch(
     {
       x <- rnorm(100); y <- 1 + 2*x + rnorm(100)
       fit <- INLA::inla(y ~ x, data = data.frame(x = x, y = y))
-      if(!fit$ok) stop(msg)
+      if(!fit$ok) stop(failure_msg)
     },
-    error =  function(e) stop(msg)
+    error =  function(e) stop(failure_msg)
   )
+  invisible()
+}
+
+check_rnssp <- function(ac = accessible_packages()) {
+  if(!"Rnssp" %in% ac) {
+    msg <- paste(
+      "Note: Rnssp is not installed but required.\n",
+      "It is not available on CRAN; to install see", 
+      "https://cdcgov.github.io/Rnssp/"
+    )   
+    stop(msg, call. = FALSE)
+  }
+  invisible()
+}
+
+check_other_uninstallable <- function(ac = accessible_packages()) {
   
   # these packages cannot be installed automatically; they are too heavy
   # with numerous dependencies
-  uninstallable_packages <- c(
-    "ggplot2", "dplyr", "tidyr", "stringr", "plotly",
-    "geojsonsf", "sf", "leaflet", "leaflet.extras", "leafpop", "Rnssp"
+  
+  u_pkgs <- c(
+    "plotly", "igraph","geojsonsf", "sf", "leaflet","arrow" 
   )
   # update to those that aren't available:
-  uninstallable_packages <- uninstallable_packages[
-    !uninstallable_packages %in% accessible_packages
-  ]
+  u_pkgs <- u_pkgs[!u_pkgs %in% ac]
   
   # if this contains any, we fail gracefully:
-  if(length(uninstallable_packages)>0) {
+  if(length(u_pkgs)>0) {
     msg = paste0(
       "Install the following missing packages and try again:\n",
-      paste0(uninstallable_packages, collapse = ",")
+      paste0(u_pkgs, collapse = ",")
     )
-    
-    if("Rnssp" %in% uninstallable_packages) {
-      msg <- paste(
-        msg,
-        "\n\n",
-        "Note: Rnssp package not available on CRAN: ", 
-        "see https://cdcgov.github.io/Rnssp/"
-      )   
-    }
-    stop(msg)
+    stop(msg, call.=FALSE)
   }
+  invisible()
+}
+
+check_installable <- function(ac = accessible_packages(), auto_install=FALSE) {
   
-  # Okay, this is the remainder of the 
-  installable_required_packages <- c(
+  # Okay, this is the remainder of the dependencies
+  ir_pkgs <- c(
     "shiny", "shinyjs", "cli", "data.table", "bslib",
     "bsicons", "lubridate","MMWRweek", "shinycssloaders", "gridExtra",
-    "rlang", "reactable", "viridisLite"
+    "rlang", "reactable", "viridisLite", "rstudioapi", "magrittr", 
+    "readr","ggplot2", "dplyr", "tidyr", "stringr", "htmltools", "jsonlite",
+    "xml2", "zip", "purrr", "htmlwidgets", "RColorBrewer", "readxl",
+    "leaflet.extras", "leafpop"
   )
   
-  missing_required <- installable_required_packages[
-    !installable_required_packages %in% accessible_packages
-  ]
+  missing_required <- ir_pkgs[!ir_pkgs %in% ac]
+
   if(length(missing_required)>0) {
-    if(install_required) {
+    if(auto_install) {
       cat(
-        "The following required app dependencies are missing, and will be installed:",
-        paste0(missing_required,collapse = ",")
+        "The following required app dependencies are missing, and will be installed:\n",
+        paste0(missing_required,collapse = ","), 
+        "\n"
       )
-      lapply(missing_required, \(mr) install.packages(mr))
+      # Now install these!
+      for(mr in missing_required) install.packages(mr)
     } else {
+      # auto-install declined; just report to user
       stop(
         "Install the following missing packages and try again:\n",
         paste0(missing_required, collapse = ",")
       )
     }
   }
+  invisible()
+}
+
+check_epistemic <- function(
+  epistemic_min, 
+  ac=accessible_packages(),
+  auto_install = FALSE
+) {
   
+  # set a null current version
   epistemic_version = "0.0.0"
-  epistemic_installed <- "epistemic" %in% accessible_packages
-  # update the version if epistemic is installed
+  
+  # check if epistemic is already installed
+  epistemic_installed <- "epistemic" %in% ac
+
+  # update the current version if epistemic is installed
   if(epistemic_installed) epistemic_version <- utils::packageVersion("epistemic")
   
-  # Also need epistemic, and must be of a certain version
-  MIN_EPISTEMIC_VERSION = epistemic_min
-  if(epistemic_version<MIN_EPISTEMIC_VERSION) {
-    # pak or devtools might not be availabe
-    if(!"pak" %in% accessible_packages) {
+  if(epistemic_version < epistemic_min) {
+    if(!auto_install) {
       stop(paste(
-        "epistemic is not installed and must be installed from github, but",
-        "pak package is not available. Install pak, devtools or remotes, and",
+        "Either auto-install, or manually install epistemic version",
+        epistemic_min,
+        "or higher from github using pak, devtools, or",
+        "remotes (e.g. pak::pak(\"mpanaggio/epistemic\")"
+      ))
+    }
+    # Then we install with pak; however this might also not be available
+    if(!"pak" %in% ac) {
+      stop(paste(
+        "epistemic (version: ", epistemic_min, "or higher) is not installed",
+        "and must be installed from github, but pak package is not available.",
+        " Install pak, devtools or remotes, and",
         "manually install using pak::pak(\"mpanaggio/epistemic\") or similar."
       ))
     } else {
@@ -124,8 +190,6 @@ package_handler <- function(
       pak::pak("mpanaggio/epistemic")
     }
   }
-  
-  cat("all required packages and version(s) found.")
-  
-  return(invisible())
+  invisible()
+
 }
