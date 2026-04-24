@@ -2,7 +2,25 @@
 # Development of this software was sponsored by the U.S. Government under
 # contract no. 75D30124C19958
 
-# Libraries
+#################################################################
+# Run the package handler
+source("src/04_package_handler.R")
+INLA_MIN = "25.04.09" # Set the minimum INLA version
+EPISTEMIC_MIN = "1.6.0" # Set the minimum epistemic version
+AUTO_INSTALL = TRUE # Should missing (installable) packages be auto-installed?
+TEST_INLA = TRUE # Should we test inla?
+
+# Call the handler; any failures will abort app launch
+package_handler(
+  inla_min = INLA_MIN,
+  epistemic_min = EPISTEMIC_MIN,
+  auto_install = AUTO_INSTALL, 
+  test_inla = TEST_INLA
+)
+#################################################################
+
+
+# Load the libraries
 library(shiny)
 library(shinyjs)
 library(cli)
@@ -28,27 +46,14 @@ library(leafpop)
 library(reactable)
 library(viridisLite)
 library(sf)
-
-# Rnssp is required, but too heavy to load
-# lets check for existence instead
-
-# epistemic required
 library(epistemic)
-
-# Check minimum epistemic version
-min_version = "1.5.1"
-if(packageVersion("epistemic")<min_version) {
-  cli::cli_abort(
-    paste0("epistemic version must be at least ", min_version)
-  )
-}
 
 
 # Profile
 source("src/01_credentials.R")
 ALLOW_SHINY_CREDENTIALS <- TRUE
 # regardless of shiny credentials allowable or not, if this is running in rstudio
-# set CREDENTIALS via the get_profile() function
+# set CREDENTIALS via the rstudio get_profile() function
 if(rstudioapi::isAvailable() == TRUE) {
   CREDENTIALS = get_profile(title = "Bayesian Spatiotemporal Modeling")
 } else {

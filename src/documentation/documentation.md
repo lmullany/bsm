@@ -250,12 +250,9 @@ Advanced users may want to perform additional customization for the model and/or
 
 After loading base query data, you can click `Add Covariates`.
 
-Supported upload formats include:
+Currently supported upload formats include:
 
 - `.csv`
-- `.xlsx`
-- `.xls`
-- `.parquet`
 
 When importing covariates, you can specify:
 
