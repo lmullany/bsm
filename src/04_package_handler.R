@@ -5,7 +5,7 @@
 # Package check and handle function. 
 
 package_handler <- function(
-    inla_min = "25.04.09", 
+    inla_min = "24.06.27",
     epistemic_min = "1.6.0",
     auto_install=FALSE, 
     test_inla = TRUE
@@ -103,7 +103,7 @@ check_other_uninstallable <- function(ac = accessible_packages()) {
   # with numerous dependencies
   
   u_pkgs <- c(
-    "plotly", "igraph","geojsonsf", "sf", "leaflet","arrow" 
+    "plotly", "igraph","geojsonsf", "sf", "leaflet"
   )
   # update to those that aren't available:
   u_pkgs <- u_pkgs[!u_pkgs %in% ac]
@@ -127,7 +127,7 @@ check_installable <- function(ac = accessible_packages(), auto_install=FALSE) {
     "bsicons", "lubridate","MMWRweek", "shinycssloaders", "gridExtra",
     "rlang", "reactable", "viridisLite", "rstudioapi", "magrittr", 
     "readr","ggplot2", "dplyr", "tidyr", "stringr", "htmltools", "jsonlite",
-    "xml2", "zip", "purrr", "htmlwidgets", "RColorBrewer", "readxl",
+    "xml2", "zip", "purrr", "htmlwidgets", "RColorBrewer", 
     "leaflet.extras", "leafpop"
   )
   

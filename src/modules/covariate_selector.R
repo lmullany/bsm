@@ -370,12 +370,12 @@ add_covariate_loader <- function(
     if (ext == "csv") {
       return(data.table::as.data.table(readr::read_csv(path, show_col_types = FALSE)))
     }
-    if (ext %in% c("xlsx", "xls")) {
-      return(data.table::as.data.table(readxl::read_excel(path)))
-    }
-    if (ext == "parquet") {
-      return(data.table::as.data.table(arrow::read_parquet(path)))
-    }
+    # if (ext %in% c("xlsx", "xls")) {
+    #   return(data.table::as.data.table(readxl::read_excel(path)))
+    # }
+    # if (ext == "parquet") {
+    #   return(data.table::as.data.table(arrow::read_parquet(path)))
+    # }
     cli::cli_abort("Unsupported file type: ", ext)
   }
   
@@ -414,7 +414,8 @@ add_covariate_loader <- function(
         fileInput(
           ns("cov_file"),
           labeltt(label_list_cs[['upload_covariates']]),
-          accept = c(".csv", ".xlsx", ".xls", ".parquet")
+          #accept = c(".csv", ".xlsx", ".xls", ".parquet")
+          accept = c(".csv")
         ),
         
         uiOutput(ns("cov_region_col_ui")),
