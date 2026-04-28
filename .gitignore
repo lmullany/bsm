@@ -3,4 +3,5 @@
 .RData
 .Ruserdata
 .Rprofile
+.Rproj
 *.rds
