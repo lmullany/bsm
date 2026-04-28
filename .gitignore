@@ -3,5 +3,5 @@
 .RData
 .Ruserdata
 .Rprofile
-.Rproj
+bsm_app.Rproj
 *.rds
