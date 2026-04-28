@@ -53,11 +53,11 @@ viz_other_time_series_ui <- function(id) {
 
 viz_other_time_series_server <- function(id, im, feature_store) {
   moduleServer(id, function(input, output, session) {
-    # Resolve the shared feature-store object passed in from viz_server().
-    get_store <- function() {
-      if (is.function(feature_store)) feature_store() else feature_store
-    }
-    
+    # # Resolve the shared feature-store object passed in from viz_server().
+    # get_store <- function() {
+    #   if (is.function(feature_store)) feature_store() else feature_store
+    # }
+    # 
     # This tab only reads from the stored shared data table.
     get_base_source <- reactive({
       req(im$data_cls)
@@ -85,7 +85,7 @@ viz_other_time_series_server <- function(id, im, feature_store) {
     plottable_features_df <- reactive({
       # A feature is plottable on this tab only if its stored output columns
       # already exist and are numeric in the shared data table.
-      store <- get_store()
+      store <- get_store(feature_store)
       base_source <- get_base_source()
       req(store, base_source)
       
@@ -167,7 +167,7 @@ viz_other_time_series_server <- function(id, im, feature_store) {
       # Scalar features are plotted as lines, while stored confidence
       # intervals are reshaped into ribbons using their lower/upper columns.
       req(im$data_cls)
-      store <- get_store()
+      store <- get_store(feature_store)
       req(store)
       
       selected_ids <- selected_feature_ids()

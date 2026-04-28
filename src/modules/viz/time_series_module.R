@@ -59,10 +59,10 @@ viz_time_series_server <- function(id, im, results, feature_store) {
   moduleServer(
     id,
     function(input, output, session) {
-      get_store <- function() {
-        if (is.function(feature_store)) feature_store() else feature_store
-      }
-      
+      # get_store <- function() {
+      #   if (is.function(feature_store)) feature_store() else feature_store
+      # }
+      # 
       scale_key <- reactive({
         if (identical(input$ts_use_count, "Count")) "counts" else "proportion"
       })
@@ -70,7 +70,7 @@ viz_time_series_server <- function(id, im, results, feature_store) {
       # Prediction Time Series only offers CIs that already exist in the
       # stored calculated-feature catalog for the chosen scale.
       available_ci_features <- reactive({
-        store <- get_store()
+        store <- get_store(feature_store)
         req(store)
         df <- as.data.frame(store$features_df())
         req(nrow(df) > 0)
@@ -94,7 +94,7 @@ viz_time_series_server <- function(id, im, results, feature_store) {
       })
       
       selected_ci_feature <- reactive({
-        store <- get_store()
+        store <- get_store(feature_store)
         req(store)
         fid <- input$ts_ci_feature
         req(!is.null(fid), nzchar(fid))
@@ -104,7 +104,7 @@ viz_time_series_server <- function(id, im, results, feature_store) {
       })
       
       median_feature <- reactive({
-        store <- get_store()
+        store <- get_store(feature_store)
         req(store)
         fid <- paste0("builtin__quantile__", scale_key(), "__q0.5")
         f <- store$get_feature(fid)

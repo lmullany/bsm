@@ -22,15 +22,12 @@ dummy_page_ui <- function(id) {
 dummy_page_server <- function(id, feature_store, im) {
   moduleServer(id, function(input, output, session) {
     
-    get_store <- function() {
-      if (is.function(feature_store)) feature_store() else feature_store
-    }
-    
+
     # keep store synced with current model output
     observe({
       req(im$data_cls)
       
-      fs <- get_store()
+      fs <- get_store(feature_store)
       req(!is.null(fs))
       
       if (is.function(fs$sync_base_columns)) {
@@ -52,7 +49,7 @@ dummy_page_server <- function(id, feature_store, im) {
     )
     
     output$debug <- renderPrint({
-      fs <- get_store()
+      fs <- get_store(feature_store)
       filt <- filters()
       
       list(

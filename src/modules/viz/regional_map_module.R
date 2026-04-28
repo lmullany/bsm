@@ -105,10 +105,10 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
     function(input, output, session) {
       ns <- session$ns
       
-      get_store <- function() {
-        if (is.function(feature_store)) feature_store() else feature_store
-      }
-      
+      # get_store <- function() {
+      #   if (is.function(feature_store)) feature_store() else feature_store
+      # }
+      # 
       get_base_source <- reactive({
         req(im$data_cls)
         im$data_cls$data
@@ -117,7 +117,7 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
       # The map can display any stored single-column numeric feature except
       # composite intervals, which do not map cleanly to one choropleth value.
       plottable_features_df <- reactive({
-        store <- get_store()
+        store <- get_store(feature_store)
         base_source <- get_base_source()
         req(store, base_source)
         
@@ -161,7 +161,7 @@ viz_regional_map_server <- function(id, dc, im, results, feature_store) {
       })
       
       selected_feature <- reactive({
-        store <- get_store()
+        store <- get_store(feature_store)
         if (is.null(store)) return(NULL)
         fid <- selected_feature_id()
         if (!nzchar(fid)) return(NULL)

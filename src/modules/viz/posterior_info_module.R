@@ -87,10 +87,10 @@ viz_posterior_server <- function(id, im, results, feature_store) {
   moduleServer(
     id,
     function(input, output, session) {
-      get_store <- function() {
-        if (is.function(feature_store)) feature_store() else feature_store
-      }
-      
+      # get_store <- function() {
+      #   if (is.function(feature_store)) feature_store() else feature_store
+      # }
+      # 
       get_base_source <- reactive({
         req(im$data_cls)
         data.table::as.data.table(im$data_cls$data)
@@ -107,7 +107,7 @@ viz_posterior_server <- function(id, im, results, feature_store) {
       # Posterior Data can display any stored feature whose output columns are
       # already present in the shared data table.
       plottable_features_df <- reactive({
-        store <- get_store()
+        store <- get_store(feature_store)
         base_source <- get_base_source()
         req(store, base_source)
         
@@ -143,7 +143,7 @@ viz_posterior_server <- function(id, im, results, feature_store) {
       })
       
       selected_feature_cols <- reactive({
-        store <- get_store()
+        store <- get_store(featire_store)
         req(store)
         
         unique(unlist(lapply(selected_feature_ids(), function(fid) {

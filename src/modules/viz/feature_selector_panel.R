@@ -164,12 +164,12 @@ feature_sidepanel_server <- function(id,
                                      initial_selected_ids = NULL) {
   moduleServer(id, function(input, output, session) {
     
-    get_store <- function() {
-      if (is.function(feature_store)) feature_store() else feature_store
-    }
+    # get_store <- function() {
+    #   if (is.function(feature_store)) feature_store() else feature_store
+    # }
     
     df_all <- reactive({
-      get_store()$features_df()
+      get_store(feature_store)$features_df()
     })
     
         normalize_df <- function(df) {
