@@ -143,7 +143,7 @@ viz_posterior_server <- function(id, im, results, feature_store) {
       })
       
       selected_feature_cols <- reactive({
-        store <- get_store(featire_store)
+        store <- get_store(feature_store)
         req(store)
         
         unique(unlist(lapply(selected_feature_ids(), function(fid) {
