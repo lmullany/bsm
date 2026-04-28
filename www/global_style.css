@@ -1,0 +1,37 @@
+.shiny-output-error-validation {
+  color: red;
+}
+.card {
+  border: 0;
+}
+[id$='_progress'] {
+  white-space: normal !important;
+  height: auto !important;
+  min-height: 2.2em !important;
+  overflow: visible !important;
+  margin-top: 0.5rem;
+}
+      
+.settings-toggle-row {
+width: 100%;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: default;              /* it's a container, not the click target */
+padding-top: .25rem;          /* fine-tune to match btn-sm height */
+padding-bottom: .25rem;
+}
+
+/* Layout for your inner toggle UI */
+.settings-toggle-row .mode-pill-wrap {
+width: 100%;
+display: flex;
+align-items: center;
+justify-content: center;      /* or space-between if you prefer */
+gap: .5rem;
+}
+
+/* Optional: prevent the inner switch button from inheriting link/btn spacing */
+.settings-toggle-row .mode-switch {
+margin: 0;
+}
