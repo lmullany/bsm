@@ -580,7 +580,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
       
       
       inla_model_new <- reactive({
-        
+
         # is model ready to run?
         model_ready <- model_ready_to_run(results$data, formula_r(), input)
         model_error_message(NULL)

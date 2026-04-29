@@ -42,6 +42,17 @@ ui <- function(request) {
 }
 
 server <- function(input, output, session) {
+  
+  # con <- file("app_log.txt", open = "wt")
+  # sink(con, type=c("message"))
+  # track_usage(
+  #   storage_mode = store_json(
+  #     path = paste0(Sys.getenv("HOME"), "/bsm_logs/") 
+  #   ),
+  #   what = c("error", "output")
+  # )
+  
+  
   output$tutorial_page_content <- renderUI(
     render_documentation_content("src/documentation/tutorial.md")
   )
@@ -107,10 +118,26 @@ server <- function(input, output, session) {
   observe(toggleState(
     condition = !is.null(im$model), selector = 'a[data-value="viz-viz_main"]'
   ))
-
+  
 }
 
-
 #-----------
-shinyApp(ui, server)
+run_with_logging <- function(app) {
+  log_con <- file(
+    paste0(Sys.getenv("HOME"), "/bsm_logs/app_log.txt"),
+    open = "wt"
+  )
+  
+  sink(log_con, split = TRUE)
+  sink(log_con, type = "message")
+  
+  on.exit({
+    sink(type = "message")
+    sink()
+    close(log_con)
+  })
 
+  runApp(app)  
+}
+
+run_with_logging(shinyApp(ui, server))
