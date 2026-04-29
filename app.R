@@ -123,19 +123,30 @@ server <- function(input, output, session) {
 
 #-----------
 run_with_logging <- function(app) {
-  log_con <- file(
-    paste0(Sys.getenv("HOME"), "/bsm_logs/app_log.txt"),
-    open = "wt"
+  tryCatch(
+    {
+      # try to create in user's home directory
+      dir.create(paste0(Sys.getenv("HOME"), "/bsm_logs"), showWarnings = FALSE)
+      
+      # Open connection to a logging file
+      log_con <- file(
+        paste0(Sys.getenv("HOME"), "/bsm_logs/app_log.txt"),
+        open = "wt"
+      )
+    
+      sink(log_con, split = TRUE)
+      sink(log_con, type = "message")
+    
+      on.exit({
+        sink(type = "message")
+        sink()
+        close(log_con)
+      })
+    }, 
+    error = function(e) {
+      print("No logging possible; error on log creation")
+    }
   )
-  
-  sink(log_con, split = TRUE)
-  sink(log_con, type = "message")
-  
-  on.exit({
-    sink(type = "message")
-    sink()
-    close(log_con)
-  })
 
   runApp(app)  
 }
