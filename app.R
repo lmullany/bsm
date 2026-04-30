@@ -43,16 +43,6 @@ ui <- function(request) {
 
 server <- function(input, output, session) {
   
-  # con <- file("app_log.txt", open = "wt")
-  # sink(con, type=c("message"))
-  # track_usage(
-  #   storage_mode = store_json(
-  #     path = paste0(Sys.getenv("HOME"), "/bsm_logs/") 
-  #   ),
-  #   what = c("error", "output")
-  # )
-  
-  
   output$tutorial_page_content <- renderUI(
     render_documentation_content("src/documentation/tutorial.md")
   )
@@ -148,7 +138,7 @@ run_with_logging <- function(app) {
     }
   )
 
-  runApp(app)  
+  runApp(app,launch.browser = TRUE)  
 }
 
 run_with_logging(shinyApp(ui, server))
