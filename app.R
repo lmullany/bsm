@@ -116,7 +116,7 @@ run_with_logging <- function(app) {
   tryCatch(
     {
       # try to create in user's home directory
-      dir.create(paste0(Sys.getenv("HOME"), "/bsm_logs"), showWarnings = FALSE)
+      dir.create(paste0(Sys.getenv("HOME"), "/bsm_logs"), showWarnings = TRUE)
       
       # Open connection to a logging file
       log_con <- file(
