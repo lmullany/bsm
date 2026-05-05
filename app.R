@@ -121,16 +121,20 @@ run_with_logging <- function(app) {
       # Open connection to a logging file
       log_con <- file(
         paste0(Sys.getenv("HOME"), "/bsm_logs/app_log.txt"),
-        open = "wt"
+        open = "at"
       )
     
       sink(log_con, split = TRUE)
       sink(log_con, type = "message")
+      
+      cat("==== App started:", as.character(Sys.time()), "====\n")
+      cat("\n==== Session Info (startup) ====\n")
+      print(sessionInfo())
     
       on.exit({
-        sink(type = "message")
-        sink()
-        close(log_con)
+        try(sink(type = "message"), silent = TRUE)
+        try(sink(), silent = TRUE)
+        try(close(log_con), silent = TRUE)
       })
     }, 
     error = function(e) {
