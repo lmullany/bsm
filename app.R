@@ -127,7 +127,7 @@ run_with_logging <- function(app) {
       sink(log_con, split = TRUE)
       sink(log_con, type = "message")
       
-      cat("==== App started:", as.character(Sys.time()), "====\n")
+      cat("\n==== App started:", as.character(Sys.time()), "====\n")
       cat("\n==== Session Info (startup) ====\n")
       print(sessionInfo())
     
