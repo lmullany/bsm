@@ -42,6 +42,7 @@ ui <- function(request) {
 }
 
 server <- function(input, output, session) {
+  
   output$tutorial_page_content <- renderUI(
     render_documentation_content("src/documentation/tutorial.md")
   )
@@ -107,10 +108,41 @@ server <- function(input, output, session) {
   observe(toggleState(
     condition = !is.null(im$model), selector = 'a[data-value="viz-viz_main"]'
   ))
-
+  
 }
 
-
 #-----------
-shinyApp(ui, server)
+run_with_logging <- function(app) {
+  tryCatch(
+    {
+      # try to create in user's home directory
+      dir.create(paste0(Sys.getenv("HOME"), "/bsm_logs"), showWarnings = FALSE)
+      
+      # Open connection to a logging file
+      log_con <- file(
+        paste0(Sys.getenv("HOME"), "/bsm_logs/app_log.txt"),
+        open = "at"
+      )
+    
+      sink(log_con, split = TRUE)
+      sink(log_con, type = "message")
+      
+      cat("\n==== App started:", as.character(Sys.time()), "====\n")
+      cat("\n==== Session Info (startup) ====\n")
+      print(sessionInfo())
+    
+      on.exit({
+        try(sink(type = "message"), silent = TRUE)
+        try(sink(), silent = TRUE)
+        try(close(log_con), silent = TRUE)
+      })
+    }, 
+    error = function(e) {
+      print("No logging possible; error on log creation")
+    }
+  )
 
+  runApp(app,launch.browser = TRUE)  
+}
+
+run_with_logging(shinyApp(ui, server))
