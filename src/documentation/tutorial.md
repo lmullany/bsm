@@ -169,6 +169,8 @@ Family guidance:
 - use `Poisson` or `Negative Binomial` for count models
 - use `Binomial` or `Beta-Binomial` for proportion models
 
+Forecasts are only available on a model's native scale. Since you selected binomial above, forecasts will be available for proportions but not counts.
+
 <figure style="margin: 0.75rem 0 1rem 0;">
   <img src="/documentation-tutorial-screenshots/step2a_inla_model.PNG" alt="INLA Model tab configured for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T8.</strong> `INLA Model` tab configured for the tutorial example.</figcaption>

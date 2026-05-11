@@ -167,6 +167,8 @@ Use the visualization tabs for different purposes:
 | `Other Time Series Plots` | Compare additional stored features over time |
 | `Posterior Data` | Search, filter, and export fitted values in table form |
 
+Note: Forecasts are only available on the model's native scale. For poisson and negative-binomial models, you will need to select counts to see forecasts, whereas for binomial and beta-binomial models, you will need to select proportions.  
+
 #### Region-Wide Map
 
 Use this tab to look at one feature across all regions for a selected date.
@@ -180,6 +182,8 @@ This is a good first place to look for geographic patterns. A typical map view i
   <img src="/documentation-screenshots/viz_map.PNG" alt="Visualization tab region-wide map" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 5.</strong> Region-wide map for a selected feature and date.</figcaption>
 </figure>
+
+The displayed sparkline provides an estimate of the aggregate trend across all regions in the associated query, and the dashed portion of the sparkline indicates forecast dates.
 
 #### Prediction Time Series Plots
 
@@ -250,9 +254,7 @@ Advanced users may want to perform additional customization for the model and/or
 
 After loading base query data, you can click `Add Covariates`.
 
-Currently supported upload formats include:
-
-- `.csv`
+Currently, upload formats are limited to `.csv` files.
 
 When importing covariates, you can specify:
 
@@ -391,6 +393,8 @@ As a general guide:
 - Negative binomial and beta-binomial are useful when data are more variable than the simpler family can comfortably capture.
 
 In many routine cases, Poisson and Binomial models also fit faster than Negative Binomial and Beta-Binomial models, which is another reason to start with the simpler family unless you need the additional flexibility.
+
+Remember that forecasts are only available on the model's native scale, so if you intent to generate forecasts, make sure to select the appropriate family for the scale where the forecasts will be needed.  
 
 <h3 id="advanced-visualization">Advanced Visualization</h3>
 
