@@ -38,6 +38,7 @@ extras_ui <- function(id) {
           class = "btn-primary btn-sm"
         ),
         
+
         # Next, we add the tooltip ui, which is just a button that
         # toggles tool tips on and off
         tooltip_ui(ns("tooltip")),
@@ -74,8 +75,17 @@ extras_ui <- function(id) {
           id = ns("refresh"),
           label = "Refresh App",
           class = "btn-primary btn-sm"
+        ),
+        actionButton(
+          ns("open_feedback"),
+          label = tagList(
+            bsicons::bs_icon("chat-dots", title = "Feedback"),
+            " Report an issue / Provide feedback"
+          ),
+          class = "btn-primary btn-sm"
         )
       ),
+
       
       # add an id for this popover (we need it to be able to programmatically close)
       id = ns("settings_pop"),
@@ -122,5 +132,14 @@ extras_server <- function(id) {
       bslib::toggle_popover("settings_pop", show = FALSE)
     }) |>
       bindEvent(input$open_tutorial, ignoreInit = TRUE)
+
+    
+    observe({
+      url <- "https://jhuapl.az1.qualtrics.com/jfe/form/SV_01TH3jXlrpk2XTo"
+      shinyjs::runjs(
+        sprintf("window.open('%s', '_blank')", url)
+      )
+    }) |>
+      bindEvent(input$open_feedback, ignoreInit = TRUE)
   })
 }
