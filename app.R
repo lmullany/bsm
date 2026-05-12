@@ -110,38 +110,24 @@ server <- function(input, output, session) {
   
 }
 
-#-----------
-run_with_logging <- function(app) {
-  tryCatch(
-    {
-      # try to create in user's home directory
-      dir.create(paste0(Sys.getenv("HOME"), "/bsm_logs"), showWarnings = TRUE)
-      
-      # Open connection to a logging file
-      log_con <- file(
-        paste0(Sys.getenv("HOME"), "/bsm_logs/app_log.txt"),
-        open = "at"
-      )
-    
-      sink(log_con, split = TRUE)
-      sink(log_con, type = "message")
-      
-      cat("\n==== App started:", as.character(Sys.time()), "====\n")
-      cat("\n==== Session Info (startup) ====\n")
-      print(sessionInfo())
-    
-      on.exit({
-        try(sink(type = "message"), silent = TRUE)
-        try(sink(), silent = TRUE)
-        try(close(log_con), silent = TRUE)
-      })
-    }, 
-    error = function(e) {
-      print("No logging possible; error on log creation")
-    }
-  )
+app <- shinyApp(ui, server)
 
-  runApp(app,launch.browser = TRUE)  
+enable_bsm_logging <- function() {
+  tryCatch({
+    dir.create(file.path(Sys.getenv("HOME"), "bsm_logs"), showWarnings = TRUE)
+    log_con <- file(file.path(Sys.getenv("HOME"), "bsm_logs", "app_log.txt"), open = "at")
+    sink(log_con, split = TRUE)
+    sink(log_con, type = "message")
+    cat("\n==== App started:", as.character(Sys.time()), "====\n")
+    cat("\n==== Session Info (startup) ====\n")
+    print(sessionInfo())
+  }, error = function(e) {
+    message("No logging possible; error on log creation")
+  })
 }
 
-run_with_logging(shinyApp(ui, server))
+if (!identical(tolower(Sys.getenv("BSM_ENABLE_LOGGING", "true")), "false")) {
+  enable_bsm_logging()
+}
+
+app
