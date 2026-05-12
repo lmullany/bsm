@@ -268,8 +268,8 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
     out2[, c(srcL, srcU) := NULL]
     return(out2[])
   }
-  
-    if (ft == "observed_prop") {
+
+    if ((ft == "other") & ("ED Visits (Proportion)" %in% out_cols[[1]])) {
       dt <- copy(dcls$data)
   
       # Use the actual region/date column names dynamically so merge keys align
@@ -311,21 +311,21 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
       setnames(res, c("tmp_region", "tmp_date"), c(reg_col, date_col))
   
       # Merge using the standardized helper which expects keyed region/date tables
-      out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
-  
-      # Validate merge worked
-      if (is.null(out2) || !nrow(out2)) {
-        stop("Merge failed for observed proportion feature")
-      }
-  
-      # Validate output column name
-      if (!nchar(out_cols[[1]])) {
-        stop("Feature has no output column name")
-      }
-  
-      out2[, (out_cols[[1]]) := as.numeric(get("observed_prop"))]
-      out2[, "observed_prop" := NULL]
-      return(out2[])
+        out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
+    
+        # Validate merge worked
+        if (is.null(out2) || !nrow(out2)) {
+          stop("Merge failed for observed proportion feature")
+        }
+    
+        # Validate output column name
+        if (!nchar(out_cols[[1]])) {
+          stop("Feature has no output column name")
+        }
+    
+        out2[, (out_cols[[1]]) := as.numeric(get("observed_prop"))]
+        out2[, "observed_prop" := NULL]
+        return(out2[])
     }  
   
   if (ft == "exceedance_probability") {
@@ -359,7 +359,7 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
 # columns to the supplied data table.
 calculate_and_store_calculated_features <- function(out, features, model, data_cls) {
   features <- Filter(function(f) {
-    !is.null(f) && (f$feature_type %||% "") %in% c("other", "mean", "quantile", "observed_prop", "confidence_interval", "exceedance_probability", "change_probability")
+    !is.null(f) && (f$feature_type %||% "") %in% c("other", "mean", "quantile", "confidence_interval", "exceedance_probability", "change_probability")
   }, features)
   if (!length(features)) {
     return(data.table::as.data.table(out))
