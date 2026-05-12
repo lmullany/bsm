@@ -174,20 +174,15 @@ documentation_layout_ui <- function(content) {
 
 register_documentation_resources <- local({
   registered <- FALSE
-  
+
   function() {
     if (registered) return(invisible(NULL))
-    
+
     shiny::addResourcePath(
-      prefix = "documentation-screenshots",
-      directoryPath = normalizePath("src/documentation/screenshots", winslash = "/", mustWork = TRUE)
+      prefix = "doc_images",
+      directoryPath = "www/doc_images"
     )
-    
-    shiny::addResourcePath(
-      prefix = "documentation-tutorial-screenshots",
-      directoryPath = normalizePath("src/documentation/tutorial_screenshots", winslash = "/", mustWork = TRUE)
-    )
-    
+
     registered <<- TRUE
     invisible(NULL)
   }

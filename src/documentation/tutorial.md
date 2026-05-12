@@ -34,7 +34,7 @@ This step defines the counties that will be included in the analysis.
 1. Click the state selector and type `DE`, `DC`, and `VA`.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step1a_add_states.PNG" alt="Selecting multiple states in the Data Loader" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step1a_add_states.PNG" alt="Selecting multiple states in the Data Loader" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T1.</strong> State selector used to add `DE`, `DC`, and `VA`.</figcaption>
 </figure>
 
@@ -44,7 +44,7 @@ This step defines the counties that will be included in the analysis.
 You can also search for a county by typing its name into the selected-counties box and choosing it from the dropdown list.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step1a_select_county.PNG" alt="Selecting an initial county in the county selector" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step1a_select_county.PNG" alt="Selecting an initial county in the county selector" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T2.</strong> County selector used to choose an initial county.</figcaption>
 </figure>
 
@@ -59,7 +59,7 @@ The county selector supports several selection methods:
 4. After selecting an initial county, click `Add Neighbors` to bring in surrounding counties and build a contiguous region.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step1a_add_neighbors.PNG" alt="Using Add Neighbors in the county selector" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step1a_add_neighbors.PNG" alt="Using Add Neighbors in the county selector" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T3.</strong> County selector used to expand the region with `Add Neighbors`.</figcaption>
 </figure>
 
@@ -75,7 +75,7 @@ This step defines the time window and syndrome outcome for the example query.
 1. Adjust the `Date Range`.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step1b_select_dates.PNG" alt="Selecting the weekly date range for the tutorial query" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step1b_select_dates.PNG" alt="Selecting the weekly date range for the tutorial query" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T4.</strong> Date-range controls used for the tutorial query.</figcaption>
 </figure>
 
@@ -83,7 +83,7 @@ This step defines the time window and syndrome outcome for the example query.
 3. Open the `Target Outcome` dropdown, delete the default text, type `ILI`, and select `ILI CCDD v1`.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step1b_select_ccdd.PNG" alt="Selecting ILI CCDD v1 as the target outcome" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step1b_select_ccdd.PNG" alt="Selecting ILI CCDD v1 as the target outcome" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T5.</strong> Target-outcome selector used to choose `ILI CCDD v1`.</figcaption>
 </figure>
 
@@ -102,7 +102,7 @@ The default target type is `Chief Complaint and Discharge Diagnosis Category`, b
 Expected result: you should now see a populated data table in the `Data Loader` tab, similar to Figure T6.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step1b_load_data.PNG" alt="Loaded tutorial data in the Data Loader table" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step1b_load_data.PNG" alt="Loaded tutorial data in the Data Loader table" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T6.</strong> `Data Loader` table after the tutorial query has been loaded.</figcaption>
 </figure>
 
@@ -131,7 +131,7 @@ If you only want the covariates for visualization and do not intend to use them 
 Expected result: the displayed table should now include the added covariate columns.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step1c_add_covariates.PNG" alt="Adding tutorial covariates from the sample data file" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step1c_add_covariates.PNG" alt="Adding tutorial covariates from the sample data file" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T7.</strong> Covariate-upload workflow using `sample_data/static_covariates.csv`.</figcaption>
 </figure>
 
@@ -172,7 +172,7 @@ Family guidance:
 Forecasts are only available on a model's native scale. Since you selected binomial above, forecasts will be available for proportions but not counts.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step2a_inla_model.PNG" alt="INLA Model tab configured for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step2a_inla_model.PNG" alt="INLA Model tab configured for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T8.</strong> `INLA Model` tab configured for the tutorial example.</figcaption>
 </figure>
 
@@ -188,7 +188,7 @@ This is an intentionally advanced example. Most new users should start with the 
 If you see red validation text before pasting, that is expected while the formula box is empty or invalid.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step2a_inla_model_custom_before.PNG" alt="Custom model formula view before pasting a formula" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step2a_inla_model_custom_before.PNG" alt="Custom model formula view before pasting a formula" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T9.</strong> `Custom Model Formula` view after switching modes but before pasting and editing the formula.</figcaption>
 </figure>
 
@@ -203,7 +203,7 @@ If you see red validation text before pasting, that is expected while the formul
 After adding the covariate, the formula should look similar to Figure T10.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step2a_inla_model_custom_after.PNG" alt="Custom model formula with an added covariate" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step2a_inla_model_custom_after.PNG" alt="Custom model formula with an added covariate" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T10.</strong> `Custom Model Formula` view after adding `medn_hhi_acs_22`.</figcaption>
 </figure>
 
@@ -221,7 +221,7 @@ Note: Small problems may fit in seconds, while larger combinations of counties a
 Expected result: you should now see a fitted model summary in the `INLA Model` tab, similar to Figure T11.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step2a_inla_model_custom_fitted.PNG" alt="Fitted custom model summary for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step2a_inla_model_custom_fitted.PNG" alt="Fitted custom model summary for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T11.</strong> Fitted model summary after the tutorial model run completes.</figcaption>
 </figure>
 
@@ -255,7 +255,7 @@ This step uses the map to compare values across counties for a selected date.
 The map should update to color counties by median household income.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step3a_map.PNG" alt="Region-Wide Map displaying a covariate in the tutorial" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step3a_map.PNG" alt="Region-Wide Map displaying a covariate in the tutorial" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T12.</strong> `Region-Wide Map` used to display the selected covariate.</figcaption>
 </figure>
 
@@ -265,7 +265,7 @@ The map should update to color counties by median household income.
 This displays the posterior median proportion for the selected outcome at the current date.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step3a_map_median.PNG" alt="Region-Wide Map displaying the posterior median proportion" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step3a_map_median.PNG" alt="Region-Wide Map displaying the posterior median proportion" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T13.</strong> `Region-Wide Map` after switching to the posterior median proportion feature.</figcaption>
 </figure>
 
@@ -295,7 +295,7 @@ This step uses the dedicated prediction view to compare model output across sele
 Figure T14 shows an example prediction-plot layout for this step.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step3b_prediction_ts.PNG" alt="Prediction time series plots for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step3b_prediction_ts.PNG" alt="Prediction time series plots for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T14.</strong> `Prediction Time Series Plots` used to compare selected counties.</figcaption>
 </figure>
 
@@ -318,7 +318,7 @@ This tab is more flexible than the prediction tab, but mixed scales can be harde
 Figure T15 shows an example `Other Time Series Plots` view with selected stored features.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step3c_other_ts.PNG" alt="Other Time Series Plots for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step3c_other_ts.PNG" alt="Other Time Series Plots for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T15.</strong> `Other Time Series Plots` used to compare selected stored features.</figcaption>
 </figure>
 
@@ -343,7 +343,7 @@ For example, filtering the state-abbreviation column will restrict the table to 
 The exported CSV should reflect the current visible table, including selected features and active filters. Figure T16 shows the table view used in this step.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step3d_posterior_table.PNG" alt="Posterior Data table for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step3d_posterior_table.PNG" alt="Posterior Data table for the tutorial example" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T16.</strong> `Posterior Data` table used with selected features and filters.</figcaption>
 </figure>
 
@@ -373,7 +373,7 @@ At this point, you have completed a full workflow: building a query, optionally 
 Expected result: you should now be able to inspect maps, plots, tables, and newly created output features across the app.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-tutorial-screenshots/step3e_add_feature.PNG" alt="Add Feature tab used to create an exceedance probability" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="/doc_images/tutorial_screenshots/step3e_add_feature.PNG" alt="Add Feature tab used to create an exceedance probability" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure T17.</strong> `Add Feature` tab used to create an exceedance probability feature.</figcaption>
 </figure>
 
