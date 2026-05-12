@@ -5,7 +5,6 @@
 # source files --------------------------------------------------------------
 source("src/00_setup.R")
 
-
 options(shiny.maxRequestSize = 1000*1024^2) 
 is_tutorial_view <- function(query_string) {
   view <- shiny::parseQueryString(sub("^\\?", "", query_string %||% ""))$view

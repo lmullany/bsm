@@ -86,7 +86,7 @@ For weekly data:
 That helps avoid partial weeks in the downloaded series.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/data_loader_no_data.PNG" alt="Data Loader tab before data are loaded" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/data_loader_no_data.PNG" alt="Data Loader tab before data are loaded" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 1.</strong> The <code>Data Loader</code> tab before a query is run.</figcaption>
 </figure>
 
@@ -102,7 +102,7 @@ The app gives feedback on county selection:
 - it warns if the selected counties are not connected
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/county_selector.PNG" alt="County selector modal" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/county_selector.PNG" alt="County selector modal" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 2.</strong> County selector modal used to refine the county set after choosing one or more states.</figcaption>
 </figure>
 
@@ -111,7 +111,7 @@ The app gives feedback on county selection:
 After you click `Query ESSENCE`, the app retrieves the data from ESSENCE using the user-provided credentials. This generates a table with columns for date, region, county FIPS, target, and overall representing the emergency department visit counts for the requested syndrome or diagnosis and across all syndromes or diagnoses. When loading is complete, the data table appears in the main panel, as shown in Figure 3.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/data_loader_with_data.PNG" alt="Data Loader tab with loaded data table" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/data_loader_with_data.PNG" alt="Data Loader tab with loaded data table" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 3.</strong> The <code>Data Loader</code> tab after a successful ESSENCE query has completed.</figcaption>
 </figure>
 
@@ -144,7 +144,7 @@ For a first analysis, start with `Poisson` when modeling counts and `Binomial` w
 The default model is intended to be the starting point for most users, and Figure 4 shows the typical default-model setup.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/inla_model_default.PNG" alt="INLA Model tab configured for a default model" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/inla_model_default.PNG" alt="INLA Model tab configured for a default model" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 4.</strong> Default-model workflow in the <code>INLA Model</code> tab.</figcaption>
 </figure>
 
@@ -179,7 +179,7 @@ Use this tab to look at one feature across all regions for a selected date.
 This is a good first place to look for geographic patterns. A typical map view is shown in Figure 5.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/viz_map.PNG" alt="Visualization tab region-wide map" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/viz_map.PNG" alt="Visualization tab region-wide map" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 5.</strong> Region-wide map for a selected feature and date.</figcaption>
 </figure>
 
@@ -196,7 +196,7 @@ Use this tab to compare predicted trajectories across selected regions.
 An example of the prediction-plot view is shown in Figure 6.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/viz_pred_ts.PNG" alt="Prediction time series plots" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/viz_pred_ts.PNG" alt="Prediction time series plots" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 6.</strong> Prediction time-series plots for selected regions.</figcaption>
 </figure>
 
@@ -219,7 +219,7 @@ You can:
 Figure 7 shows the posterior table view.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/viz_post_tab.PNG" alt="Posterior data table" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/viz_post_tab.PNG" alt="Posterior data table" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 7.</strong> Posterior data table with filters and selected features.</figcaption>
 </figure>
 
@@ -373,7 +373,7 @@ This mode is useful when you want to:
 For additional details on INLA formula syntax and latent model terms, see the official [R-INLA documentation](https://www.r-inla.org/documentation). The app shows the available numeric features that can be used in the formula. If the formula references `graph`, the interface also asks which adjacency matrix should be used. Figure 8 shows an example of a customized model setup.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/inla_model_custom.PNG" alt="Customized INLA model settings" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/inla_model_custom.PNG" alt="Customized INLA model settings" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 8.</strong> Example of a customized model specification in the <code>INLA Model</code> tab.</figcaption>
 </figure>
 
@@ -453,7 +453,7 @@ Supported feature types include:
 Figure 9 shows the `Add Feature` workflow for defining and storing a derived posterior summary.
 
 <figure style="margin: 0.75rem 0 1rem 0;">
-  <img src="/documentation-screenshots/viz_add_feat.PNG" alt="Add Feature tab with derived posterior feature options" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
+  <img src="doc_images/screenshots/viz_add_feat.PNG" alt="Add Feature tab with derived posterior feature options" style="display:block; width:60%; height:auto; border:1px solid #ddd;" />
   <figcaption><strong>Figure 9.</strong> The <code>Add Feature</code> tab used to create a derived posterior feature such as a quantile, interval, or exceedance probability.</figcaption>
 </figure>
 

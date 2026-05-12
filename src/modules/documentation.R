@@ -174,20 +174,19 @@ documentation_layout_ui <- function(content) {
 
 register_documentation_resources <- local({
   registered <- FALSE
-  
+
   function() {
     if (registered) return(invisible(NULL))
-    
-    shiny::addResourcePath(
-      prefix = "documentation-screenshots",
-      directoryPath = normalizePath("src/documentation/screenshots", winslash = "/", mustWork = TRUE)
+
+    app_dir <- rprojroot::find_root(
+      rprojroot::has_file("app.R")
     )
-    
+
     shiny::addResourcePath(
-      prefix = "documentation-tutorial-screenshots",
-      directoryPath = normalizePath("src/documentation/tutorial_screenshots", winslash = "/", mustWork = TRUE)
+      prefix = "doc_images",
+      directoryPath = file.path(app_dir, "www", "doc_images")
     )
-    
+
     registered <<- TRUE
     invisible(NULL)
   }
