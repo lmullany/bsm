@@ -5,6 +5,21 @@
 # source files --------------------------------------------------------------
 source("src/00_setup.R")
 
+cat("\nWORKING DIRECTORY:\n")
+print(getwd())
+
+cat("\nTOP LEVEL FILES:\n")
+print(list.files())
+
+cat("\nWWW EXISTS:\n")
+print(dir.exists("www"))
+
+cat("\nDOC_IMAGES EXISTS:\n")
+print(dir.exists("www/doc_images"))
+
+cat("\nSCREENSHOTS:\n")
+print(list.files("www/doc_images/screenshots"))
+
 
 options(shiny.maxRequestSize = 1000*1024^2) 
 is_tutorial_view <- function(query_string) {
