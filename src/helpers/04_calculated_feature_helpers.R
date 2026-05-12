@@ -269,35 +269,64 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
     return(out2[])
   }
   
-  if (ft == "observed_prop") {
-   
-    dt <- copy(dcls$data)
-    
-    res <- dt[, .(
-      region = get(dcls$region_column),
-      date   = get(dcls$date_column),
-      observed_prop  = fifelse(
-        get(dcls$denominator) == 0 & get(dcls$numerator) == 0,
-        0,
-        fifelse(
-          get(dcls$denominator) == 0,
-          NA_real_,
-          get(dcls$numerator) / get(dcls$denominator)
-        )
-      )
-    )]
-    
-    # optional: rename columns to original names
-    setnames(
-      res,
-      c("region", "date"),
-      c(dcls$region_column, dcls$date_column)
-    )
-    
-    out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
-    return(out2[])
-  }
+    if (ft == "observed_prop") {
+      dt <- copy(dcls$data)
   
+      # Use the actual region/date column names dynamically so merge keys align
+      reg_col <- dcls$region_column
+      date_col <- dcls$date_column
+      num_col <- dcls$numerator_column
+      den_col <- dcls$denominator_column
+  
+      # Validate that required columns exist
+      required_cols <- c(reg_col, date_col, num_col, den_col)
+      missing <- setdiff(required_cols, names(dt))
+      if (length(missing)) {
+        stop(paste("Missing columns for observed proportion:", paste(missing, collapse = ", ")))
+      }
+  
+      # Compute observed proportion - store in temp column first
+      dt[, observed_prop := fifelse(
+        is.na(get(den_col)) | is.na(get(num_col)),
+        NA_real_,
+        fifelse(
+          get(den_col) == 0 & get(num_col) == 0,
+          0,
+          fifelse(
+            get(den_col) == 0,
+            NA_real_,
+            get(num_col) / get(den_col)
+          )
+        )
+      )]
+  
+      # Extract columns for merging using simple expressions (no := in .())
+      res <- dt[, .(
+        tmp_region = get(reg_col),
+        tmp_date = get(date_col),
+        observed_prop = observed_prop
+      )]
+  
+      # Rename to match merge keys
+      setnames(res, c("tmp_region", "tmp_date"), c(reg_col, date_col))
+  
+      # Merge using the standardized helper which expects keyed region/date tables
+      out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
+  
+      # Validate merge worked
+      if (is.null(out2) || !nrow(out2)) {
+        stop("Merge failed for observed proportion feature")
+      }
+  
+      # Validate output column name
+      if (!nchar(out_cols[[1]])) {
+        stop("Feature has no output column name")
+      }
+  
+      out2[, (out_cols[[1]]) := as.numeric(get("observed_prop"))]
+      out2[, "observed_prop" := NULL]
+      return(out2[])
+    }  
   
   if (ft == "exceedance_probability") {
     thr <- as.numeric(feature$params$threshold %||% 0)
@@ -330,7 +359,7 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
 # columns to the supplied data table.
 calculate_and_store_calculated_features <- function(out, features, model, data_cls) {
   features <- Filter(function(f) {
-    !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "observed_prop", "confidence_interval", "exceedance_probability", "change_probability")
+    !is.null(f) && (f$feature_type %||% "") %in% c("other", "mean", "quantile", "observed_prop", "confidence_interval", "exceedance_probability", "change_probability")
   }, features)
   if (!length(features)) {
     return(data.table::as.data.table(out))

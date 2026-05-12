@@ -219,7 +219,7 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
     
     is_calculated_feature <- function(f) {
       !is.null(f$feature_type) &&
-        f$feature_type %in% c("mean", "quantile", "confidence_interval", "exceedance_probability", "change_probability")
+        f$feature_type %in% c("other", "mean", "quantile", "confidence_interval", "exceedance_probability", "change_probability")
     }
     
     quantile_feature_id <- function(scale, q) {
@@ -939,6 +939,48 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         out2[, (chg_col) := NULL]
         return(out2[])
       }
+      
+      # Handle "observed_prop" type features
+      if (ft == "observed_prop") {
+        dt <- copy(dcls$data)
+        
+        reg_col <- dcls$region_column
+        date_col <- dcls$date_column
+        num_col <- dcls$numerator_column
+        den_col <- dcls$denominator_column
+        
+        # Compute observed proportion
+        dt[, observed_prop := fifelse(
+          is.na(get(den_col)) | is.na(get(num_col)),
+          NA_real_,
+          fifelse(
+            get(den_col) == 0 & get(num_col) == 0,
+            0,
+            fifelse(
+              get(den_col) == 0,
+              NA_real_,
+              get(num_col) / get(den_col)
+            )
+          )
+        )]
+        
+        # Extract columns for merging
+        res <- dt[, .(
+          tmp_region = get(reg_col),
+          tmp_date = get(date_col),
+          observed_prop = observed_prop
+        )]
+        setnames(res, c("tmp_region", "tmp_date"), c(reg_col, date_col))
+        
+        # Merge and assign to output
+        out2 <- merge_by_region_date(out, res, dcls)
+        if (length(out_cols) > 0 && nchar(out_cols[1]) > 0) {
+          out2[, (out_cols[1]) := as.numeric(get("observed_prop"))]
+        }
+        out2[, "observed_prop" := NULL]
+        return(out2[])
+      }
+      
       out
     }
     
