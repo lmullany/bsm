@@ -542,7 +542,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
         # If it's an R-printed string like: " ... \"iid\" ... "
         # evaluate it as a string literal to remove the backslashes + outer quotes
         f2 <- tryCatch({
-          if (grepl('^".*"$', f) && grepl('\\\\\"', f)) eval(parse(text = f)) else f
+          if (grepl('^".*"#', f) && grepl('\\\\\"', f)) eval(parse(text = f)) else f
         }, error = function(e) f)
         
         # Now try to parse as an expression and re-render nicely
@@ -1529,13 +1529,13 @@ init_feature_df <- function() {
     # a posterior-derived feature, so it is registered outside the scale loop.
     add_feature_def(
       fid = "builtin__observed_proportion",
-      label = "Observed Proportion",
+      label = "ED Visits (Proportion)",
       description = sprintf(
         "Observed proportion of ED visits (target / overall)."
       ),
       feature_type = "observed_prop",
       feature_scale = "proportion",
-      out_cols = c("Observed Proportion"),
+      out_cols = c("ED Visits (Proportion)"),
       params = list()
     )
     
