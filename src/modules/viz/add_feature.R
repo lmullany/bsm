@@ -939,7 +939,6 @@ add_feature_server <- function(id, dc = NULL, im = NULL, results = NULL, feature
         out2[, (chg_col) := NULL]
         return(out2[])
       }
-      
       out
     }
     
