@@ -112,32 +112,22 @@ server <- function(input, output, session) {
 
 app <- shinyApp(ui, server)
 
-run_with_logging <- function(app, ...) {
+enable_bsm_logging <- function() {
   tryCatch({
     dir.create(file.path(Sys.getenv("HOME"), "bsm_logs"), showWarnings = TRUE)
     log_con <- file(file.path(Sys.getenv("HOME"), "bsm_logs", "app_log.txt"), open = "at")
-    
     sink(log_con, split = TRUE)
     sink(log_con, type = "message")
-    
     cat("\n==== App started:", as.character(Sys.time()), "====\n")
     cat("\n==== Session Info (startup) ====\n")
     print(sessionInfo())
-    
-    on.exit({
-      try(sink(type = "message"), silent = TRUE)
-      try(sink(), silent = TRUE)
-      try(close(log_con), silent = TRUE)
-    })
   }, error = function(e) {
-    print("No logging possible; error on log creation")
+    message("No logging possible; error on log creation")
   })
-  
-  runApp(app, ...)
 }
 
-if (sys.nframe() == 0) {
-  run_with_logging(app, launch.browser = TRUE)
-} else {
-  app
+if (!identical(tolower(Sys.getenv("BSM_ENABLE_LOGGING", "true")), "false")) {
+  enable_bsm_logging()
 }
+
+app
