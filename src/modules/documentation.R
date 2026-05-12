@@ -178,9 +178,15 @@ register_documentation_resources <- local({
   function() {
     if (registered) return(invisible(NULL))
 
+    # shiny::addResourcePath(
+    #   prefix = "doc_images",
+    #   directoryPath = "www/doc_images"
+    # )
+    app_dir <- dirname(normalizePath(sys.frame(1)$ofile %||% "app.R"))
+    
     shiny::addResourcePath(
       prefix = "doc_images",
-      directoryPath = "www/doc_images"
+      directoryPath = file.path(app_dir, "www", "doc_images")
     )
 
     registered <<- TRUE
