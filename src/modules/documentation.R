@@ -181,12 +181,7 @@ register_documentation_resources <- local({
     app_dir <- rprojroot::find_root(
       rprojroot::has_file("app.R")
     )
-    print(paste0("APP DIR: ",app_dir))
-    print("APP DIR contents:")
-    print(list.files(file.path(app_dir,"www", "doc_images"),
-                    all.files = TRUE,
-                    recursive = TRUE
-                    ))
+
     shiny::addResourcePath(
       prefix = "doc_images",
       directoryPath = file.path(app_dir, "www", "doc_images")
