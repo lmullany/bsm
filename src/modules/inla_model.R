@@ -1365,7 +1365,7 @@ init_feature_df <- function() {
       } else if (meta$is_core) {
         fid <- paste0("col__", col)
         ftype <- "core"
-        fscale <- "other"
+        fscale <- "counts"
       } else {
         fid <- paste0("col__", col)
         ftype <- "other"
