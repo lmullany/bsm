@@ -416,7 +416,7 @@ inla_model_server <- function(id, dc, im, results, cache_transitions) {
             # tabs only need to read stored columns.
             calculated_feature_ids <- feat_store$rv$order[vapply(feat_store$rv$order, function(fid) {
               f <- feat_store$get_feature(fid)
-              !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability")
+              !is.null(f) && (f$feature_type %||% "") %in% c("observed_prop", "mean", "quantile", "confidence_interval", "exceedance_probability")
             }, logical(1))]
             calculated_features <- lapply(calculated_feature_ids, feat_store$get_feature)
             
@@ -1523,6 +1523,17 @@ init_feature_df <- function() {
           member_ids = c(qid_lower, qid_upper)
         )
       }
+      add_feature_def(
+        fid = "builtin__observed_proportion",
+        label = "ED visits (Prop)",
+        description = sprintf(
+          "Observed proportion of ED visits (target/overall)."
+        ),
+        feature_type = "observed_prop",
+        feature_scale = "proportion",
+        out_cols = "ED visits (Prop)",
+        params = list()
+      )
     }
     
     if (changed) rv$refresh <- rv$refresh + 1L

@@ -268,7 +268,37 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
     out2[, c(srcL, srcU) := NULL]
     return(out2[])
   }
-
+  
+  if (ft == "observed_prop") {
+   
+    dt <- copy(dcls$data)
+    
+    res <- dt[, .(
+      region = get(dcls$region_column),
+      date   = get(dcls$date_column),
+      observed_prop  = fifelse(
+        get(dcls$denominator) == 0 & get(dcls$numerator) == 0,
+        0,
+        fifelse(
+          get(dcls$denominator) == 0,
+          NA_real_,
+          get(dcls$numerator) / get(dcls$denominator)
+        )
+      )
+    )]
+    
+    # optional: rename columns to original names
+    setnames(
+      res,
+      c("region", "date"),
+      c(dcls$region_column, dcls$date_column)
+    )
+    
+    out2 <- calculated_feature_merge_by_region_date(out2, res, dcls)
+    return(out2[])
+  }
+  
+  
   if (ft == "exceedance_probability") {
     thr <- as.numeric(feature$params$threshold %||% 0)
     use_count <- identical(sc, "counts")
@@ -300,7 +330,7 @@ calculate_and_store_calculated_feature <- function(out, feature, context) {
 # columns to the supplied data table.
 calculate_and_store_calculated_features <- function(out, features, model, data_cls) {
   features <- Filter(function(f) {
-    !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "confidence_interval", "exceedance_probability", "change_probability")
+    !is.null(f) && (f$feature_type %||% "") %in% c("mean", "quantile", "observed_prop", "confidence_interval", "exceedance_probability", "change_probability")
   }, features)
   if (!length(features)) {
     return(data.table::as.data.table(out))
